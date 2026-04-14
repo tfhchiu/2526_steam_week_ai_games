@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>看圖猜成語 - 腦力大挑戰</title>
+    <style>
+        :root {
+            --primary: #FF9800;
+            --secondary: #2196F3;
+            --success: #4CAF50;
+            --error: #F44336;
+            --bg: #F5F7FA;
+            --card-bg: #FFFFFF;
+            --text-main: #2D3748;
+        }
+        body { 
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            overflow-x: hidden;
+        }
+        #app { 
+            background: var(--card-bg); 
+            width: 95%; 
+            max-width: 480px; 
+            border-radius: 30px; 
+            padding: 30px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1); 
+            text-align: center;
+            position: relative;
+        }
+        
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 20px; 
+        }
+        .level-info { 
+            background: #EDF2F7; 
+            padding: 6px 16px; 
+            border-radius: 50px; 
+            font-weight: bold; 
+            font-size: 14px; 
+            color: #4A5568;
+        }
+        .mode-tag { 
+            color: var(--secondary); 
+            font-weight: bold; 
+            font-size: 13px; 
+            border: 1.5px solid var(--secondary); 
+            padding: 4px 12px; 
+            border-radius: 50px; 
+        }
+
+        /* 圖片容器 */
+        #img-box { 
+            width: 100%; 
+            height: 240px; 
+            background: #E2E8F0; 
+            border-radius: 20px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin-bottom: 25px; 
+            overflow: hidden; 
+            position: relative;
+            border: 4px solid #fff;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.05);
+        }
+        #img-element { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.5s; }
+        #emoji-placeholder { font-size: 90px; position: absolute; }
+
+        /* 填寫格樣式 */
+        .slots-wrap { 
+            display: flex; 
+            justify-content: center; 
+            gap: 12px; 
+            margin-bottom: 30px; 
+            min-height: 60px;
+        }
+        .slot { 
+            width: 55px; 
+            height: 55px; 
+            border: 2.5px solid #CBD5E0; 
+            border-radius: 12px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 26px; 
+            font-weight: 800; 
+            cursor: pointer; 
+            color: var(--text-main);
+            background: white;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .slot.filled { border-color: var(--secondary); background: #EBF8FF; transform: scale(1.05); }
+
+        /* 字池佈局 */
+        .pool-grid { 
+            display: grid; 
+            grid-template-columns: repeat(6, 1fr); 
+            gap: 10px; 
+            background: #F8FAFC;
+            padding: 15px;
+            border-radius: 15px;
+        }
+        .pool-btn { 
+            aspect-ratio: 1; 
+            border: none; 
+            border-radius: 10px; 
+            background: white; 
+            font-size: 18px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            box-shadow: 0 4px 0 #CBD5E0;
+            transition: all 0.1s; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            color: #4A5568;
+        }
+        .pool-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #CBD5E0; }
+        .pool-btn:disabled { opacity: 0; pointer-events: none; }
+
+        /* 選擇題佈局 */
+        .choice-stack { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        .choice-btn { 
+            padding: 18px; 
+            background: #FFFFFF; 
+            border: 2px solid #E2E8F0; 
+            border-radius: 16px; 
+            font-size: 19px; 
+            font-weight: bold; 
+            cursor: pointer;
+            transition: 0.2s; 
+            color: #4A5568;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .choice-btn:hover { border-color: var(--secondary); background: #F0F9FF; }
+        .choice-btn.correct { background: var(--success) !important; color: white; border-color: var(--success); }
+        .choice-btn.wrong { background: var(--error) !important; color: white; border-color: var(--error); }
+
+        #msg-box { height: 30px; margin: 15px 0; font-weight: bold; font-size: 17px; }
+        .btn-confirm { 
+            width: 100%; 
+            padding: 18px; 
+            background: var(--secondary); 
+            color: white; 
+            border: none; 
+            border-radius: 16px; 
+            font-size: 20px; 
+            font-weight: 800; 
+            cursor: pointer; 
+            display: none; 
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.3);
+            animation: popIn 0.3s ease-out;
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="header">
+        <span class="level-info" id="ui-level">第 1 關</span>
+        <span class="mode-tag" id="ui-mode">選擇模式</span>
+    </div>
+
+    <div id="img-box">
+        <img id="img-element" src="" alt="成語題目" onerror="onImgLoadError()">
+        <div id="emoji-placeholder">🧩</div>
+    </div>
+
+    <!-- 模式 1: 四選一 -->
+    <div id="view-choice" class="choice-stack"></div>
+
+    <!-- 模式 2: 隨機填字 -->
+    <div id="view-fill" class="hidden">
+        <div class="slots-wrap" id="wrap-slots"></div>
+        <div class="pool-grid" id="wrap-pool"></div>
+    </div>
+
+    <div id="msg-box"></div>
+    <button id="btn-next" class="btn-confirm" onclick="toNextLevel()">前進下一關</button>
+</div>
+
+<script>
+    // 完整的 40 關數據
+    const GAME_DATA = [
+        // 階段 1：20題 選擇題 (四選一)
+        { ans: "膽大包天", others: ["膽小如鼠", "無法無天", "頂天立地"], emoji: "🏮" },
+        { ans: "畫蛇添足", others: ["龍騰虎躍", "杯弓蛇影", "多此一舉"], emoji: "🐍" },
+        { ans: "對牛彈琴", others: ["琴棋書畫", "馬到成功", "走馬觀花"], emoji: "🎸" },
+        { ans: "一箭雙雕", others: ["驚弓之鳥", "百步穿楊", "一石二鳥"], emoji: "🏹" },
+        { ans: "順手牽羊", others: ["亡羊補牢", "歧路亡羊", "牽腸掛肚"], emoji: "🐑" },
+        { ans: "掩耳盜鈴", others: ["偷梁換柱", "自欺欺人", "充耳不聞"], emoji: "🔔" },
+        { ans: "盲人摸象", others: ["以偏概全", "走馬觀花", "洞若觀火"], emoji: "🐘" },
+        { ans: "魚躍龍門", others: ["年年有餘", "望子成龍", "飛黃騰達"], emoji: "🐟" },
+        { ans: "隔岸觀火", others: ["趁火打劫", "火燒連營", "坐以待斃"], emoji: "🔥" },
+        { ans: "落井下石", others: ["助人為樂", "乘人之危", "投石問路"], emoji: "🕳️" },
+        { ans: "守株待兔", others: ["刻舟求劍", "緣木求魚", "坐享其成"], emoji: "🌳" },
+        { ans: "如虎添翼", others: ["狐假虎威", "龍飛鳳舞", "錦上添花"], emoji: "🐯" },
+        { ans: "紙上談兵", others: ["空頭支票", "指點江山", "坐而論道"], emoji: "📄" },
+        { ans: "口是心非", others: ["甜言密語", "心口如一", "兩面三刀"], emoji: "👄" },
+        { ans: "梁上君子", others: ["小人得志", "翻牆入室", "掩人耳目"], emoji: "🏚️" },
+        { ans: "藕斷絲連", others: ["難捨難分", "意猶未盡", "絲絲入扣"], emoji: "🥗" },
+        { ans: "走馬觀花", others: ["馬到成功", "浮光掠影", "快馬加鞭"], emoji: "🐎" },
+        { ans: "火上澆油", others: ["雪上加霜", "趁火打劫", "推波助瀾"], emoji: "⛽" },
+        { ans: "鐵杵成針", others: ["持之以恆", "堅持不懈", "磨杵成針"], emoji: "👵" },
+        { ans: "一柱擎天", others: ["頂天立地", "孤掌難鳴", "獨樹一幟"], emoji: "🏛️" },
+
+        // 階段 2：20題 填空題 (隨機字池)
+        { ans: "胸有成竹", pool: "胸有成竹氣壯山河", emoji: "🎋" },
+        { ans: "聞雞起舞", pool: "聞雞起舞勤能補拙", emoji: "🐔" },
+        { ans: "杯弓蛇影", pool: "杯弓蛇影驚弓之鳥", emoji: "🍷" },
+        { ans: "開門見山", pool: "開門見山直截了當", emoji: "⛰️" },
+        { ans: "破釜沉舟", pool: "破釜沉舟背水一戰", emoji: "🥣" },
+        { ans: "望梅止渴", pool: "望梅止渴畫餅充飢", emoji: "🫐" },
+        { ans: "愚公移山", pool: "愚公移山精衛填海", emoji: "👴" },
+        { ans: "東張西望", pool: "東張西望左顧右盼", emoji: "👀" },
+        { ans: "名落孫山", pool: "名落孫山名列前茅", emoji: "📉" },
+        { ans: "一箭之心", pool: "一箭之心萬箭穿心", emoji: "💘" },
+        { ans: "草木皆兵", pool: "草木皆兵風聲鶴唳", emoji: "🌿" },
+        { ans: "名列前茅", pool: "名列前茅脫穎而出", emoji: "🥇" },
+        { ans: "金蟬脫殼", pool: "金蟬脫殼瞞天過海", emoji: "🍂" },
+        { ans: "水滴石穿", pool: "水滴石穿磨杵成針", emoji: "💧" },
+        { ans: "亡羊補牢", pool: "亡羊補牢為時未晚", emoji: "🐑" },
+        { ans: "三足鼎立", pool: "三足鼎立三分天下", emoji: "🥘" },
+        { ans: "虎頭蛇尾", pool: "虎頭蛇尾半途而廢", emoji: "🦁" },
+        { ans: "九牛一毛", pool: "九牛一毛滄海一粟", emoji: "🐮" },
+        { ans: "投筆從戎", pool: "投筆從戎文武雙全", emoji: "⚔️" },
+        { ans: "步步高升", pool: "步步高升平步青雲", emoji: "📈" }
+    ];
+
+    let currentLvl = 0;
+    let fillAnswers = [];
+    let isGameOver = false;
+
+    // --- 音效模組 ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSfx(freq, duration) {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        o.start(); o.stop(audioCtx.currentTime + duration);
+    }
+
+    // --- 圖片處理 ---
+    function onImgLoadError() {
+        document.getElementById('img-element').style.opacity = "0";
+        document.getElementById('emoji-placeholder').style.display = "block";
+    }
+
+    function fetchImg(keyword) {
+        const img = document.getElementById('img-element');
+        const emoji = document.getElementById('emoji-placeholder');
+        img.style.opacity = "1";
+        emoji.style.display = "none";
+        // 嘗試加載插畫
+        img.src = `https://source.unsplash.com/featured/800x600?${encodeURIComponent(keyword)},illustration`;
+        emoji.innerText = GAME_DATA[currentLvl].emoji;
+    }
+
+    // --- 核心邏輯 ---
+    function initGame() {
+        isGameOver = false;
+        const data = GAME_DATA[currentLvl];
+        document.getElementById('ui-level').innerText = `關卡 ${currentLvl + 1}/40`;
+        document.getElementById('msg-box').innerText = "";
+        document.getElementById('btn-next').style.display = "none";
+        fetchImg(data.ans);
+
+        if (currentLvl < 20) {
+            renderChoiceMode(data);
+        } else {
+            renderFillMode(data);
+        }
+        localStorage.setItem('idiom_progress_v5', currentLvl);
+    }
+
+    // 模式1：選擇題
+    function renderChoiceMode(data) {
+        document.getElementById('ui-mode').innerText = "進度：初級挑戰";
+        document.getElementById('view-choice').classList.remove('hidden');
+        document.getElementById('view-fill').classList.add('hidden');
+        
+        const options = [data.ans, ...data.others].sort(() => Math.random() - 0.5);
+        const container = document.getElementById('view-choice');
+        container.innerHTML = "";
+
+        options.forEach(text => {
+            const btn = document.createElement('button');
+            btn.className = 'choice-btn';
+            btn.innerText = text;
+            btn.onclick = () => {
+                if(isGameOver) return;
+                if(text === data.ans) {
+                    btn.classList.add('correct');
+                    levelWin();
+                } else {
+                    btn.classList.add('wrong');
+                    playSfx(180, 0.3);
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    // 模式2：隨機填字題
+    function renderFillMode(data) {
+        document.getElementById('ui-mode').innerText = "進度：大師填字";
+        document.getElementById('view-choice').classList.add('hidden');
+        document.getElementById('view-fill').classList.remove('hidden');
+
+        fillAnswers = Array(4).fill("");
+        updateSlots();
+        
+        // 字池隨機洗牌：正確答案 + 干擾字，全部打亂
+        const pool = (data.pool || "").split("").sort(() => Math.random() - 0.5);
+        
+        const container = document.getElementById('wrap-pool');
+        container.innerHTML = "";
+        pool.forEach(char => {
+            const btn = document.createElement('button');
+            btn.className = 'pool-btn';
+            btn.innerText = char;
+            btn.onclick = () => {
+                if(isGameOver) return;
+                const idx = fillAnswers.indexOf("");
+                if(idx !== -1) {
+                    fillAnswers[idx] = char;
+                    playSfx(600, 0.1);
+                    updateSlots();
+                    if(!fillAnswers.includes("")) checkFillResult();
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function updateSlots() {
+        const wrap = document.getElementById('wrap-slots');
+        wrap.innerHTML = "";
+        fillAnswers.forEach((char, i) => {
+            const s = document.createElement('div');
+            s.className = `slot ${char ? 'filled' : ''}`;
+            s.innerText = char;
+            s.onclick = () => { if(!isGameOver) { fillAnswers[i] = ""; updateSlots(); } };
+            wrap.appendChild(s);
+        });
+    }
+
+    function checkFillResult() {
+        if(fillAnswers.join("") === GAME_DATA[currentLvl].ans) {
+            levelWin();
+        } else {
+            document.getElementById('msg-box').innerText = "❌ 順序不對，請重新組合！";
+            document.getElementById('msg-box').style.color = "var(--error)";
+            playSfx(120, 0.4);
+        }
+    }
+
+    function levelWin() {
+        isGameOver = true;
+        playSfx(880, 0.1);
+        setTimeout(() => playSfx(1100, 0.25), 100);
+        document.getElementById('msg-box').innerText = "🎉 恭喜！完美過關！";
+        document.getElementById('msg-box').style.color = "var(--success)";
+        document.getElementById('btn-next').style.display = "block";
+    }
+
+    function toNextLevel() {
+        currentLvl++;
+        if(currentLvl < GAME_DATA.length) {
+            initGame();
+        } else {
+            document.getElementById('img-box').innerHTML = "<div style='font-size:80px'>🏆</div>";
+            document.getElementById('msg-box').innerText = "你已登頂成語大師！";
+            document.getElementById('btn-next').innerText = "再次挑戰";
+            document.getElementById('btn-next').onclick = () => {
+                localStorage.removeItem('idiom_progress_v5');
+                location.reload();
+            };
+        }
+    }
+
+    // 初始化讀取進度
+    const saved = localStorage.getItem('idiom_progress_v5');
+    if(saved) currentLvl = parseInt(saved);
+    initGame();
+</script>
+</body>
+</html>

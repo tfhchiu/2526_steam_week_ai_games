@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>双人火柴人吃豆豆闯关</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+        body {
+            font-family: 'ZCOOL KuaiLe', sans-serif;
+            background-color: #f0fdf4;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            border: 4px solid #cbd5e1;
+        }
+        .hidden { display: none !important; }
+        
+        .card-enter {
+            animation: slideUp 0.5s ease-out forwards;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 登录/登记 界面 -->
+    <div id="loginScreen" class="absolute z-50 bg-white p-8 rounded-2xl shadow-2xl w-96 card-enter border-t-8 border-green-500">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">火柴人吃豆豆</h1>
+        <p class="text-gray-500 text-sm text-center mb-6">双人合作挑战！(红方WASD，蓝方方向键)</p>
+        
+        <form id="entryForm" class="space-y-4">
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">队伍名字</label>
+                <input type="text" id="playerName" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition" placeholder="例如：吃豆大师">
+            </div>
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">赛前宣言</label>
+                <textarea id="playerContent" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition" rows="3" placeholder="写点什么吧..."></textarea>
+            </div>
+            
+            <div id="resultInfo" class="hidden bg-green-50 p-3 rounded-lg border border-green-200 text-sm space-y-1">
+                <p class="text-green-700 font-bold">✓ 登记成功！</p>
+                <p class="text-gray-700" id="displayContent"></p>
+                <p class="text-blue-600 font-mono text-xs font-bold" id="displayTimestamp"></p>
+            </div>
+
+            <button type="submit" id="submitBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg transition duration-300 shadow-md">
+                提交登记
+            </button>
+        </form>
+
+        <div id="startGameSection" class="hidden mt-6 space-y-3">
+            <button id="startBtn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg transition duration-300 shadow-md text-xl animate-pulse">
+                开始游戏
+            </button>
+            <button id="viewLeaderboardBtn" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 rounded-lg transition duration-300 shadow-md">
+                查看排行榜
+            </button>
+        </div>
+    </div>
+
+    <!-- UI 层 -->
+    <div id="gameUI" class="absolute top-4 left-0 w-full px-8 flex justify-between items-start z-10 hidden pointer-events-none">
+        <div class="bg-white/90 p-4 rounded-xl shadow-lg backdrop-blur border-2 border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800" id="uiTeamName">队伍名</h2>
+            <div class="text-2xl font-black text-red-500 mt-1">剩余时间: <span id="uiTimer">60</span>s</div>
+            <div class="text-lg font-bold text-blue-600 mt-1">当前关卡: <span id="uiLevel">1</span></div>
+            <div class="text-sm font-bold text-purple-600 mt-1">累计得分: <span id="uiScore">0</span></div>
+        </div>
+        <div class="bg-white/90 p-4 rounded-xl shadow-lg backdrop-blur border-2 border-gray-200 text-right">
+            <div class="font-bold text-red-600 text-lg">红豆剩余: <span id="uiRedDots">0</span></div>
+            <div class="font-bold text-blue-600 text-lg mt-2">蓝豆剩余: <span id="uiBlueDots">0</span></div>
+        </div>
+    </div>
+
+    <!-- 屏幕中央大字提示 -->
+    <div id="centerMessage" class="absolute z-20 text-8xl font-black text-yellow-400 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] hidden pointer-events-none transition-transform scale-150 text-center">
+        5
+    </div>
+
+    <!-- 排行榜界面 -->
+    <div id="leaderboardScreen" class="absolute z-50 bg-white p-8 rounded-2xl shadow-2xl w-[500px] hidden card-enter border-t-8 border-purple-500">
+        <h1 class="text-3xl font-bold text-center text-purple-700 mb-6">🏆 英雄排行榜 🏆</h1>
+        <div class="max-h-64 overflow-y-auto mb-6 pr-2">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-purple-100 text-purple-800">
+                        <th class="p-2 rounded-tl-lg">名次</th>
+                        <th class="p-2">队伍</th>
+                        <th class="p-2">进度</th>
+                        <th class="p-2 rounded-tr-lg">得分</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardBody"></tbody>
+            </table>
+        </div>
+        <button id="closeLeaderboardBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 rounded-lg transition duration-300">
+            返回
+        </button>
+    </div>
+
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas" width="800" height="600" class="hidden"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const TILE_SIZE = 40;
+    const COLS = canvas.width / TILE_SIZE; // 20
+    const ROWS = canvas.height / TILE_SIZE; // 15
+
+    let gameState = 'LOGIN'; 
+    let currentLevel = 0;
+    let totalScore = 0;
+    let teamName = "";
+    
+    let prepTimer = 5;
+    let gameTimer = 60;
+    let lastTime = 0;
+    let timerAccumulator = 0;
+
+    let leaderboard = [
+        { name: "开发者测试", level: 3, score: 150 }
+    ];
+
+    // ================= 全新设计的无阻挡、全连通地图 =================
+    // 0:空地, 1:墙壁, R:红豆, B:蓝豆, F:终点, H:水平移动障碍, V:垂直移动障碍
+    const levels = [
+        // 关卡 1：极其宽敞的通道
+        [
+            "11111111111111111111",
+            "100000000100000000R1",
+            "10111011010110111101",
+            "101R001B000000000B01",
+            "10101110111110111101",
+            "10000000000000000001",
+            "10111110111110111101",
+            "10000000000000000001",
+            "10111110111110111101",
+            "101R0000000000000R01",
+            "10101110111110111101",
+            "10000010000010000B01",
+            "10111010111010111101",
+            "100B00000000000FFF01",
+            "11111111111111111111"
+        ],
+        // 关卡 2：加入障碍物，并提供专属笔直无阻挡通道
+        [
+            "11111111111111111111",
+            "100000000000000000B1",
+            "10111101100110111101",
+            "1R000000000000000R01",
+            "10111101100110111101",
+            "10000000100100000001",
+            "11110101100110101111",
+            "100H00000VV00000H001", // H在完全畅通的第7行左右扫描，V在完全畅通的第9、10列上下扫描
+            "11110101100110101111",
+            "10000000100100000001",
+            "10111101100110111101",
+            "1B000000000000000B01",
+            "10111101100110111101",
+            "100000000FFF00000001",
+            "11111111111111111111"
+        ],
+        // 关卡 3：更快的障碍物，更多豆豆，迷宫保持绝对通畅
+        [
+            "11111111111111111111",
+            "1R0000000V0000000R01", // V专属通道列9
+            "10110110100101101101",
+            "10000000000000000001",
+            "10110110100101101101",
+            "100000B000000B000001",
+            "10110110100101101101",
+            "10H00000000000000H01", // H专属通道行7
+            "10110110100101101101",
+            "100000R000000R000001",
+            "10110110100101101101",
+            "10000000000000000001",
+            "10110110100101101101",
+            "1B0000000FFF00000B01",
+            "11111111111111111111"
+        ]
+    ];
+
+    let map = []; 
+    let dots = []; 
+    let hazards = []; 
+    let finishZone = {x:0, y:0, w:0, h:0};
+
+    const player1 = {
+        x: 60, y: 60, vx: 0, vy: 0, speed: 4.5, radius: 11, color: '#ef4444', 
+        keys: { up: 'w', down: 's', left: 'a', right: 'd' },
+        currentKeys: { up: false, down: false, left: false, right: false }
+    };
+
+    const player2 = {
+        x: 60, y: 100, vx: 0, vy: 0, speed: 4.5, radius: 11, color: '#3b82f6',
+        keys: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+        currentKeys: { up: false, down: false, left: false, right: false }
+    };
+
+    // ================= 表单交互系统 =================
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('playerName').value.trim();
+        const contentInput = document.getElementById('playerContent').value.trim();
+        
+        if(!nameInput || !contentInput) {
+            alert("请输入名字和赛前宣言！");
+            return;
+        }
+
+        teamName = nameInput;
+        
+        // 交互要求1：把按钮变成绿色
+        submitBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+        submitBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+        submitBtn.innerText = "✓ 资料已确认准备就绪";
+        
+        // 交互要求2：添加时间戳记
+        const timestamp = new Date().toLocaleString();
+        document.getElementById('displayContent').innerText = `宣言: ${contentInput}`;
+        document.getElementById('displayTimestamp').innerText = `添加时间戳记: [${timestamp}]`;
+        document.getElementById('resultInfo').classList.remove('hidden');
+        
+        document.getElementById('startGameSection').classList.remove('hidden');
+        submitBtn.disabled = true;
+    });
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('gameCanvas').classList.remove('hidden');
+        document.getElementById('gameUI').classList.remove('hidden');
+        document.getElementById('uiTeamName').innerText = teamName;
+        currentLevel = 0;
+        totalScore = 0;
+        loadLevel(currentLevel);
+    });
+
+    document.getElementById('viewLeaderboardBtn').addEventListener('click', showLeaderboard);
+    document.getElementById('closeLeaderboardBtn').addEventListener('click', () => {
+        document.getElementById('leaderboardScreen').classList.add('hidden');
+        if(gameState === 'LOGIN') document.getElementById('loginScreen').classList.remove('hidden');
+    });
+
+    // ================= 按键监听 =================
+    window.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === player1.keys.up) player1.currentKeys.up = true;
+        if (e.key.toLowerCase() === player1.keys.down) player1.currentKeys.down = true;
+        if (e.key.toLowerCase() === player1.keys.left) player1.currentKeys.left = true;
+        if (e.key.toLowerCase() === player1.keys.right) player1.currentKeys.right = true;
+        
+        if (e.key === player2.keys.up) player2.currentKeys.up = true;
+        if (e.key === player2.keys.down) player2.currentKeys.down = true;
+        if (e.key === player2.keys.left) player2.currentKeys.left = true;
+        if (e.key === player2.keys.right) player2.currentKeys.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.key.toLowerCase() === player1.keys.up) player1.currentKeys.up = false;
+        if (e.key.toLowerCase() === player1.keys.down) player1.currentKeys.down = false;
+        if (e.key.toLowerCase() === player1.keys.left) player1.currentKeys.left = false;
+        if (e.key.toLowerCase() === player1.keys.right) player1.currentKeys.right = false;
+        
+        if (e.key === player2.keys.up) player2.currentKeys.up = false;
+        if (e.key === player2.keys.down) player2.currentKeys.down = false;
+        if (e.key === player2.keys.left) player2.currentKeys.left = false;
+        if (e.key === player2.keys.right) player2.currentKeys.right = false;
+    });
+
+    // ================= 游戏逻辑 =================
+    function loadLevel(levelIndex) {
+        if(levelIndex >= levels.length) {
+            gameWin();
+            return;
+        }
+
+        const layout = levels[levelIndex];
+        map = [];
+        dots = [];
+        hazards = [];
+        let finishCells = [];
+
+        player1.x = 60; player1.y = 60;
+        player2.x = 60; player2.y = 100;
+
+        for (let r = 0; r < ROWS; r++) {
+            let rowObj = [];
+            for (let c = 0; c < COLS; c++) {
+                let cell = layout[r][c];
+                rowObj.push(cell === '1' ? 1 : 0); 
+
+                const cx = c * TILE_SIZE + TILE_SIZE/2;
+                const cy = r * TILE_SIZE + TILE_SIZE/2;
+
+                if (cell === 'R') {
+                    dots.push({ x: cx, y: cy, color: 'red', active: true });
+                } else if (cell === 'B') {
+                    dots.push({ x: cx, y: cy, color: 'blue', active: true });
+                } else if (cell === 'F') {
+                    finishCells.push({c, r});
+                } else if (cell === 'H') {
+                    hazards.push({ x: cx, y: cy, radius: 12, vx: 4 + levelIndex, vy: 0 });
+                } else if (cell === 'V') {
+                    hazards.push({ x: cx, y: cy, radius: 12, vx: 0, vy: 4 + levelIndex });
+                }
+            }
+            map.push(rowObj);
+        }
+
+        if(finishCells.length > 0) {
+            let minC = Math.min(...finishCells.map(f => f.c));
+            let maxC = Math.max(...finishCells.map(f => f.c));
+            let minR = Math.min(...finishCells.map(f => f.r));
+            let maxR = Math.max(...finishCells.map(f => f.r));
+            finishZone = {
+                x: minC * TILE_SIZE,
+                y: minR * TILE_SIZE,
+                w: (maxC - minC + 1) * TILE_SIZE,
+                h: (maxR - minR + 1) * TILE_SIZE
+            };
+        }
+
+        updateUIMetrics();
+        document.getElementById('uiLevel').innerText = levelIndex + 1;
+        
+        // 5秒准备倒计时
+        gameState = 'COUNTDOWN';
+        prepTimer = 5;
+        gameTimer = 60;
+        lastTime = performance.now();
+        
+        const centerMsg = document.getElementById('centerMessage');
+        centerMsg.classList.remove('hidden');
+        centerMsg.innerText = prepTimer;
+        centerMsg.style.color = '#eab308'; 
+    }
+
+    function updateUIMetrics() {
+        let redCount = dots.filter(d => d.color === 'red' && d.active).length;
+        let blueCount = dots.filter(d => d.color === 'blue' && d.active).length;
+        document.getElementById('uiRedDots').innerText = redCount;
+        document.getElementById('uiBlueDots').innerText = blueCount;
+        document.getElementById('uiScore').innerText = totalScore;
+    }
+
+    function checkWallCollision(px, py, radius) {
+        let startCol = Math.floor((px - radius) / TILE_SIZE);
+        let endCol = Math.floor((px + radius) / TILE_SIZE);
+        let startRow = Math.floor((py - radius) / TILE_SIZE);
+        let endRow = Math.floor((py + radius) / TILE_SIZE);
+
+        for (let r = startRow; r <= endRow; r++) {
+            for (let c = startCol; c <= endCol; c++) {
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                    if (map[r][c] === 1) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function updatePlayer(player) {
+        let dx = 0; let dy = 0;
+        if (player.currentKeys.up) dy -= player.speed;
+        if (player.currentKeys.down) dy += player.speed;
+        if (player.currentKeys.left) dx -= player.speed;
+        if (player.currentKeys.right) dx += player.speed;
+
+        if (dx !== 0) {
+            if (!checkWallCollision(player.x + dx, player.y, player.radius)) {
+                player.x += dx;
+            } else {
+                let wallSign = Math.sign(dx);
+                player.x = Math.round(player.x);
+                while (!checkWallCollision(player.x + wallSign, player.y, player.radius)) player.x += wallSign;
+            }
+        }
+        if (dy !== 0) {
+            if (!checkWallCollision(player.x, player.y + dy, player.radius)) {
+                player.y += dy;
+            } else {
+                let wallSign = Math.sign(dy);
+                player.y = Math.round(player.y);
+                while (!checkWallCollision(player.x, player.y + wallSign, player.radius)) player.y += wallSign;
+            }
+        }
+        player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+    }
+
+    function getDistance(x1, y1, x2, y2) {
+        return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    }
+
+    function checkInteractions() {
+        let changed = false;
+        
+        dots.forEach(dot => {
+            if (!dot.active) return;
+            if (dot.color === 'red' && getDistance(player1.x, player1.y, dot.x, dot.y) < player1.radius + 8) {
+                dot.active = false; totalScore += 5; changed = true;
+            }
+            if (dot.color === 'blue' && getDistance(player2.x, player2.y, dot.x, dot.y) < player2.radius + 8) {
+                dot.active = false; totalScore += 5; changed = true;
+            }
+        });
+
+        if(changed) updateUIMetrics();
+
+        for(let hz of hazards) {
+            if(getDistance(player1.x, player1.y, hz.x, hz.y) < player1.radius + hz.radius - 2 ||
+               getDistance(player2.x, player2.y, hz.x, hz.y) < player2.radius + hz.radius - 2) {
+                gameOver("碰到刺球障碍物，闯关失败！");
+                return;
+            }
+        }
+
+        const p1InFinish = (player1.x > finishZone.x && player1.x < finishZone.x + finishZone.w && player1.y > finishZone.y && player1.y < finishZone.y + finishZone.h);
+        const p2InFinish = (player2.x > finishZone.x && player2.x < finishZone.x + finishZone.w && player2.y > finishZone.y && player2.y < finishZone.y + finishZone.h);
+        const redLeft = dots.filter(d => d.color === 'red' && d.active).length;
+        const blueLeft = dots.filter(d => d.color === 'blue' && d.active).length;
+
+        if (p1InFinish && p2InFinish && redLeft === 0 && blueLeft === 0) {
+            totalScore += Math.floor(gameTimer) * 2; 
+            currentLevel++;
+            loadLevel(currentLevel);
+        }
+    }
+
+    function updateHazards() {
+        hazards.forEach(hz => {
+            hz.x += hz.vx;
+            hz.y += hz.vy;
+            if (checkWallCollision(hz.x, hz.y, hz.radius)) {
+                hz.x -= hz.vx; hz.y -= hz.vy;
+                hz.vx *= -1; hz.vy *= -1;
+            }
+        });
+    }
+
+    function gameOver(reason) {
+        gameState = 'GAMEOVER';
+        saveToLeaderboard();
+        const msg = document.getElementById('centerMessage');
+        msg.innerHTML = `挑战结束<br><span class="text-3xl">${reason}</span>`;
+        msg.style.color = '#ef4444'; 
+        msg.classList.remove('hidden');
+        setTimeout(() => {
+            msg.classList.add('hidden');
+            document.getElementById('gameCanvas').classList.add('hidden');
+            document.getElementById('gameUI').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+        }, 3000);
+    }
+
+    function gameWin() {
+        gameState = 'VICTORY';
+        saveToLeaderboard();
+        const msg = document.getElementById('centerMessage');
+        msg.innerHTML = `成功通关!<br><span class="text-3xl">队伍: ${teamName}<br>总得分: ${totalScore}</span>`;
+        msg.style.color = '#22c55e'; 
+        msg.classList.remove('hidden');
+        setTimeout(() => {
+            msg.classList.add('hidden');
+            document.getElementById('gameCanvas').classList.add('hidden');
+            document.getElementById('gameUI').classList.add('hidden');
+            showLeaderboard();
+        }, 4000);
+    }
+
+    function saveToLeaderboard() {
+        leaderboard.push({ name: teamName, level: currentLevel, score: totalScore, time: new Date().getTime() });
+        leaderboard.sort((a, b) => {
+            if(b.level !== a.level) return b.level - a.level;
+            return b.score - a.score;
+        });
+    }
+
+    function showLeaderboard() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('gameCanvas').classList.add('hidden');
+        document.getElementById('gameUI').classList.add('hidden');
+        
+        const lbScreen = document.getElementById('leaderboardScreen');
+        lbScreen.classList.remove('hidden');
+        
+        const tbody = document.getElementById('leaderboardBody');
+        tbody.innerHTML = '';
+        
+        leaderboard.slice(0, 8).forEach((entry, index) => {
+            const tr = document.createElement('tr');
+            tr.className = "border-b border-gray-100 hover:bg-purple-50 transition";
+            let rankEmoji = index + 1;
+            if(index === 0) rankEmoji = '🥇';
+            if(index === 1) rankEmoji = '🥈';
+            if(index === 2) rankEmoji = '🥉';
+
+            tr.innerHTML = `
+                <td class="p-3 font-bold text-gray-700">${rankEmoji}</td>
+                <td class="p-3 font-bold text-gray-800">${entry.name}</td>
+                <td class="p-3 text-purple-600 font-bold">通关 ${entry.level}</td>
+                <td class="p-3 text-red-500 font-black">${entry.score}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ================= 渲染系统 =================
+    function drawStickman(x, y, color, frame) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        const bob = Math.sin(frame * 0.2) * 2;
+        const walk = Math.sin(frame * 0.3) * 5;
+
+        ctx.beginPath();
+        ctx.arc(x, y - 8 + bob, 6, 0, Math.PI * 2);
+        ctx.moveTo(x, y - 2 + bob); ctx.lineTo(x, y + 8 + bob);
+        ctx.moveTo(x - 8, y + 2 + bob + walk); ctx.lineTo(x + 8, y + 2 + bob - walk);
+        ctx.moveTo(x, y + 8 + bob); ctx.lineTo(x - 6, y + 16 + walk);
+        ctx.moveTo(x, y + 8 + bob); ctx.lineTo(x + 6, y + 16 - walk);
+        ctx.stroke();
+    }
+
+    function drawMap() {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (map[r][c] === 1) {
+                    ctx.fillStyle = '#94a3b8'; // 更加柔和的墙壁颜色
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.fillStyle = '#64748b'; 
+                    ctx.fillRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                }
+            }
+        }
+
+        if(finishZone.w > 0) {
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.2)'; 
+            ctx.fillRect(finishZone.x, finishZone.y, finishZone.w, finishZone.h);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([10, 10]);
+            ctx.lineDashOffset = -performance.now() / 50;
+            ctx.strokeRect(finishZone.x + 2, finishZone.y + 2, finishZone.w - 4, finishZone.h - 4);
+            ctx.setLineDash([]); 
+            
+            ctx.fillStyle = '#16a34a';
+            ctx.font = 'bold 24px "ZCOOL KuaiLe"';
+            ctx.textAlign = 'center';
+            ctx.fillText("终 点", finishZone.x + finishZone.w/2, finishZone.y + finishZone.h/2 + 8);
+        }
+    }
+
+    function drawDots() {
+        const pulse = Math.sin(performance.now() / 200) * 1.5;
+        dots.forEach(dot => {
+            if (!dot.active) return;
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, 6 + pulse, 0, Math.PI * 2);
+            ctx.fillStyle = dot.color === 'red' ? '#fca5a5' : '#93c5fd'; 
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = dot.color === 'red' ? '#dc2626' : '#2563eb'; 
+            ctx.fill();
+        });
+    }
+
+    function drawHazards() {
+        const rot = performance.now() / 80;
+        hazards.forEach(hz => {
+            ctx.save();
+            ctx.translate(hz.x, hz.y);
+            ctx.rotate(rot);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, hz.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a'; 
+            ctx.fill();
+            
+            ctx.fillStyle = '#000000';
+            for(let i=0; i<8; i++){
+                ctx.rotate(Math.PI / 4);
+                ctx.beginPath();
+                ctx.moveTo(-4, -hz.radius + 2);
+                ctx.lineTo(4, -hz.radius + 2);
+                ctx.lineTo(0, -hz.radius - 6);
+                ctx.fill();
+            }
+            
+            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#ef4444'; ctx.fill();
+            ctx.restore();
+        });
+    }
+
+    function gameLoop(timestamp) {
+        requestAnimationFrame(gameLoop);
+        let deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+
+        if (gameState === 'COUNTDOWN') {
+            timerAccumulator += deltaTime;
+            if (timerAccumulator >= 1.0) {
+                prepTimer -= 1;
+                timerAccumulator -= 1.0;
+                const msg = document.getElementById('centerMessage');
+                if (prepTimer > 0) {
+                    msg.innerText = prepTimer;
+                } else {
+                    msg.innerText = "开始！";
+                    msg.style.color = '#22c55e';
+                    setTimeout(() => msg.classList.add('hidden'), 1000);
+                    gameState = 'PLAYING';
+                }
+            }
+        } else if (gameState === 'PLAYING') {
+            gameTimer -= deltaTime;
+            document.getElementById('uiTimer').innerText = Math.ceil(gameTimer);
+
+            if (gameTimer <= 0) gameOver("时间耗尽！");
+
+            updatePlayer(player1);
+            updatePlayer(player2);
+            updateHazards();
+            checkInteractions();
+        }
+
+        if (gameState === 'COUNTDOWN' || gameState === 'PLAYING') {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 1;
+            for(let i=0; i<canvas.width; i+=TILE_SIZE) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=TILE_SIZE) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+            drawMap();
+            drawDots();
+            drawHazards();
+            
+            let frame = timestamp / 60;
+            let p1Walking = player1.currentKeys.up || player1.currentKeys.down || player1.currentKeys.left || player1.currentKeys.right;
+            let p2Walking = player2.currentKeys.up || player2.currentKeys.down || player2.currentKeys.left || player2.currentKeys.right;
+
+            drawStickman(player1.x, player1.y, player1.color, p1Walking ? frame : 0);
+            drawStickman(player2.x, player2.y, player2.color, p2Walking ? frame : 0);
+        }
+    }
+
+    requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
+
+</script>
+</body>
+</html>

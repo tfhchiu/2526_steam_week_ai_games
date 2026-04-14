@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>火影忍者：木葉保衛戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a202c;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* 防止手機端下拉刷新 */
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        /* 手機端控制按鈕 */
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            backdrop-filter: blur(4px);
+            transition: transform 0.1s;
+        }
+        .btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+        .jutsu-btn {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #fbbf24;
+            border-radius: 8px;
+            color: #fbbf24;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+        .jutsu-btn.unlocked {
+            opacity: 1;
+            background: rgba(251, 191, 36, 0.2);
+            box-shadow: 0 0 10px #fbbf24;
+            cursor: pointer;
+        }
+        .jutsu-btn.cooldown {
+            opacity: 0.3;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+        /* 彈出視窗 */
+        .modal {
+            background: rgba(15, 23, 42, 0.95);
+            border: 4px solid #fbbf24;
+            border-radius: 16px;
+            box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI 覆蓋層 -->
+    <div class="ui-layer flex flex-col justify-between p-4">
+        
+        <!-- 頂部資訊 -->
+        <div class="flex justify-between items-start">
+            <div>
+                <div class="text-xl font-bold text-yellow-400 drop-shadow-md shadow-black">木葉村生命: <span id="hpDisplay">100</span>%</div>
+                <div class="text-lg font-bold text-white drop-shadow-md shadow-black">擊殺: <span id="killDisplay">0</span> / 51</div>
+                <div class="text-md font-bold text-red-400 drop-shadow-md shadow-black" id="bossWarning" style="display: none;">BOSS 降臨！</div>
+            </div>
+            
+            <!-- 忍術面板 -->
+            <div class="flex flex-col gap-2 interactive">
+                <button id="btnJutsu1" class="jutsu-btn w-12 h-12 flex items-center justify-center font-bold text-sm" onclick="useJutsu(1)">火(1)</button>
+                <button id="btnJutsu2" class="jutsu-btn w-12 h-12 flex items-center justify-center font-bold text-sm" onclick="useJutsu(2)">水(2)</button>
+                <button id="btnJutsu3" class="jutsu-btn w-12 h-12 flex items-center justify-center font-bold text-sm" onclick="useJutsu(3)">土(3)</button>
+                <button id="btnJutsu4" class="jutsu-btn w-12 h-12 flex items-center justify-center font-bold text-sm" onclick="useJutsu(4)">風(4)</button>
+            </div>
+        </div>
+
+        <!-- 手機端控制 (底部) - 僅左右移動，已移除射擊按鈕 -->
+        <div class="flex justify-between items-end pb-8 px-4 interactive sm:hidden w-full">
+            <button id="btnLeft" class="btn w-20 h-20 text-3xl">◀</button>
+            <button id="btnRight" class="btn w-20 h-20 text-3xl">▶</button>
+        </div>
+    </div>
+
+    <!-- 開始畫面 -->
+    <div id="startScreen" class="ui-layer interactive flex items-center justify-center bg-black/80 z-50">
+        <div class="modal p-8 text-center max-w-md mx-4">
+            <h1 class="text-4xl font-bold text-yellow-400 mb-4">木葉保衛戰</h1>
+            <p class="mb-2 text-gray-300">操作鳴人左右移動，自動發射飛鏢抵禦大蛇丸！</p>
+            <ul class="mb-4 text-sm text-gray-400 text-left list-disc pl-6">
+                <li>擊殺 <span class="text-yellow-400">5個</span> 大蛇丸：飛鏢升級散射！</li>
+                <li>每擊殺 <span class="text-yellow-400">10個</span> 大蛇丸：獲得忍術卷軸。</li>
+                <li>第 <span class="text-red-400">51個</span> 大蛇丸：終極 BOSS！</li>
+            </ul>
+            <div class="text-left bg-black/50 p-4 rounded mb-6 text-sm text-gray-300">
+                <p>💻 鍵盤：A/D 或 左右方向鍵移動，1-4數字鍵放忍術</p>
+                <p>📱 觸控：點擊螢幕下方的虛擬按鍵移動</p>
+            </div>
+            <button onclick="startGame()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-full text-xl shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all">
+                開始戰鬥
+            </button>
+        </div>
+    </div>
+
+    <!-- 算術題卷軸畫面 -->
+    <div id="quizScreen" class="ui-layer interactive hidden items-center justify-center bg-black/80 z-50">
+        <div class="modal p-8 text-center max-w-sm mx-4">
+            <div class="text-5xl mb-4">📜</div>
+            <h2 class="text-2xl font-bold text-yellow-400 mb-2">發現忍術卷軸！</h2>
+            <p class="mb-6 text-gray-300" id="quizDesc">解開結印算式以解鎖新忍術！</p>
+            
+            <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                <span id="mathQuestion" class="text-3xl font-mono tracking-wider">5 + 5 = ?</span>
+            </div>
+            
+            <div class="flex flex-col gap-3">
+                <input type="number" id="quizAnswer" class="w-full bg-gray-900 border-2 border-gray-600 rounded p-3 text-center text-xl text-white outline-none focus:border-yellow-400" placeholder="輸入答案" autocomplete="off">
+                <button onclick="checkQuiz()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow-lg transition-all">
+                    解開結印
+                </button>
+                <p id="quizFeedback" class="text-red-400 text-sm h-5 hidden">答案錯誤，請重新計算！</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束 / 勝利畫面 -->
+    <div id="endScreen" class="ui-layer interactive hidden items-center justify-center bg-black/90 z-50">
+        <div class="modal p-8 text-center max-w-md mx-4">
+            <h1 id="endTitle" class="text-5xl font-bold mb-4">遊戲結束</h1>
+            <p id="endDesc" class="mb-6 text-xl text-gray-300">木葉村被摧毀了...</p>
+            <button onclick="location.reload()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-full text-xl shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all">
+                重新開始
+            </button>
+        </div>
+    </div>
+
+<script>
+/** @type {HTMLCanvasElement} */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// 用於繪製背景的離屏 Canvas，優化性能
+const bgCanvas = document.createElement('canvas');
+const bgCtx = bgCanvas.getContext('2d');
+
+// 遊戲狀態
+let gameState = 'start'; // start, playing, quiz, gameover, victory
+let lastTime = 0;
+let keys = {};
+
+// 遊戲進度
+const TOTAL_ENEMIES = 51;
+let spawnCount = 0;
+let killCount = 0;
+let currentEnemyBaseHP = 1;
+let konohaHP = 100;
+let unlockedJutsus = [false, false, false, false]; // 火, 水, 土, 風
+let jutsuCooldowns = [0, 0, 0, 0]; // 0 表示可用
+const JUTSU_COOLDOWN_MAX = 600; // 幀數 (~10秒)
+
+// 飛鏢升級系統
+let shurikenLevel = 1;
+
+// 算術題狀態
+let expectedAnswer = 0;
+let currentUnlockingJutsu = 0; // 0: 火, 1: 水, 2: 土, 3: 風
+
+// 實體陣列
+let enemies = [];
+let projectiles = [];
+let particles = [];
+let jutsuEffects = [];
+let floatingTexts = [];
+
+// 調整 Canvas 大小並重新生成背景
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    generateBackground();
+}
+window.addEventListener('resize', resize);
+
+// 生成木葉村背景
+function generateBackground() {
+    bgCanvas.width = canvas.width;
+    bgCanvas.height = canvas.height;
+    
+    // 1. 繪製天空 (漸層藍色)
+    let skyGrad = bgCtx.createLinearGradient(0, 0, 0, bgCanvas.height);
+    skyGrad.addColorStop(0, "#4da6ff");
+    skyGrad.addColorStop(1, "#cce6ff");
+    bgCtx.fillStyle = skyGrad;
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+    // 2. 繪製太陽
+    bgCtx.fillStyle = "rgba(255, 230, 0, 0.9)";
+    bgCtx.beginPath();
+    bgCtx.arc(bgCanvas.width * 0.8, bgCanvas.height * 0.15, 40, 0, Math.PI * 2);
+    bgCtx.fill();
+
+    // 3. 繪製遠處火影岩山脈
+    bgCtx.fillStyle = "#a89f91";
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, bgCanvas.height * 0.5);
+    bgCtx.lineTo(bgCanvas.width * 0.15, bgCanvas.height * 0.35);
+    bgCtx.lineTo(bgCanvas.width * 0.4, bgCanvas.height * 0.4);
+    bgCtx.lineTo(bgCanvas.width * 0.7, bgCanvas.height * 0.3);
+    bgCtx.lineTo(bgCanvas.width, bgCanvas.height * 0.45);
+    bgCtx.lineTo(bgCanvas.width, bgCanvas.height);
+    bgCtx.lineTo(0, bgCanvas.height);
+    bgCtx.fill();
+
+    // 火影岩上的抽象頭像雕刻
+    bgCtx.fillStyle = "#8a8073";
+    let faces = [0.2, 0.45, 0.65];
+    faces.forEach(pos => {
+        bgCtx.beginPath();
+        bgCtx.arc(bgCanvas.width * pos, bgCanvas.height * 0.38, 20, Math.PI, 0);
+        bgCtx.fill();
+    });
+
+    // 4. 繪製木葉村森林
+    bgCtx.fillStyle = "#2d6a4f";
+    for(let i = 0; i < 30; i++) {
+        let tx = Math.random() * bgCanvas.width;
+        let ty = bgCanvas.height * 0.6 + Math.random() * bgCanvas.height * 0.2;
+        let tr = 25 + Math.random() * 30;
+        bgCtx.beginPath();
+        bgCtx.arc(tx, ty, tr, 0, Math.PI * 2);
+        bgCtx.fill();
+    }
+
+    // 5. 繪製傳統屋頂
+    for(let i = 0; i < 6; i++) {
+        let rx = (bgCanvas.width / 6) * i + (Math.random() * 30);
+        let ry = bgCanvas.height * 0.75 + (Math.random() * 60 - 20);
+        
+        // 牆壁
+        bgCtx.fillStyle = "#e6ccb2";
+        bgCtx.fillRect(rx + 15, ry, 70, bgCanvas.height - ry);
+        
+        // 屋頂
+        bgCtx.fillStyle = "#7f4f24";
+        bgCtx.beginPath();
+        bgCtx.moveTo(rx, ry);
+        bgCtx.lineTo(rx + 50, ry - 40);
+        bgCtx.lineTo(rx + 100, ry);
+        bgCtx.fill();
+    }
+}
+resize(); // 初始化調整大小並生成背景
+
+// --- 類別 ---
+
+class Player {
+    constructor() {
+        this.width = 60;
+        this.height = 80;
+        this.x = canvas.width / 2 - this.width / 2;
+        this.y = canvas.height - this.height - 20;
+        this.speed = 7;
+        this.color = '#f97316'; // 鳴人橙色
+        this.shootTimer = 0;
+        this.shootCooldown = 20; // 初始發射間隔
+    }
+
+    update() {
+        if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchControls.left) {
+            this.x -= this.speed;
+        }
+        if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchControls.right) {
+            this.x += this.speed;
+        }
+
+        // 邊界限制
+        if (this.x < 0) this.x = 0;
+        if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+
+        this.y = canvas.height - this.height - 20;
+
+        // 自動發射邏輯
+        if (this.shootTimer > 0) this.shootTimer--;
+        if (this.shootTimer <= 0) {
+            this.shoot();
+            this.shootTimer = this.shootCooldown;
+        }
+    }
+
+    shoot() {
+        if (shurikenLevel === 1) {
+            // 單發
+            projectiles.push(new Projectile(this.x + this.width / 2, this.y, 0));
+        } else {
+            // 散射 (升級後)
+            projectiles.push(new Projectile(this.x + this.width / 2, this.y, 0));
+            projectiles.push(new Projectile(this.x + this.width / 2, this.y, -3));
+            projectiles.push(new Projectile(this.x + this.width / 2, this.y, 3));
+        }
+        // 發射特效
+        createParticles(this.x + this.width / 2, this.y, '#ccc', 3, 2);
+    }
+
+    draw() {
+        // 身體
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // 頭部/頭髮 (黃色)
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x + this.width/2, this.y - 20);
+        ctx.lineTo(this.x + this.width, this.y);
+        ctx.fill();
+
+        // 護額
+        ctx.fillStyle = '#333';
+        ctx.fillRect(this.x, this.y, this.width, 10);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(this.x + this.width/2 - 8, this.y + 1, 16, 8);
+
+        // 眼睛
+        ctx.fillStyle = 'white';
+        ctx.fillRect(this.x + 10, this.y + 15, 12, 8);
+        ctx.fillRect(this.x + this.width - 22, this.y + 15, 12, 8);
+        ctx.fillStyle = '#3b82f6'; // 藍眼睛
+        ctx.fillRect(this.x + 14, this.y + 15, 4, 8);
+        ctx.fillRect(this.x + this.width - 18, this.y + 15, 4, 8);
+        
+        // 貓鬚紋理
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x + 5, this.y + 25); ctx.lineTo(this.x + 15, this.y + 27);
+        ctx.moveTo(this.x + 5, this.y + 30); ctx.lineTo(this.x + 15, this.y + 30);
+        ctx.moveTo(this.x + 5, this.y + 35); ctx.lineTo(this.x + 15, this.y + 33);
+        
+        ctx.moveTo(this.x + this.width - 5, this.y + 25); ctx.lineTo(this.x + this.width - 15, this.y + 27);
+        ctx.moveTo(this.x + this.width - 5, this.y + 30); ctx.lineTo(this.x + this.width - 15, this.y + 30);
+        ctx.moveTo(this.x + this.width - 5, this.y + 35); ctx.lineTo(this.x + this.width - 15, this.y + 33);
+        ctx.stroke();
+    }
+}
+
+class Projectile {
+    constructor(x, y, vx) {
+        this.x = x;
+        this.y = y;
+        this.speed = 12;
+        this.vx = vx; // 水平速度用於散射
+        this.radius = 12;
+        this.rotation = 0;
+        this.damage = 1;
+        this.markedForDeletion = false;
+    }
+
+    update() {
+        this.y -= this.speed;
+        this.x += this.vx;
+        this.rotation += 0.4; // 旋轉速度
+        if (this.y + this.radius < 0 || this.x < 0 || this.x > canvas.width) {
+            this.markedForDeletion = true;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        
+        // 繪製飛鏢形狀
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+            ctx.lineTo(0, -this.radius);
+            ctx.lineTo(this.radius * 0.3, -this.radius * 0.3);
+            ctx.rotate(Math.PI / 2);
+        }
+        ctx.fill();
+        
+        // 中間的洞
+        ctx.fillStyle = '#1a202c';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
+}
+
+class Enemy {
+    constructor(isBoss = false) {
+        this.isBoss = isBoss;
+        this.width = isBoss ? 120 : 60;
+        this.height = isBoss ? 160 : 80;
+        this.x = Math.random() * (canvas.width - this.width);
+        this.y = -this.height;
+        this.speed = isBoss ? 0.8 : 1.5 + Math.random() * 1.5;
+        this.maxHp = isBoss ? 100 : currentEnemyBaseHP;
+        this.hp = this.maxHp;
+        this.markedForDeletion = false;
+        
+        // Boss 移動模式
+        this.angle = 0;
+    }
+
+    update() {
+        if (this.isBoss) {
+            this.y += this.speed * 0.3; // 緩慢下降
+            this.x += Math.sin(this.angle) * 4; // 左右搖擺
+            this.angle += 0.05;
+            
+            // 保持在畫面內
+            if (this.x < 0) this.x = 0;
+            if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+        } else {
+            this.y += this.speed;
+        }
+
+        // 碰到螢幕底部 - 木葉村扣血
+        if (this.y > canvas.height) {
+            this.markedForDeletion = true;
+            takeDamage(this.isBoss ? 50 : 5);
+        }
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        createParticles(this.x + this.width/2, this.y + this.height/2, '#8b5cf6', 5, 3);
+        
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            killEnemy(this.isBoss);
+            createParticles(this.x + this.width/2, this.y + this.height/2, '#a855f7', 20, 5);
+            createParticles(this.x + this.width/2, this.y + this.height/2, '#4b5563', 15, 6);
+        }
+    }
+
+    draw() {
+        // 身體 (紫色/白色 主題代表大蛇丸)
+        ctx.fillStyle = '#f8fafc'; // 蒼白皮膚
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // 衣服 (紫色腰帶)
+        ctx.fillStyle = '#7e22ce';
+        ctx.fillRect(this.x, this.y + this.height * 0.5, this.width, this.height * 0.2);
+
+        // 頭髮 (黑色，長髮)
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(this.x - 5, this.y - 10, this.width + 10, 30);
+        ctx.fillRect(this.x - 5, this.y, 10, this.height * 0.6);
+        ctx.fillRect(this.x + this.width - 5, this.y, 10, this.height * 0.6);
+
+        // 眼睛 (蛇瞳)
+        ctx.fillStyle = '#fbbf24'; // 黃色
+        let eyeW = this.isBoss ? 20 : 10;
+        let eyeH = this.isBoss ? 12 : 6;
+        ctx.fillRect(this.x + this.width*0.2, this.y + this.height*0.2, eyeW, eyeH);
+        ctx.fillRect(this.x + this.width*0.8 - eyeW, this.y + this.height*0.2, eyeW, eyeH);
+        
+        // 瞳孔
+        ctx.fillStyle = 'black';
+        ctx.fillRect(this.x + this.width*0.2 + eyeW/2 - 1, this.y + this.height*0.2, 2, eyeH);
+        ctx.fillRect(this.x + this.width*0.8 - eyeW/2 - 1, this.y + this.height*0.2, 2, eyeH);
+
+        // 血條
+        if (this.hp < this.maxHp || this.isBoss) {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(this.x, this.y - 10, this.width, 5);
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 5);
+        }
+        
+        // Boss 標籤
+        if (this.isBoss) {
+            ctx.fillStyle = 'red';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText("大蛇丸 (本體)", this.x + this.width/2, this.y - 20);
+        }
+    }
+}
+
+class Particle {
+    constructor(x, y, color, size, speed) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * size + 2;
+        this.speedX = Math.random() * speed - speed/2;
+        this.speedY = Math.random() * speed - speed/2;
+        this.life = 1.0;
+        this.decay = Math.random() * 0.05 + 0.02;
+    }
+    update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.life -= this.decay;
+    }
+    draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class FloatingText {
+    constructor(text, x, y, color) {
+        this.text = text;
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.life = 100;
+        this.opacity = 1;
+    }
+    update() {
+        this.y -= 2;
+        this.life--;
+        this.opacity = this.life / 100;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = this.color;
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 10;
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+    }
+}
+
+class JutsuEffect {
+    constructor(type) {
+        this.type = type; // 1: 火, 2: 水, 3: 土, 4: 風
+        this.timer = 0;
+        this.maxTime = 60; // 特效持續時間
+        
+        // 立即造成傷害
+        if (type === 1) this.damageAll(15);
+        else if (type === 2) this.damageAll(20);
+        else if (type === 3) this.damageAll(25);
+        else if (type === 4) this.damageAll(30);
+    }
+    
+    damageAll(amt) {
+        enemies.forEach(e => {
+            e.takeDamage(amt);
+        });
+    }
+
+    update() {
+        this.timer++;
+        if (this.timer > this.maxTime) return true;
+        
+        // 產生粒子特效
+        if (this.timer % 2 === 0) {
+            for(let i=0; i<5; i++) {
+                let px = Math.random() * canvas.width;
+                let py = Math.random() * canvas.height;
+                if (this.type === 1) createParticles(px, canvas.height, '#ef4444', 15, 10); // 火遁
+                if (this.type === 2) createParticles(px, py, '#3b82f6', 10, 5); // 水遁
+                if (this.type === 3) createParticles(px, py, '#78350f', 20, 2); // 土遁
+                if (this.type === 4) createParticles(px, py, '#f1f5f9', 5, 20); // 風遁
+            }
+        }
+        return false;
+    }
+    
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = 1 - (this.timer / this.maxTime);
+        
+        if (this.type === 1) { // 火
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("火遁！", canvas.width/2, canvas.height/2);
+        } else if (this.type === 2) { // 水
+            let waveY = canvas.height - (canvas.height * (this.timer / this.maxTime));
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.6)';
+            ctx.fillRect(0, waveY, canvas.width, canvas.height - waveY);
+            ctx.fillStyle = '#3b82f6';
+            ctx.font = 'bold 120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("水遁！", canvas.width/2, canvas.height/2);
+        } else if (this.type === 3) { // 土
+            ctx.fillStyle = 'rgba(120, 53, 15, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#78350f';
+            ctx.font = 'bold 120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("土遁！", canvas.width/2, canvas.height/2);
+        } else if (this.type === 4) { // 風
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(0, Math.random() * canvas.height);
+            ctx.lineTo(canvas.width, Math.random() * canvas.height);
+            ctx.lineWidth = 20;
+            ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            ctx.stroke();
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = 'bold 120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("風遁！", canvas.width/2, canvas.height/2);
+        }
+        ctx.restore();
+    }
+}
+
+// --- 全域變數 ---
+let player = new Player();
+let enemySpawnTimer = 0;
+let enemySpawnInterval = 100;
+let screenFlashTimer = 0; // 受傷紅屏計時
+
+// 控制輸入
+const touchControls = { left: false, right: false };
+
+window.addEventListener('keydown', e => { 
+    keys[e.key] = true; 
+    
+    // 忍術快捷鍵
+    if (gameState === 'playing') {
+        if (e.key === '1') useJutsu(1);
+        if (e.key === '2') useJutsu(2);
+        if (e.key === '3') useJutsu(3);
+        if (e.key === '4') useJutsu(4);
+    }
+    
+    // 答題快捷鍵
+    if (gameState === 'quiz' && e.key === 'Enter') {
+        checkQuiz();
+    }
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// 觸控設定
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+
+const bindTouch = (btn, dir) => {
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); touchControls[dir] = true; });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); touchControls[dir] = false; });
+    btn.addEventListener('mousedown', () => touchControls[dir] = true);
+    btn.addEventListener('mouseup', () => touchControls[dir] = false);
+    btn.addEventListener('mouseleave', () => touchControls[dir] = false);
+};
+bindTouch(btnLeft, 'left');
+bindTouch(btnRight, 'right');
+
+// --- 核心函數 ---
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    gameState = 'playing';
+    
+    // 重置狀態
+    spawnCount = 0;
+    killCount = 0;
+    currentEnemyBaseHP = 1;
+    konohaHP = 100;
+    shurikenLevel = 1;
+    enemies = [];
+    projectiles = [];
+    particles = [];
+    jutsuEffects = [];
+    floatingTexts = [];
+    player = new Player();
+    unlockedJutsus = [false, false, false, false];
+    jutsuCooldowns = [0, 0, 0, 0];
+    
+    updateHUD();
+    updateJutsuUI();
+    document.getElementById('bossWarning').style.display = 'none';
+    
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function createParticles(x, y, color, count, speed) {
+    for (let i = 0; i < count; i++) {
+        particles.push(new Particle(x, y, color, count/2, speed));
+    }
+}
+
+function takeDamage(amount) {
+    konohaHP -= amount;
+    if (konohaHP <= 0) {
+        konohaHP = 0;
+        gameOver(false);
+    }
+    updateHUD();
+    screenFlashTimer = 15; // 觸發紅屏閃爍
+}
+
+function killEnemy(isBoss) {
+    killCount++;
+    updateHUD();
+    
+    if (isBoss) {
+        gameOver(true);
+        return;
+    }
+
+    // 飛鏢升級邏輯：擊殺5個
+    if (killCount === 5) {
+        shurikenLevel = 2; // 升級為散射
+        player.shootCooldown = 12; // 加快發射速度
+        floatingTexts.push(new FloatingText("✨ 飛鏢增強！散射解鎖！", canvas.width/2, canvas.height/2, "#fde047"));
+    }
+    
+    // 忍術解鎖：10, 20, 30, 40
+    if (killCount === 10) triggerQuiz(0); // 火
+    else if (killCount === 20) triggerQuiz(1); // 水
+    else if (killCount === 30) triggerQuiz(2); // 土
+    else if (killCount === 40) triggerQuiz(3); // 風
+    
+    // 每 10 擊殺增加大蛇丸血量
+    if (killCount % 10 === 0 && killCount < 50) {
+        currentEnemyBaseHP++;
+        floatingTexts.push(new FloatingText("⚠️ 敵人變強了！", canvas.width/2, canvas.height/3, "#ef4444"));
+    }
+}
+
+function spawnEnemyLogic() {
+    if (spawnCount >= TOTAL_ENEMIES) return;
+
+    enemySpawnTimer++;
+    // 隨時間加快生成
+    let currentInterval = Math.max(40, enemySpawnInterval - (spawnCount * 1.2));
+    
+    if (enemySpawnTimer > currentInterval) {
+        enemySpawnTimer = 0;
+        spawnCount++;
+        
+        if (spawnCount === TOTAL_ENEMIES) {
+            enemies.push(new Enemy(true)); // Boss
+            document.getElementById('bossWarning').style.display = 'block';
+            floatingTexts.push(new FloatingText("大蛇丸本體降臨！", canvas.width/2, canvas.height/2, "#dc2626"));
+        } else {
+            enemies.push(new Enemy(false));
+        }
+    }
+}
+
+function triggerQuiz(jutsuIndex) {
+    gameState = 'quiz';
+    currentUnlockingJutsu = jutsuIndex;
+    
+    const jutsuNames = ['火遁', '水遁', '土遁', '風遁'];
+    document.getElementById('quizDesc').innerText = `解開結印算式，解鎖【${jutsuNames[jutsuIndex]}】！`;
+    document.getElementById('quizFeedback').classList.add('hidden');
+    document.getElementById('quizAnswer').value = '';
+    
+    // 產生算術題
+    let a, b, op;
+    if (jutsuIndex === 0) { // 加法
+        a = Math.floor(Math.random() * 20) + 1;
+        b = Math.floor(Math.random() * 20) + 1;
+        expectedAnswer = a + b;
+        op = '+';
+    } else if (jutsuIndex === 1) { // 減法
+        a = Math.floor(Math.random() * 30) + 20;
+        b = Math.floor(Math.random() * 20) + 1;
+        expectedAnswer = a - b;
+        op = '-';
+    } else if (jutsuIndex === 2) { // 乘法
+        a = Math.floor(Math.random() * 9) + 2;
+        b = Math.floor(Math.random() * 9) + 2;
+        expectedAnswer = a * b;
+        op = '×';
+    } else { // 較難的乘法
+        a = Math.floor(Math.random() * 15) + 5;
+        b = Math.floor(Math.random() * 10) + 2;
+        expectedAnswer = a * b;
+        op = '×';
+    }
+    
+    document.getElementById('mathQuestion').innerText = `${a} ${op} ${b} = ?`;
+    document.getElementById('quizScreen').classList.remove('hidden');
+    document.getElementById('quizScreen').classList.add('flex');
+    
+    setTimeout(() => document.getElementById('quizAnswer').focus(), 100);
+}
+
+function checkQuiz() {
+    const input = parseInt(document.getElementById('quizAnswer').value);
+    if (input === expectedAnswer) {
+        // 答對
+        unlockedJutsus[currentUnlockingJutsu] = true;
+        updateJutsuUI();
+        
+        document.getElementById('quizScreen').classList.add('hidden');
+        document.getElementById('quizScreen').classList.remove('flex');
+        
+        // 立即展示解鎖特效
+        jutsuEffects.push(new JutsuEffect(currentUnlockingJutsu + 1));
+        
+        gameState = 'playing';
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+    } else {
+        // 答錯
+        const fb = document.getElementById('quizFeedback');
+        fb.classList.remove('hidden');
+        document.getElementById('quizAnswer').classList.add('border-red-500');
+        setTimeout(() => document.getElementById('quizAnswer').classList.remove('border-red-500'), 500);
+    }
+}
+
+function useJutsu(type) {
+    let index = type - 1;
+    if (!unlockedJutsus[index]) return;
+    if (jutsuCooldowns[index] > 0) return;
+    
+    jutsuEffects.push(new JutsuEffect(type));
+    jutsuCooldowns[index] = JUTSU_COOLDOWN_MAX;
+    updateJutsuUI();
+}
+
+function updateJutsuUI() {
+    for (let i = 0; i < 4; i++) {
+        let btn = document.getElementById(`btnJutsu${i+1}`);
+        if (unlockedJutsus[i]) {
+            btn.classList.add('unlocked');
+            if (jutsuCooldowns[i] > 0) {
+                btn.classList.add('cooldown');
+                let cdSec = Math.ceil(jutsuCooldowns[i] / 60);
+                btn.innerText = cdSec + "s";
+            } else {
+                btn.classList.remove('cooldown');
+                let names = ['火(1)', '水(2)', '土(3)', '風(4)'];
+                btn.innerText = names[i];
+            }
+        }
+    }
+}
+
+function updateHUD() {
+    document.getElementById('hpDisplay').innerText = konohaHP;
+    document.getElementById('killDisplay').innerText = killCount;
+    if(konohaHP < 30) document.getElementById('hpDisplay').classList.replace('text-yellow-400', 'text-red-500');
+}
+
+function gameOver(isWin) {
+    gameState = isWin ? 'victory' : 'gameover';
+    document.getElementById('endScreen').classList.remove('hidden');
+    document.getElementById('endScreen').classList.add('flex');
+    
+    if (isWin) {
+        document.getElementById('endTitle').innerText = '保衛成功！';
+        document.getElementById('endTitle').classList.add('text-green-400');
+        document.getElementById('endDesc').innerText = '你擊敗了所有大蛇丸，拯救了木葉村！';
+    } else {
+        document.getElementById('endTitle').innerText = '任務失敗';
+        document.getElementById('endTitle').classList.add('text-red-500');
+        document.getElementById('endDesc').innerText = `木葉村被摧毀了...你擊殺了 ${killCount} 個大蛇丸。`;
+    }
+}
+
+// --- 遊戲主循環 ---
+
+function gameLoop(timestamp) {
+    if (gameState !== 'playing') return;
+    
+    lastTime = timestamp;
+
+    // 繪製背景 (優化：直接繪製離屏 Canvas)
+    ctx.drawImage(bgCanvas, 0, 0);
+
+    // 繪製地面/城牆邊緣
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+    // 受傷紅屏特效
+    if (screenFlashTimer > 0) {
+        ctx.fillStyle = `rgba(255, 0, 0, ${screenFlashTimer / 30})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        screenFlashTimer--;
+    }
+
+    // 更新忍術冷卻
+    let uiNeedsUpdate = false;
+    for (let i = 0; i < 4; i++) {
+        if (jutsuCooldowns[i] > 0) {
+            if (jutsuCooldowns[i] % 60 === 0) uiNeedsUpdate = true;
+            jutsuCooldowns[i]--;
+            if (jutsuCooldowns[i] === 0) uiNeedsUpdate = true;
+        }
+    }
+    if(uiNeedsUpdate) updateJutsuUI();
+
+    // 生成敵人邏輯
+    spawnEnemyLogic();
+
+    // 更新與繪製玩家
+    player.update();
+    player.draw();
+
+    // 更新與繪製飛鏢
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        let p = projectiles[i];
+        p.update();
+        p.draw();
+        
+        // 碰撞檢測 (飛鏢打中敵人)
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            let e = enemies[j];
+            if (p.x > e.x && p.x < e.x + e.width && 
+                p.y > e.y && p.y < e.y + e.height) {
+                e.takeDamage(p.damage);
+                p.markedForDeletion = true;
+                break; // 一發飛鏢只能打中一個敵人
+            }
+        }
+
+        if (p.markedForDeletion) {
+            projectiles.splice(i, 1);
+        }
+    }
+
+    // 更新與繪製敵人
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        let e = enemies[i];
+        e.update();
+        e.draw();
+        if (e.markedForDeletion) {
+            enemies.splice(i, 1);
+        }
+    }
+
+    // 更新與繪製粒子特效
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.update();
+        p.draw();
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // 更新與繪製懸浮文字
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        let ft = floatingTexts[i];
+        ft.update();
+        ft.draw();
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+    }
+
+    // 更新與繪製忍術特效
+    for (let i = jutsuEffects.length - 1; i >= 0; i--) {
+        let effect = jutsuEffects[i];
+        if (effect.update()) {
+            jutsuEffects.splice(i, 1);
+        } else {
+            effect.draw();
+        }
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+// 初始畫面繪製
+ctx.drawImage(bgCanvas, 0, 0);
+player.draw();
+
+</script>
+</body>
+</html>

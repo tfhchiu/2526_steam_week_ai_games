@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>單字勇者 RPG - AI 極限進化版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- ✨ 引入炫酷的未來科技字體 Orbitron ✨ -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 炫酷標題字體與特效 */
+        .game-title {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3), 
+                         0 0 20px rgba(234, 179, 8, 0.5), 
+                         0 0 40px rgba(239, 68, 68, 0.5);
+        }
+
+        .emoji-shadow { filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3)); }
+        .rarity-common { color: #cbd5e1; }
+        .rarity-rare { color: #3b82f6; }
+        .rarity-epic { color: #a855f7; }
+        .rarity-legendary { color: #eab308; text-shadow: 0 0 10px rgba(234, 179, 8, 0.5); }
+        .rarity-mythic { color: #ef4444; animation: pulse 1s infinite; text-shadow: 0 0 15px rgba(239, 68, 68, 0.7); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .shake-anim { animation: shake 0.2s ease-in-out; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        /* 氣泡對話框小尾巴 */
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 20px;
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+            display: block;
+            width: 0;
+        }
+
+        @keyframes bg-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-bg-gradient {
+            background-size: 300% 300%;
+            animation: bg-gradient 15s ease infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+            animation: float-up var(--duration, 5s) linear infinite;
+            opacity: 0;
+        }
+        @keyframes float-up {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            20% { opacity: var(--max-opacity, 0.5); scale: 1; }
+            80% { opacity: var(--max-opacity, 0.5); }
+            100% { transform: translateY(-10vh) scale(0.5); opacity: 0; }
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans min-h-screen overflow-hidden select-none animate-bg-gradient bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-900 relative">
+
+    <div id="particles-layer" class="absolute inset-0 z-0 pointer-events-none overflow-hidden"></div>
+
+    <!-- 開始畫面 -->
+    <div id="start-screen" class="absolute inset-0 z-40 flex flex-col items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel p-8 rounded-3xl shadow-[0_0_30px_rgba(79,70,229,0.3)] text-center max-w-lg w-full mt-10 relative z-10">
+            <!-- ✨ 更新的炫酷標題 -->
+            <h1 class="text-5xl md:text-6xl game-title font-black mb-6 text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-yellow-500 to-red-500 italic animate-pulse">
+                VOCAB<br>HERO AI
+            </h1>
+            
+            <!-- AI 單字生成區 -->
+            <div class="bg-slate-800/80 p-4 rounded-2xl mb-6 border border-slate-600 text-left">
+                <h3 class="text-lg font-bold text-indigo-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 單字擴充</h3>
+                <div class="flex gap-2">
+                    <input type="text" id="theme-input" placeholder="輸入主題 (例如: 科技, 動物)" class="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+                    <button id="generate-btn" onclick="generateVocab()" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl font-bold transition-colors whitespace-nowrap">✨ 生成</button>
+                </div>
+                <p id="ai-status" class="text-xs text-slate-400 mt-2 hidden"></p>
+            </div>
+
+            <div class="mb-6 text-slate-300">
+                當前題庫：<span id="vocab-count" class="font-bold text-yellow-400">0</span> 個單字
+            </div>
+
+            <div class="flex flex-col gap-4">
+                <button onclick="startGame('survival')" class="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-lg flex flex-col items-center justify-center gap-1 transition-transform active:scale-95 shadow-lg border border-red-400">
+                    <div class="flex items-center gap-2"><i class="fa-solid fa-fire"></i> 無盡生存模式</div>
+                    <div class="text-xs text-red-200 font-normal">最高分: <span id="menu-hs-survival">0</span></div>
+                </button>
+
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-blue-300"><i class="fa-solid fa-stopwatch"></i> 極限倒計時</span>
+                        <span class="text-xs text-blue-200">最高分: <span id="menu-hs-time">0</span></span>
+                    </div>
+                    <div class="flex gap-2 mb-3">
+                        <button id="t-30" onclick="setGameTime(30, 0.8)" class="time-btn flex-1 py-2 bg-slate-700 rounded-lg text-sm border-2 border-transparent hover:bg-slate-600 transition-colors">30秒<br><span class="text-[10px] text-slate-400">x0.8</span></button>
+                        <button id="t-60" onclick="setGameTime(60, 1)" class="time-btn flex-1 py-2 bg-slate-700 rounded-lg text-sm border-2 border-blue-500 hover:bg-slate-600 transition-colors">60秒<br><span class="text-[10px] text-slate-400">x1.0</span></button>
+                        <button id="t-120" onclick="setGameTime(120, 1.2)" class="time-btn flex-1 py-2 bg-slate-700 rounded-lg text-sm border-2 border-transparent hover:bg-slate-600 transition-colors">120秒<br><span class="text-[10px] text-slate-400">x1.2</span></button>
+                    </div>
+                    <button onclick="startGame('time')" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg">
+                        開始挑戰
+                    </button>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="openInstructions()" class="flex-1 py-3 bg-teal-700 hover:bg-teal-600 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-teal-500 transition-transform active:scale-95">
+                        <i class="fa-solid fa-book"></i> 遊戲說明
+                    </button>
+                    <button onclick="openSkinModal()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-slate-500 transition-transform active:scale-95">
+                        <i class="fa-solid fa-dragon"></i> 皮膚圖鑑 (<span id="unlocked-count">1</span>/50)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲說明彈窗 -->
+    <div id="instructions-modal" class="hidden absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+        <div class="glass-panel p-6 rounded-3xl w-full max-w-md relative border border-slate-500 shadow-2xl animate-float" style="animation-duration: 4s; animation-name: float-modal;">
+            <h2 class="text-3xl font-black text-teal-400 mb-6 text-center drop-shadow-md"><i class="fa-solid fa-book-open"></i> 遊戲說明</h2>
+            
+            <div class="space-y-4 text-sm text-slate-200">
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 shadow-inner">
+                    <h3 class="text-yellow-400 font-bold mb-2 text-base"><i class="fa-solid fa-gamepad"></i> 基本玩法</h3>
+                    <p>根據畫面上方的「中文提示」，在下方四個按鈕中選出正確的「英文單字」。答對可攻擊怪獸，答錯則會扣除自身血量！</p>
+                </div>
+                
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 shadow-inner">
+                    <h3 class="text-red-400 font-bold mb-2 text-base"><i class="fa-solid fa-fire"></i> 遊戲模式</h3>
+                    <ul class="list-disc pl-5 space-y-2 text-xs">
+                        <li><span class="font-bold text-red-300">無盡生存：</span>沒有時間限制，挑戰存活到最後一刻，考驗單字量與耐心。</li>
+                        <li><span class="font-bold text-blue-300">極限倒計時：</span>在限時內狂刷分數！選擇的時間越短，分數加成倍率越高。</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 shadow-inner">
+                    <h3 class="text-indigo-400 font-bold mb-2 text-base"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 題庫與圖鑑</h3>
+                    <p class="text-xs leading-relaxed">你可以隨時輸入主題讓 <b>AI 生成專屬單字卡</b>加入題庫。隨著最高分的提升，還能解鎖高達 <b>50 種超炫怪獸皮膚</b>，並換裝成你的專屬頭像！</p>
+                </div>
+            </div>
+            
+            <button onclick="closeInstructions()" class="w-full mt-6 py-3 bg-teal-600 hover:bg-teal-500 rounded-xl font-bold transition-transform active:scale-95 text-lg shadow-lg border border-teal-400 text-white">
+                我準備好了！
+            </button>
+        </div>
+        <style>
+            @keyframes float-modal {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-5px); }
+            }
+        </style>
+    </div>
+
+    <!-- 遊戲畫面 -->
+    <div id="game-screen" class="hidden flex-col items-center p-4 w-full h-full relative z-10">
+        <div class="w-full max-w-2xl flex justify-between items-center glass-panel p-4 rounded-2xl mb-4 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+            <div class="text-2xl font-black text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]"><i class="fa-solid fa-star"></i> <span id="score-display">0</span></div>
+            <div id="timer-ui" class="text-3xl font-black text-red-500 animate-pulse drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">60s</div>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <div class="text-xs text-slate-300">門檻: <span id="threshold-display">0</span></div>
+                    <div class="font-bold text-purple-400 text-lg drop-shadow-md">Lv.<span id="level-display">1</span></div>
+                </div>
+                <button onclick="surrender()" class="w-10 h-10 bg-slate-700/80 hover:bg-red-600 rounded-full flex items-center justify-center transition-all border border-slate-500 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="w-full max-w-2xl flex-grow flex flex-col justify-around">
+            <div class="flex justify-between items-end h-40 px-8 relative">
+                <div class="text-center w-1/3 relative z-10">
+                    <div class="absolute -inset-4 bg-blue-500/20 rounded-full blur-xl animate-pulse -z-10"></div>
+                    <div class="w-full bg-slate-700/80 h-2 rounded-full mb-2 backdrop-blur-sm"><div id="p-hp" class="bg-gradient-to-r from-green-400 to-green-600 h-full w-full rounded-full transition-all shadow-[0_0_10px_rgba(74,222,128,0.5)]"></div></div>
+                    <div id="player-avatar" class="text-7xl emoji-shadow transition-transform duration-200 animate-float">🧙‍♂️</div>
+                </div>
+                
+                <div id="msg" class="hidden absolute left-1/2 -translate-x-1/2 top-0 text-3xl font-black italic z-20 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                
+                <div class="text-center w-1/3 relative z-10">
+                    <div class="absolute -inset-4 bg-red-500/20 rounded-full blur-xl animate-pulse -z-10" style="animation-delay: 1s;"></div>
+                    <div id="boss-dialogue" class="speech-bubble hidden absolute -top-14 -left-10 bg-white text-slate-900 text-sm font-bold px-4 py-2 rounded-2xl shadow-xl z-20 min-w-[120px] max-w-[200px] whitespace-normal break-words emoji-shadow transition-opacity duration-300">
+                        ...
+                    </div>
+                    
+                    <div class="w-full bg-slate-700/80 h-2 rounded-full mb-2 backdrop-blur-sm"><div id="m-hp" class="bg-gradient-to-r from-red-600 to-red-400 h-full w-full rounded-full transition-all shadow-[0_0_10px_rgba(248,113,113,0.5)]"></div></div>
+                    <div id="monster-avatar" class="text-7xl emoji-shadow scale-x-[-1] transition-transform duration-200 animate-float" style="animation-delay: 0.5s;">👾</div>
+                    <div id="monster-name-display" class="text-xs font-bold text-red-400 mt-2 drop-shadow-md">史萊姆</div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-6 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.5)] mt-4 relative z-10">
+                <div id="q-zh" class="text-4xl font-bold text-center mb-8 drop-shadow-lg">準備中...</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="ans-grid">
+                    <button class="ans-btn p-4 bg-slate-700 hover:bg-blue-600 rounded-2xl text-xl font-bold transition-all border-2 border-slate-600"></button>
+                    <button class="ans-btn p-4 bg-slate-700 hover:bg-blue-600 rounded-2xl text-xl font-bold transition-all border-2 border-slate-600"></button>
+                    <button class="ans-btn p-4 bg-slate-700 hover:bg-blue-600 rounded-2xl text-xl font-bold transition-all border-2 border-slate-600"></button>
+                    <button class="ans-btn p-4 bg-slate-700 hover:bg-blue-600 rounded-2xl text-xl font-bold transition-all border-2 border-slate-600"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 皮膚彈窗 -->
+    <div id="skin-modal" class="hidden absolute inset-0 z-50 bg-black/90 flex flex-col items-center p-6 backdrop-blur-md">
+        <h2 class="text-3xl font-black text-yellow-400 mb-6 game-title">圖鑑與換裝</h2>
+        <div class="text-slate-300 mb-4 text-sm">點擊已解鎖的怪獸即可裝備為自己的頭像！</div>
+        <div id="skin-grid" class="grid grid-cols-3 md:grid-cols-5 gap-4 overflow-y-auto w-full max-w-4xl p-4"></div>
+        <button onclick="closeSkinModal()" class="mt-8 px-12 py-3 bg-slate-700 hover:bg-slate-600 rounded-full font-bold transition-colors">返回</button>
+    </div>
+
+    <!-- 結算畫面 -->
+    <div id="go-screen" class="hidden absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-xl flex flex-col items-center justify-center p-6">
+        <div class="absolute inset-0 z-0 flex items-center justify-center opacity-30 pointer-events-none">
+            <div class="w-[800px] h-[800px] bg-[conic-gradient(from_0deg,transparent_0_340deg,white_360deg)] rounded-full animate-[spin_4s_linear_infinite] mix-blend-overlay blur-xl"></div>
+        </div>
+        
+        <div class="relative z-10 flex flex-col items-center w-full">
+            <div id="new-record-alert" class="hidden animate-bounce bg-green-500 text-white font-black px-6 py-2 rounded-full mb-4 shadow-[0_0_20px_rgba(34,197,94,0.8)] border border-green-300">🎉 新最高分紀錄！</div>
+            <div id="new-skin-alert" class="hidden animate-bounce bg-yellow-500 text-black font-black px-6 py-2 rounded-full mb-4 shadow-[0_0_20px_rgba(234,179,8,0.8)] border border-yellow-200">✨ 解鎖了新皮膚！</div>
+            <h2 class="text-6xl game-title font-black text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-red-600 mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.6)]" id="go-title">戰鬥結束</h2>
+            <div class="glass-panel p-8 rounded-3xl text-center shadow-[0_0_40px_rgba(0,0,0,0.8)] mb-6 max-w-sm w-full border border-slate-600">
+                <p class="text-slate-300 font-bold tracking-widest">最終分數</p>
+                <p id="final-score" class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-yellow-500 drop-shadow-[0_0_25px_rgba(234,179,8,0.6)] my-4 game-title">0</p>
+                <p class="mt-4 text-purple-300 font-bold bg-slate-800/50 py-2 rounded-xl border border-purple-500/30">解鎖進度：<span id="skin-progress" class="text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]">0%</span></p>
+            </div>
+            <button onclick="returnToMenu()" class="px-12 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(79,70,229,0.5)] transition-all active:scale-95 border border-indigo-400">回到首頁</button>
+        </div>
+    </div>
+
+    <!-- 自定義 Toast -->
+    <div id="toast-container" class="fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        const apiKey = ""; 
+
+        async function callGeminiAPI(payload, isJson = false) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            let retries = 5;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+                    const data = await response.json();
+                    const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!textResult) throw new Error("No text in response");
+                    if (isJson) {
+                        try {
+                            const cleanText = textResult.replace(/```json/gi, '').replace(/```/g, '').trim();
+                            return JSON.parse(cleanText);
+                        } catch (e) { throw new Error("Invalid JSON format"); }
+                    }
+                    return textResult;
+                } catch (error) {
+                    if (i === retries - 1) return null;
+                    await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
+                }
+            }
+        }
+
+        async function generateVocab() {
+            const inputEl = document.getElementById('theme-input');
+            const btnEl = document.getElementById('generate-btn');
+            const statusEl = document.getElementById('ai-status');
+            const theme = inputEl.value.trim() || '隨機生活';
+            
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 召喚中...';
+            btnEl.disabled = true;
+            btnEl.classList.add('opacity-70', 'cursor-not-allowed');
+            statusEl.innerText = `正在請 AI 腦力激盪「${theme}」的相關單字...`;
+            statusEl.classList.remove('hidden', 'text-red-400');
+            statusEl.classList.add('text-indigo-300');
+
+            const promptText = `Generate 10 English vocabulary words related to the theme "${theme}". Return ONLY a valid JSON array of objects, where each object has "en" (the English word) and "zh" (the Traditional Chinese translation). Example: [{"en": "apple", "zh": "蘋果"}]. Do not include markdown formatting like \`\`\`json or any other text.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: promptText }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: { type: "OBJECT", properties: { en: { type: "STRING" }, zh: { type: "STRING" } } }
+                    }
+                }
+            };
+
+            const newVocab = await callGeminiAPI(payload, true);
+
+            if (newVocab && Array.isArray(newVocab) && newVocab.length > 0) {
+                let addedCount = 0;
+                newVocab.forEach(v => {
+                    if (!VOCAB.some(existing => existing.en.toLowerCase() === v.en.toLowerCase())) {
+                        VOCAB.push(v);
+                        addedCount++;
+                    }
+                });
+                statusEl.innerText = `✨ 成功加入 ${addedCount} 個「${theme}」相關單字！`;
+                statusEl.classList.replace('text-indigo-300', 'text-green-400');
+                document.getElementById('vocab-count').innerText = VOCAB.length;
+                showToast(`擴充了 ${addedCount} 個單字！`);
+                inputEl.value = ''; 
+            } else {
+                statusEl.innerText = "❌ 召喚失敗，請檢查網路或稍後重試。";
+                statusEl.classList.replace('text-indigo-300', 'text-red-400');
+            }
+            btnEl.innerHTML = '✨ 生成';
+            btnEl.disabled = false;
+            btnEl.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+
+        async function triggerBossTaunt() {
+            const bubble = document.getElementById('boss-dialogue');
+            const monsterName = document.getElementById('monster-name-display').innerText || '怪獸';
+            
+            bubble.innerText = '...';
+            bubble.classList.remove('hidden');
+            bubble.classList.add('animate-pulse');
+
+            const promptText = `你現在是一隻在 RPG 遊戲中的怪獸，你的名字/種類是「${monsterName}」。面對挑戰你的玩家，請用一句簡短的繁體中文（不超過15個字）嘲諷或威脅他。只要回傳對白文字即可，不要有引號。`;
+
+            const payload = { contents: [{ parts: [{ text: promptText }] }] };
+            const taunt = await callGeminiAPI(payload, false);
+            
+            bubble.classList.remove('animate-pulse');
+            bubble.innerText = taunt ? taunt.replace(/["']/g, '') : "吼！！！準備受死！";
+            setTimeout(() => { bubble.classList.add('hidden'); }, 5000);
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'bg-slate-800 text-white px-6 py-3 rounded-full font-bold shadow-xl border border-slate-600 transition-all duration-300 translate-y-[-20px] opacity-0 flex items-center gap-2';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-green-400"></i> ${message}`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => { toast.classList.remove('translate-y-[-20px]', 'opacity-0'); });
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function openInstructions() { document.getElementById('instructions-modal').classList.remove('hidden'); }
+        function closeInstructions() { document.getElementById('instructions-modal').classList.add('hidden'); }
+
+        function openSkinModal() {
+            document.getElementById('skin-modal').classList.remove('hidden');
+            const grid = document.getElementById('skin-grid');
+            grid.innerHTML = '';
+            ALL_SKINS.forEach(s => {
+                const isU = unlockedSkins.includes(s.n);
+                const isCurrent = (currentSkinId === s.n);
+                const div = document.createElement('div');
+                div.className = `p-4 rounded-2xl border-2 text-center transition-all relative ${isU ? 'bg-slate-800 border-slate-600 hover:border-blue-400 cursor-pointer' : 'bg-black/50 border-slate-800 opacity-40'} ${isCurrent ? 'ring-2 ring-yellow-400 border-yellow-400' : ''}`;
+                div.innerHTML = `
+                    ${isCurrent ? '<div class="absolute -top-2 -right-2 bg-yellow-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full">裝備中</div>' : ''}
+                    <div class="text-4xl mb-2 emoji-shadow">${isU ? s.e : '❓'}</div>
+                    <div class="text-xs font-bold ${s.r === 'M' ? 'rarity-mythic' : s.r === 'L' ? 'rarity-legendary' : ''}">${s.n}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">${s.q} pts解鎖</div>
+                `;
+                if(isU) div.onclick = () => {
+                    currentSkinId = s.n;
+                    localStorage.setItem('currentSkin', s.n);
+                    showToast(`裝備成功：${s.n}`);
+                    openSkinModal(); 
+                };
+                grid.appendChild(div);
+            });
+            document.getElementById('unlocked-count').innerText = unlockedSkins.length;
+        }
+        function closeSkinModal() { document.getElementById('skin-modal').classList.add('hidden'); }
+
+        const ALL_SKINS = [
+            { e: '👾', n: '史萊姆', r: 'C', q: 0 }, { e: '🐭', n: '小老鼠', r: 'C', q: 50 }, { e: '🐦', n: '憤怒鳥', r: 'C', q: 100 },
+            { e: '🐸', n: '毒蛙', r: 'C', q: 150 }, { e: '🐢', n: '小龜', r: 'C', q: 200 }, { e: '🦇', n: '蝙蝠', r: 'C', q: 250 },
+            { e: '🐺', n: '野狼', r: 'C', q: 300 }, { e: '🕸️', n: '蜘蛛', r: 'C', q: 350 }, { e: '🐝', n: '殺人蜂', r: 'C', q: 400 },
+            { e: '🦀', n: '巨蟹', r: 'R', q: 500 }, { e: '🦂', n: '毒蠍', r: 'R', q: 600 }, { e: '🐗', n: '山豬', r: 'R', q: 700 },
+            { e: '👺', n: '天狗', r: 'R', q: 850 }, { e: '👻', n: '幽靈', r: 'R', q: 1000 }, { e: '🧟', n: '殭屍', r: 'R', q: 1200 },
+            { e: '🧛', n: '吸血鬼', r: 'R', q: 1400 }, { e: '🐙', n: '海怪', r: 'R', q: 1600 }, { e: '🐍', n: '巨蟒', r: 'R', q: 1800 },
+            { e: '🦁', n: '雄獅', r: 'E', q: 2200 }, { e: '🐘', n: '猛獁', r: 'E', q: 2600 }, { e: '🦄', n: '獨角獸', r: 'E', q: 3000 },
+            { e: '🦖', n: '暴龍', r: 'E', q: 3500 }, { e: '🦅', n: '獅鷲', r: 'E', q: 4000 }, { e: '🛸', n: '外星人', r: 'E', q: 4500 },
+            { e: '👽', n: '異形', r: 'E', q: 5000 }, { e: '🦾', n: '改造人', r: 'E', q: 5500 }, { e: '🔥', n: '火靈', r: 'E', q: 6000 },
+            { e: '🐲', n: '青龍', r: 'L', q: 8000 }, { e: '🐉', n: '巨龍', r: 'L', q: 10000 }, { e: '🔱', n: '海神', r: 'L', q: 12000 },
+            { e: '☄️', n: '隕石怪', r: 'L', q: 15000 }, { e: '⚖️', n: '審判者', r: 'L', q: 18000 }, { e: '👹', n: '赤鬼', r: 'L', q: 22000 },
+            { e: '🌋', n: '炎魔', r: 'L', q: 26000 }, { e: '🌩️', n: '雷神', r: 'L', q: 30000 }, { e: '🖤', n: '虛空', r: 'L', q: 35000 },
+            { e: '🌌', n: '星雲', r: 'M', q: 50000 }, { e: '👁️', n: '全知眼', r: 'M', q: 60000 }, { e: '👑', n: '至高王', r: 'M', q: 75000 },
+            { e: '💎', n: '晶鑽神', r: 'M', q: 90000 }, { e: '🎆', n: '創世靈', r: 'M', q: 120000 }
+        ];
+
+        let VOCAB = [
+            {en:"adventure", zh:"冒險"}, {en:"brave", zh:"勇敢"}, {en:"celebrate", zh:"慶祝"},
+            {en:"dangerous", zh:"危險的"}, {en:"education", zh:"教育"}, {en:"festival", zh:"節日"},
+            {en:"government", zh:"政府"}, {en:"history", zh:"歷史"}, {en:"imagine", zh:"想像"},
+            {en:"journey", zh:"旅程"}, {en:"knowledge", zh:"知識"}, {en:"language", zh:"語言"}
+        ];
+
+        // ✨ 單字牌組機制 (確保不重複)
+        let vocabDeck = [];
+        let lastWordEn = "";
+
+        function shuffleDeck() {
+            vocabDeck = [...VOCAB];
+            // Fisher-Yates 洗牌演算法
+            for (let i = vocabDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [vocabDeck[i], vocabDeck[j]] = [vocabDeck[j], vocabDeck[i]];
+            }
+        }
+
+        let unlockedSkins = JSON.parse(localStorage.getItem('unlockedSkins')) || ['史萊姆'];
+        let currentSkinId = localStorage.getItem('currentSkin') || '史萊姆';
+        let highScoreSurvival = parseInt(localStorage.getItem('hsSurvival')) || 0;
+        let highScoreTime = parseInt(localStorage.getItem('hsTime')) || 0;
+
+        let gameMode = 'survival';
+        let score = 0;
+        let level = 1;
+        let selectedTime = 60;
+        let timeRemaining = 60;
+        let scoreMultiplier = 1;
+        let timer = null;
+        let threshold = 0;
+        let isProcessing = false;
+
+        let playerHp = 100;
+        let monsterHp = 100;
+        let maxMonsterHp = 100;
+
+        function setGameTime(sec, mult) {
+            selectedTime = sec;
+            scoreMultiplier = mult;
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.replace('border-blue-500', 'border-transparent'));
+            document.getElementById('t-'+sec).classList.replace('border-transparent', 'border-blue-500');
+        }
+
+        function updateMonsterAppearance() {
+            const maxIndex = Math.min(ALL_SKINS.length - 1, level * 3 + 2);
+            const minIndex = Math.max(0, level - 5); 
+            const range = maxIndex - minIndex + 1;
+            const randomIndex = minIndex + Math.floor(Math.random() * range);
+            const randomMonster = ALL_SKINS[randomIndex] || ALL_SKINS[0];
+            
+            document.getElementById('monster-avatar').innerText = randomMonster.e;
+            document.getElementById('monster-name-display').innerText = randomMonster.n;
+        }
+
+        function startGame(mode) {
+            if (VOCAB.length < 4) {
+                showToast("題庫單字不足，請先生成更多單字！");
+                return;
+            }
+
+            gameMode = mode;
+            score = 0;
+            level = 1;
+            threshold = 0;
+            playerHp = 100;
+            maxMonsterHp = 100;
+            monsterHp = 100;
+            
+            // ✨ 遊戲開始時重置單字牌組與上一題紀錄
+            shuffleDeck();
+            lastWordEn = "";
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            
+            const playerSkin = ALL_SKINS.find(s => s.n === currentSkinId) || {e: '🧙‍♂️'};
+            document.getElementById('player-avatar').innerText = playerSkin.e;
+            
+            updateMonsterAppearance();
+            
+            if (mode === 'time') {
+                timeRemaining = selectedTime;
+                document.getElementById('timer-ui').innerText = timeRemaining + 's';
+                document.getElementById('timer-ui').classList.remove('hidden');
+                
+                timer = setInterval(() => {
+                    timeRemaining--;
+                    document.getElementById('timer-ui').innerText = timeRemaining + 's';
+                    if (timeRemaining <= 0) processGameOver("時間到！");
+                }, 1000);
+            } else {
+                document.getElementById('timer-ui').classList.add('hidden');
+                scoreMultiplier = 1;
+            }
+            
+            updateUI();
+            updateHPUI();
+            nextQuestion();
+            triggerBossTaunt();
+        }
+
+        function nextQuestion() {
+            isProcessing = false;
+            
+            // ✨ 從牌組中抽牌，抽完就重新洗牌
+            if (vocabDeck.length === 0) {
+                shuffleDeck();
+            }
+            let correct = vocabDeck.pop();
+
+            // 防呆：如果洗牌後抽出的第一張牌跟上一題一樣，就換下一張 (如果牌組夠大的話)
+            if (correct.en === lastWordEn && vocabDeck.length > 0) {
+                const temp = correct;
+                correct = vocabDeck.pop();
+                vocabDeck.push(temp); // 把重複的放回去等下用
+            }
+            lastWordEn = correct.en;
+
+            // 產生 3 個錯誤選項 (從總題庫中隨機挑選，但不等於正確答案)
+            const options = [correct];
+            let attempts = 0;
+            while(options.length < 4 && attempts < 30) {
+                const r = VOCAB[Math.floor(Math.random() * VOCAB.length)];
+                if(!options.includes(r)) options.push(r);
+                attempts++;
+            }
+            
+            options.sort(() => Math.random() - 0.5);
+
+            document.getElementById('q-zh').innerText = correct.zh;
+            const btns = document.querySelectorAll('.ans-btn');
+            btns.forEach((b, i) => {
+                if(options[i]) {
+                    b.style.display = 'block';
+                    b.innerText = options[i].en;
+                    b.className = "ans-btn p-4 bg-slate-700 hover:bg-blue-600 rounded-2xl text-xl font-bold transition-all border-2 border-slate-600 text-white shadow-md active:scale-95";
+                    b.onclick = () => checkAnswer(options[i].en === correct.en, b);
+                } else {
+                    b.style.display = 'none';
+                }
+            });
+        }
+
+        function checkAnswer(isCorrect, btn) {
+            if(isProcessing) return;
+            isProcessing = true;
+            
+            const pAvatar = document.getElementById('player-avatar');
+            const mAvatar = document.getElementById('monster-avatar');
+
+            if(isCorrect) {
+                btn.classList.replace('bg-slate-700', 'bg-green-600');
+                btn.classList.replace('hover:bg-blue-600', 'hover:bg-green-500');
+                score += Math.round(10 * scoreMultiplier * (1 + level * 0.1));
+                
+                pAvatar.classList.add('translate-x-4', 'scale-110');
+                setTimeout(() => pAvatar.classList.remove('translate-x-4', 'scale-110'), 200);
+                
+                monsterHp -= 35; 
+                
+                if (monsterHp <= 0) {
+                    level++;
+                    maxMonsterHp = 100 + level * 20; 
+                    monsterHp = maxMonsterHp;
+                    playerHp = Math.min(100, playerHp + 20); 
+                    updateMonsterAppearance(); 
+                    if(gameMode === 'time') threshold = level * 80;
+                    triggerBossTaunt();
+                }
+            } else {
+                btn.classList.replace('bg-slate-700', 'bg-red-600');
+                btn.classList.replace('hover:bg-blue-600', 'hover:bg-red-500');
+                btn.classList.add('shake-anim');
+                
+                mAvatar.classList.add('-translate-x-4', 'scale-110');
+                setTimeout(() => mAvatar.classList.remove('-translate-x-4', 'scale-110'), 200);
+
+                playerHp -= 30;
+                
+                setTimeout(() => btn.classList.remove('shake-anim'), 300);
+
+                if (playerHp <= 0) {
+                    processGameOver("血量耗盡！");
+                    return;
+                }
+            }
+
+            if (gameMode === 'time' && score < threshold) {
+                document.getElementById('threshold-display').classList.add('text-red-500');
+            } else {
+                document.getElementById('threshold-display').classList.remove('text-red-500');
+            }
+
+            updateUI();
+            updateHPUI(); 
+            setTimeout(nextQuestion, 600);
+        }
+
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('level-display').innerText = level;
+            document.getElementById('threshold-display').innerText = threshold;
+        }
+
+        function updateHPUI() {
+            const pBar = document.getElementById('p-hp');
+            const mBar = document.getElementById('m-hp');
+            
+            pBar.style.width = Math.max(0, (playerHp / 100) * 100) + '%';
+            mBar.style.width = Math.max(0, (monsterHp / maxMonsterHp) * 100) + '%';
+
+            pBar.className = playerHp <= 30 
+                ? "bg-red-600 h-full rounded-full transition-all duration-300" 
+                : "bg-green-500 h-full rounded-full transition-all duration-300";
+            mBar.className = "bg-red-500 h-full rounded-full transition-all duration-300";
+        }
+
+        function surrender() { processGameOver("勇者撤退"); }
+
+        function processGameOver(title) {
+            clearInterval(timer);
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('go-screen').classList.remove('hidden');
+            document.getElementById('go-title').innerText = title;
+            document.getElementById('final-score').innerText = score;
+
+            let isNewRecord = false;
+            if(gameMode === 'survival' && score > highScoreSurvival) {
+                highScoreSurvival = score;
+                localStorage.setItem('hsSurvival', score);
+                isNewRecord = true;
+            }
+            if(gameMode === 'time' && score > highScoreTime) {
+                highScoreTime = score;
+                localStorage.setItem('hsTime', score);
+                isNewRecord = true;
+            }
+            
+            if (isNewRecord) {
+                document.getElementById('new-record-alert').classList.remove('hidden');
+            } else {
+                document.getElementById('new-record-alert').classList.add('hidden');
+            }
+
+            let unlockedAny = false;
+            ALL_SKINS.forEach(skin => {
+                if (score >= skin.q && !unlockedSkins.includes(skin.n)) {
+                    unlockedSkins.push(skin.n);
+                    unlockedAny = true;
+                }
+            });
+            if(unlockedAny) {
+                localStorage.setItem('unlockedSkins', JSON.stringify(unlockedSkins));
+                document.getElementById('new-skin-alert').classList.remove('hidden');
+            }
+            document.getElementById('skin-progress').innerText = Math.round((unlockedSkins.length / 50) * 100) + '%';
+        }
+
+        function returnToMenu() {
+            document.getElementById('go-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            
+            document.getElementById('menu-hs-survival').innerText = highScoreSurvival;
+            document.getElementById('menu-hs-time').innerText = highScoreTime;
+            document.getElementById('unlocked-count').innerText = unlockedSkins.length;
+            
+            document.getElementById('new-skin-alert').classList.add('hidden');
+            document.getElementById('new-record-alert').classList.add('hidden');
+            document.getElementById('boss-dialogue').classList.add('hidden');
+        }
+
+        document.getElementById('menu-hs-survival').innerText = highScoreSurvival;
+        document.getElementById('menu-hs-time').innerText = highScoreTime;
+        document.getElementById('unlocked-count').innerText = unlockedSkins.length;
+        document.getElementById('vocab-count').innerText = VOCAB.length;
+        window.alert = showToast;
+
+        function createParticles() {
+            const layer = document.getElementById('particles-layer');
+            const particleCount = 35;
+            for (let i = 0; i < particleCount; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 6 + 2; 
+                const left = Math.random() * 100; 
+                const duration = Math.random() * 10 + 6; 
+                const delay = Math.random() * 10; 
+                const opacity = Math.random() * 0.4 + 0.1; 
+                p.style.width = `${size}px`;
+                p.style.height = `${size}px`;
+                p.style.left = `${left}%`;
+                p.style.setProperty('--duration', `${duration}s`);
+                p.style.setProperty('--max-opacity', opacity);
+                p.style.animationDelay = `${delay}s`;
+                const colors = ['rgba(255,255,255,0.8)', 'rgba(167,139,250,0.8)', 'rgba(96,165,250,0.8)'];
+                p.style.background = `radial-gradient(circle, ${colors[Math.floor(Math.random()*colors.length)]} 0%, rgba(255,255,255,0) 70%)`;
+                layer.appendChild(p);
+            }
+        }
+        createParticles();
+    </script>
+</body>
+</html>

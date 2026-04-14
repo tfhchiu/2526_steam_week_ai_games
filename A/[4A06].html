@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 經典影視打字劇場</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        theater: {
+                            bg: '#0f172a',      // 深藍黑背景
+                            card: '#1e293b',    // 卡片背景
+                            gold: '#fbbf24',    // 電影金
+                            goldHover: '#f59e0b',
+                            red: '#dc2626',     // 幕布紅
+                            text: '#f8fafc',
+                        }
+                    },
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'drive': 'drive 3s linear infinite',
+                        'swing': 'swing 2s ease-in-out infinite',
+                        'pulse-glow': 'pulseGlow 1.5s ease-in-out infinite',
+                        'spin-slow': 'spin 4s linear infinite',
+                        'bounce-slight': 'bounceSlight 1s infinite',
+                        'magic-sparkle': 'sparkle 1.5s ease-out infinite',
+                        'flash-red': 'flashRed 0.5s infinite alternate'
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+                        drive: { '0%': { transform: 'translateX(-100px)' }, '100%': { transform: 'translateX(300px)' } },
+                        swing: { '0%, 100%': { transform: 'rotate(-10deg)' }, '50%': { transform: 'rotate(10deg)' } },
+                        pulseGlow: { '0%, 100%': { opacity: 1, transform: 'scale(1)', filter: 'drop-shadow(0 0 5px rgba(251,191,36,0.5))' }, '50%': { opacity: 0.8, transform: 'scale(1.2)', filter: 'drop-shadow(0 0 15px rgba(251,191,36,1))' } },
+                        bounceSlight: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
+                        sparkle: { '0%': { opacity: 0, transform: 'scale(0) translateY(0)' }, '50%': { opacity: 1, transform: 'scale(1.5) translateY(-20px)' }, '100%': { opacity: 0, transform: 'scale(0) translateY(-40px)' } },
+                        flashRed: { '0%': { filter: 'drop-shadow(0 0 5px red)' }, '100%': { filter: 'drop-shadow(0 0 20px red)' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            color: #f8fafc;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            overflow-x: hidden;
+        }
+
+        /* --- 電影院背景特效 --- */
+        .spotlight {
+            position: fixed; top: -50px; width: 300px; height: 100vh;
+            background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+            z-index: -1; pointer-events: none;
+        }
+        .spotlight.left { left: 10%; transform: rotate(-15deg); }
+        .spotlight.right { right: 10%; transform: rotate(15deg); }
+
+        /* --- UI 電影卡片樣式 --- */
+        .theater-card {
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(20px);
+            border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+            color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            box-shadow: 0 8px 15px rgba(217, 119, 6, 0.3);
+            border: 1px solid rgba(255,255,255,0.3); transition: all 0.3s;
+        }
+        .btn-gold:hover { transform: translateY(-3px); box-shadow: 0 12px 20px rgba(217, 119, 6, 0.5); filter: brightness(1.1); }
+        
+        .btn-red {
+            background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%);
+            color: #fff; box-shadow: 0 8px 15px rgba(220, 38, 38, 0.3); border: 1px solid rgba(255,255,255,0.3); transition: all 0.3s;
+        }
+        .btn-red:hover { transform: translateY(-3px); box-shadow: 0 12px 20px rgba(220, 38, 38, 0.5); filter: brightness(1.1); }
+
+        /* 打字字元樣式 */
+        .typing-text { font-family: 'Roboto Mono', monospace; font-weight: 700; letter-spacing: 1px; }
+        .char { transition: color 0.1s; display: inline-block; }
+        .char.correct { color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.6); } 
+        .char.incorrect { color: #ef4444; border-bottom: 2px solid #ef4444; background: rgba(239, 68, 68, 0.2); border-radius: 2px; }
+        
+        .fade-enter { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .app-section { display: none; }
+
+        /* --- 導演打板 (Mascot) --- */
+        #mascot-container {
+            position: fixed; bottom: 10px; right: 2vw; z-index: 50;
+            display: flex; align-items: flex-end; flex-direction: row-reverse;
+            animation: floatMascot 4s ease-in-out infinite alternate;
+        }
+        @keyframes floatMascot { 0% { transform: translateY(0px); } 100% { transform: translateY(-5px); } }
+
+        .speech-bubble {
+            background: rgba(30, 41, 59, 0.95); border: 2px solid #fbbf24; padding: 12px 18px;
+            border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            margin-bottom: 80px; margin-right: 15px; color: #f8fafc; font-weight: bold; max-width: 250px;
+            opacity: 0; transform: scale(0.9) translateY(10px); transition: all 0.4s; position: relative;
+        }
+        .speech-bubble.show { opacity: 1; transform: scale(1) translateY(0); }
+        .speech-bubble::after {
+            content: ''; position: absolute; bottom: -12px; right: 30px;
+            border-width: 12px 12px 0 0; border-style: solid; border-color: rgba(30, 41, 59, 0.95) transparent transparent transparent;
+        }
+
+        /* 動態小劇場舞台 */
+        .stage-container {
+            background: linear-gradient(180deg, #111827 0%, #000000 100%);
+            border: 2px solid #334155;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 10px 20px rgba(0,0,0,0.4);
+        }
+        .stage-curtain {
+            position: absolute; top: 0; width: 40px; height: 100%;
+            background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 50%, #7f1d1d 100%);
+            z-index: 10; border-left: 2px solid #450a0a; border-right: 2px solid #450a0a;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+        .stage-curtain.left { left: 0; border-radius: 0 0 10px 0; }
+        .stage-curtain.right { right: 0; border-radius: 0 0 0 10px; }
+        
+        /* 自定義卷軸 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #fbbf24; }
+
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <!-- 背景特效 -->
+    <div class="spotlight left"></div>
+    <div class="spotlight right"></div>
+
+    <!-- 導演打板吉祥物 -->
+    <div id="mascot-container">
+        <svg width="100" height="100" viewBox="0 0 100 100" style="filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));">
+            <g class="animate-bounce-slight">
+                <!-- 下半部 -->
+                <rect x="10" y="45" width="80" height="45" fill="#1e293b" rx="4" stroke="#e2e8f0" stroke-width="2"/>
+                <path d="M10 45 L90 45" stroke="#e2e8f0" stroke-width="2"/>
+                <text x="50" y="75" fill="#fbbf24" font-size="16" font-weight="bold" text-anchor="middle" font-family="sans-serif">ACTION</text>
+                <!-- 上半部 (打板) -->
+                <g transform="rotate(-15 10 45)">
+                    <rect x="10" y="25" width="80" height="15" fill="#1e293b" rx="2" stroke="#e2e8f0" stroke-width="2"/>
+                    <!-- 斜條紋 -->
+                    <path d="M20 25 L30 40 M40 25 L50 40 M60 25 L70 40 M80 25 L90 40" stroke="#f8fafc" stroke-width="4"/>
+                </g>
+                <circle cx="15" cy="45" r="4" fill="#ef4444"/>
+            </g>
+        </svg>
+        <div id="mascotSpeech" class="speech-bubble">Action！歡迎來到經典影視劇場！今天想挑戰哪部戲？</div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="theater-card w-full max-w-4xl p-6 md:p-10 mb-8 relative mt-4 z-10">
+        
+        <div class="text-center mb-8 relative">
+            <h1 class="text-4xl md:text-5xl font-black mb-3 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 drop-shadow-md tracking-wider">
+                經典影視打字劇場
+            </h1>
+            <p class="text-gray-300 font-bold tracking-widest text-xs md:text-sm inline-block px-4 py-1 rounded-full border border-gray-600 bg-gray-800/50">
+                🎬 沉浸式還原．經典台詞重現 🎬
+            </p>
+        </div>
+
+        <!-- 區塊 1：主選單 -->
+        <div id="mainMenu" class="app-section fade-enter text-center" style="display: block;">
+            <div class="flex flex-col md:flex-row gap-6 justify-center mt-6">
+                <button onclick="goToSingleSetup()" class="flex-1 p-8 rounded-2xl btn-gold cursor-pointer group">
+                    <div class="text-6xl mb-4 transform group-hover:scale-110 transition-transform">🍿</div>
+                    <h2 class="text-2xl font-black mb-2 tracking-wide">個人試鏡</h2>
+                    <p class="text-sm opacity-90 font-bold">挑戰手速，演繹經典大片名場面！</p>
+                </button>
+                <button onclick="goToMultiSetup()" class="flex-1 p-8 rounded-2xl btn-red cursor-pointer group">
+                    <div class="text-6xl mb-4 transform group-hover:scale-110 transition-transform">⚔️</div>
+                    <h2 class="text-2xl font-black mb-2 tracking-wide">多人對戲</h2>
+                    <p class="text-sm opacity-90 font-bold">邀請朋友同台飆戲，看誰不NG！</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- 區塊 2：單人設定 -->
+        <div id="singleSetup" class="app-section fade-enter text-center">
+            <h2 class="text-2xl font-black text-yellow-400 mb-8">請輸入您的演員名稱</h2>
+            <input type="text" id="singlePlayerName" placeholder="例如：好萊塢巨星..." 
+                   class="w-full md:w-2/3 px-6 py-4 rounded-xl text-xl text-center mb-4 bg-gray-800 border-2 border-gray-600 outline-none focus:border-yellow-400 text-white font-bold transition-colors">
+            <p id="singleNameError" class="text-red-400 text-sm mb-6 font-bold hidden">卡！導演說沒名字不能上場！</p>
+            <div class="flex gap-4 justify-center mt-8">
+                <button onclick="switchSection('mainMenu')" class="px-8 py-3 rounded-full bg-gray-700 text-white font-bold hover:bg-gray-600 transition">返回大廳</button>
+                <button onclick="startSingleGame()" class="px-10 py-3 rounded-full btn-gold text-lg font-bold tracking-wide">進入片場</button>
+            </div>
+        </div>
+
+        <!-- 區塊 3：多人設定 -->
+        <div id="multiSetup" class="app-section fade-enter text-center">
+            <h2 class="text-2xl font-black text-red-400 mb-6">劇組名單確認</h2>
+            <div class="mb-6 flex justify-center items-center gap-4 bg-gray-800 py-2 px-6 rounded-full inline-flex border border-gray-600">
+                <label class="text-gray-300 font-bold">同台演員數：</label>
+                <select id="playerCountSelect" onchange="renderMultiSetup()" class="px-2 py-1 rounded outline-none font-bold bg-gray-700 text-white border border-gray-500 cursor-pointer">
+                    <option value="2">2 位演員</option>
+                    <option value="3">3 位演員</option>
+                </select>
+            </div>
+            <div id="multiPlayersContainer" class="flex flex-col gap-4 mb-6 max-w-lg mx-auto"></div>
+            <p id="multiError" class="text-red-400 text-sm mb-6 font-bold hidden">卡！有人沒簽合約（填寫名字）！</p>
+            <div class="flex gap-4 justify-center">
+                <button onclick="switchSection('mainMenu')" class="px-8 py-3 rounded-full bg-gray-700 text-white font-bold hover:bg-gray-600 transition">返回大廳</button>
+                <button onclick="startMultiGame()" class="px-10 py-3 rounded-full btn-red text-lg font-bold tracking-wide">開始對決</button>
+            </div>
+        </div>
+
+        <!-- 區塊 4：多人回合提示 -->
+        <div id="turnAnnouncement" class="app-section fade-enter text-center py-10">
+            <div class="bg-gray-800 p-8 rounded-2xl shadow-xl border border-yellow-500 max-w-sm mx-auto">
+                <div id="turnAvatar" class="text-7xl mb-4 drop-shadow-lg"></div>
+                <h2 class="text-xl font-bold text-gray-400 mb-2">下一位準備上場的是...</h2>
+                <p class="text-3xl text-yellow-400 mb-8 font-black tracking-wider"><span id="turnPlayerName"></span></p>
+                <button onclick="setupRound()" class="px-10 py-3 rounded-full btn-gold text-lg font-black w-full">Camera Ready!</button>
+            </div>
+        </div>
+
+        <!-- 區塊 5：遊戲畫面 -->
+        <div id="gameSection" class="app-section fade-enter">
+            <!-- 頂部資訊 -->
+            <div class="flex justify-between items-end mb-4 bg-gray-800/80 p-3 rounded-xl border border-gray-600">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gray-900 px-4 py-2 rounded-lg font-bold shadow-sm border border-gray-700 flex items-center">
+                        <span id="gameAvatar" class="text-2xl mr-2"></span><span id="displayPlayerName" class="text-yellow-300"></span>
+                    </div>
+                    <div id="levelBadge" class="bg-red-900 text-red-100 px-3 py-2 rounded-lg font-bold shadow-sm border border-red-700 hidden">
+                        <span id="levelDisplay">第一幕</span>
+                    </div>
+                </div>
+                <div class="text-right bg-gray-900 px-5 py-2 rounded-lg shadow-sm border border-gray-700">
+                    <p class="text-xs text-gray-400 font-bold mb-0">拍攝時間</p>
+                    <div class="text-yellow-400 font-black text-2xl" style="font-family: 'Roboto Mono', monospace;">
+                        <span id="timeDisplay">0.0</span><span class="text-sm ml-1 text-gray-500">s</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🎬 影視動態舞台區 -->
+            <div class="stage-container relative h-48 md:h-56 rounded-xl mb-6 overflow-hidden flex items-center justify-center">
+                <div class="stage-curtain left"></div>
+                <div class="stage-curtain right"></div>
+                <!-- JS 注入場景 HTML -->
+                <div id="animationStage" class="w-full h-full flex items-center justify-center relative"></div>
+                
+                <!-- 劇本提示浮層 -->
+                <div class="absolute bottom-3 w-full text-center px-12 z-20 pointer-events-none">
+                    <p id="targetScene" class="text-xs md:text-sm font-bold text-gray-200 bg-black/60 backdrop-blur-md inline-block px-4 py-1.5 rounded-full border border-gray-500"></p>
+                </div>
+            </div>
+
+            <!-- 打字劇本區 -->
+            <div class="bg-gray-800 rounded-xl p-6 mb-4 shadow-xl border border-gray-600 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-2 h-full bg-yellow-500"></div>
+                <p id="targetTextTranslation" class="text-sm text-gray-400 mb-3 font-bold pl-2"></p>
+                <div id="targetTextDisplay" class="text-xl md:text-2xl typing-text text-gray-500 leading-relaxed break-words select-none tracking-wide pl-2">
+                    <!-- JS 生成 -->
+                </div>
+            </div>
+
+            <textarea id="typingInput" rows="2" placeholder="請精準輸入經典台詞... (按 Enter 完成)"
+                      class="w-full px-6 py-4 rounded-xl border-2 border-gray-600 bg-gray-900 outline-none text-xl md:text-2xl typing-text text-white mb-4 shadow-inner focus:border-yellow-500 transition-colors" autocomplete="off" spellcheck="false"></textarea>
+            
+            <div class="text-center">
+                <button onclick="submitResult()" class="btn-gold font-black py-3 px-16 rounded-full text-lg w-full md:w-auto tracking-widest">CUT! (送出)</button>
+            </div>
+        </div>
+
+        <!-- 區塊 6：單人關卡結算 -->
+        <div id="levelResultSection" class="app-section fade-enter text-center">
+            <div class="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-600 mb-6 max-w-md mx-auto">
+                <div id="resultIcon" class="text-6xl mb-4 drop-shadow-lg"></div>
+                <h2 id="resultTitle" class="text-2xl font-black mb-2"></h2>
+                <p id="resultMessage" class="text-gray-400 mb-6 font-bold"></p>
+                
+                <div class="flex justify-between gap-4">
+                    <div class="flex-1 bg-gray-900 border border-gray-700 p-3 rounded-lg"><span class="text-gray-500 text-xs font-bold block">台詞準確率</span><span class="text-2xl font-black text-yellow-400"><span id="accRes"></span>%</span></div>
+                    <div class="flex-1 bg-gray-900 border border-gray-700 p-3 rounded-lg"><span class="text-gray-500 text-xs font-bold block">花費時間</span><span class="text-2xl font-black text-blue-400"><span id="timeRes"></span>s</span></div>
+                    <div class="flex-1 bg-gray-900 border border-gray-700 p-3 rounded-lg"><span class="text-gray-500 text-xs font-bold block">打字手速</span><span class="text-2xl font-black text-green-400" id="wpmRes"></span></div>
+                </div>
+            </div>
+            <div id="singleResultButtons" class="flex gap-4 justify-center"></div>
+        </div>
+
+        <!-- 區塊 7：單人最終結算 -->
+        <div id="finalSettlementSection" class="app-section fade-enter text-center py-8">
+            <div class="text-7xl mb-4 animate-bounce drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]">🏆</div>
+            <h2 class="text-4xl font-black text-yellow-400 mb-2 tracking-wider">殺青大成功！</h2>
+            <p class="text-gray-300 mb-8 font-bold">導演對你的表現非常滿意，這部戲絕對會大賣！</p>
+            
+            <div class="bg-gray-800 rounded-2xl p-8 mx-auto max-w-sm mb-8 shadow-2xl border border-yellow-500">
+                <h3 class="text-xl font-bold text-white mb-5 bg-gray-700 py-2 rounded border border-gray-600">最終票房統計</h3>
+                <div class="flex justify-between mb-4 border-b border-gray-600 pb-2">
+                    <span class="text-gray-400 font-bold">總拍攝時間</span><span class="font-black text-blue-400"><span id="finalTime"></span> s</span>
+                </div>
+                <div class="flex justify-between mb-4 border-b border-gray-600 pb-2">
+                    <span class="text-gray-400 font-bold">平均手速</span><span class="font-black text-green-400"><span id="finalWpm"></span> WPM</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 font-bold">平均準確率</span><span class="font-black text-yellow-400"><span id="finalAcc"></span> %</span>
+                </div>
+            </div>
+            <button onclick="switchSection('mainMenu')" class="btn-gold py-4 px-12 rounded-full text-xl font-black">回大廳接新戲</button>
+        </div>
+
+        <!-- 區塊 8：多人結算排名 -->
+        <div id="multiResultSection" class="app-section fade-enter text-center py-6">
+            <h2 class="text-4xl font-black text-yellow-400 mb-2 tracking-wider">🌟 奧斯卡頒獎典禮 🌟</h2>
+            <p class="text-gray-300 font-bold mb-8">最佳男/女主角得主是...</p>
+            <div id="podiumContainer" class="flex flex-col gap-4 max-w-lg mx-auto mb-10 text-left"></div>
+            <button onclick="switchSection('mainMenu')" class="btn-red py-4 px-12 rounded-full text-xl font-black tracking-widest">再來一局</button>
+        </div>
+
+    </div>
+    
+    <div style="height: 120px;"></div>
+
+    <script>
+        // --- 導演對話 ---
+        function mascotSay(text) {
+            const bubble = document.getElementById('mascotSpeech');
+            bubble.classList.remove('show');
+            setTimeout(() => { bubble.innerText = text; bubble.classList.add('show'); }, 300); 
+        }
+
+        // --- 演員頭像庫 ---
+        const avatars = ['😎', '🕵🏻‍♂️', '🥷', '🧙‍♂️', '🦸‍♀️', '🧛‍♂️'];
+        
+        // --- 🎬 影視動漫資料庫 (已調降難度 & 加長台詞) ---
+        // 降低 targetWpm (手速要求) 讓玩家有更長的思考和打字時間
+        const levels = [
+            {
+                id: 1, name: "第一幕：傳世電影", targetWpm: 8, targetAccuracy: 70, // 原本 15 WPM，大幅降低
+                phrases: [
+                    { 
+                        text: "Sorry, I am a cop. I want to be a good guy.", translation: "對不起，我是警察。我想做個好人。", 
+                        scene: "《無間道》(2002) - 陳永仁在天台用槍指著劉健明。",
+                        anim: `<div class="relative text-7xl flex items-center justify-center gap-2">
+                                  <span class="z-10 drop-shadow-md">🕵🏻‍♂️</span>
+                                  <span class="text-4xl animate-bounce-slight transform -translate-y-2">🔫</span>
+                                  <span class="opacity-80 grayscale">🕴🏻</span>
+                               </div>`
+                    },
+                    { 
+                        text: "May the Force be with you, always.", translation: "願原力與你同在，直到永遠。", 
+                        scene: "《星際大戰》(1977) - 絕地武士舉起發光的藍色光劍。",
+                        anim: `<div class="flex items-center text-7xl justify-center">
+                                  <span class="animate-float">🤺</span>
+                                  <div class="h-28 w-2 bg-blue-300 rounded-full animate-swing origin-bottom drop-shadow-[0_0_15px_rgba(96,165,250,1)] ml-2"></div>
+                               </div>`
+                    },
+                    { 
+                        text: "Hasta la vista, baby. I will be back.", translation: "後會有期，寶貝。我會回來的。", 
+                        scene: "《魔鬼終結者》(1984) - T-800 戴著墨鏡，閃爍著駭人的紅眼。",
+                        anim: `<div class="relative text-8xl flex items-center justify-center">
+                                  <span class="drop-shadow-lg">🤖</span>
+                                  <div class="absolute w-3 h-3 bg-red-500 rounded-full top-[42%] right-[32%] animate-flash-red shadow-[0_0_15px_red]"></div>
+                               </div>`
+                    }
+                ]
+            },
+            {
+                id: 2, name: "第二幕：熱血動漫", targetWpm: 12, targetAccuracy: 75, // 原本 20 WPM，大幅降低
+                phrases: [
+                    { 
+                        text: "I will keep moving forward, until all my enemies are destroyed.", translation: "我會不斷前進，直到將敵人驅逐殆盡。", 
+                        scene: "《進擊的巨人》 - 艾連披著調查兵團斗篷，眼神堅定望向海的另一邊。",
+                        anim: `<div class="relative text-7xl flex items-center justify-center w-full">
+                                  <span class="animate-drive absolute left-0 text-5xl">🕊️</span>
+                                  <span class="z-10 drop-shadow-lg text-green-800 relative">🥷<div class="absolute -bottom-2 -right-4 text-4xl animate-magic-sparkle text-red-500">🔥</div></span>
+                               </div>`
+                    },
+                    { 
+                        text: "You thought your first kiss would be JoJo, but it was me, Dio!", translation: "你以為你的初吻會是JOJO，其實是我迪奧啦！", 
+                        scene: "《JOJO的奇妙冒險》 - 迪奧指著自己，背景充滿壓迫感的狀聲詞。",
+                        anim: `<div class="relative text-8xl flex items-center justify-center gap-4">
+                                  <span class="animate-pulse font-black text-yellow-400 absolute -top-4 -left-8 text-5xl transform -rotate-12 drop-shadow-[0_0_8px_yellow]">ゴ</span>
+                                  <span class="animate-pulse font-black text-yellow-400 absolute top-8 -right-8 text-5xl transform rotate-12 delay-100 drop-shadow-[0_0_8px_yellow]">ゴ</span>
+                                  <span class="z-10 animate-swing drop-shadow-xl">🧛‍♂️</span>
+                               </div>`
+                    }
+                ]
+            },
+            {
+                id: 3, name: "第三幕：史詩高潮", targetWpm: 15, targetAccuracy: 80, // 原本 25 WPM，大幅降低
+                phrases: [
+                    { 
+                        text: "You can take away my suits, but I am Iron Man.", translation: "你可以拿走我的戰甲，但我是鋼鐵人。", 
+                        scene: "《復仇者聯盟》(2013/2019) - 鋼鐵人的終極宣言。",
+                        anim: `<div class="relative text-7xl flex flex-col items-center justify-center">
+                                  <span class="animate-bounce-slight z-10 drop-shadow-lg">🦸‍♂️</span>
+                                  <span class="text-6xl absolute -right-10 top-2 animate-magic-sparkle">🫰✨</span>
+                               </div>`
+                    },
+                    { 
+                        text: "You shall not pass! Fly, you fools!", translation: "你休想越過這道防線！快逃，你們這些傻瓜！", 
+                        scene: "《魔戒首部曲》(2001) - 甘道夫將法杖重重砸在橋上。",
+                        anim: `<div class="relative text-7xl flex items-center justify-center gap-2">
+                                  <span class="animate-float z-10">🧙‍♂️</span>
+                                  <div class="h-32 w-3 bg-yellow-700 rounded animate-bounce-slight relative border border-yellow-900">
+                                      <div class="absolute -top-6 -left-3 w-10 h-10 bg-white rounded-full animate-pulse-glow mix-blend-screen shadow-[0_0_30px_#fff]"></div>
+                                  </div>
+                               </div>`
+                    }
+                ]
+            }
+        ];
+
+        // --- 全域變數 ---
+        let gameMode = 'single';
+        let currentLevelIndex = 0;
+        let singleStats = { time: 0, wpmSum: 0, accSum: 0, stages: 0 };
+        let multiPlayers = []; 
+        let currentPlayerTurn = 0;
+        let multiTargetPhrase = null; 
+        
+        let currentPhraseStr = "";
+        let startTime = 0;
+        let timerInterval;
+
+        // --- UI 控制 ---
+        function switchSection(sectionId) {
+            document.querySelectorAll('.app-section').forEach(sec => sec.style.display = 'none');
+            document.getElementById(sectionId).style.display = 'block';
+            if(sectionId === 'mainMenu') {
+                singleStats = { time: 0, wpmSum: 0, accSum: 0, stages: 0 };
+                mascotSay("影棚清理完畢！今天要挑戰經典台詞，還是找朋友一起試鏡？");
+            }
+        }
+
+        function getUniquePhrase(levelIndex) {
+            let lvl = levels[levelIndex];
+            if (!lvl.pool || lvl.pool.length === 0) lvl.pool = [...lvl.phrases].sort(() => Math.random() - 0.5);
+            return lvl.pool.pop();
+        }
+
+        // --- 模式設定 ---
+        function goToSingleSetup() {
+            document.getElementById('singleNameError').classList.add('hidden');
+            switchSection('singleSetup');
+            mascotSay("請在演員表填上你的大名，準備開機！");
+        }
+
+        function startSingleGame() {
+            const name = document.getElementById('singlePlayerName').value.trim();
+            if(!name) { document.getElementById('singleNameError').classList.remove('hidden'); return; }
+            gameMode = 'single'; currentLevelIndex = 0;
+            document.getElementById('displayPlayerName').innerText = name;
+            document.getElementById('gameAvatar').innerText = '🎫';
+            document.getElementById('levelBadge').classList.remove('hidden');
+            setupRound();
+        }
+
+        function goToMultiSetup() {
+            gameMode = 'multi';
+            document.getElementById('playerCountSelect').value = "2";
+            renderMultiSetup(); switchSection('multiSetup');
+            mascotSay("劇組集合！請大家選一個符合氣質的演員頭像並寫上名字！");
+        }
+
+        function renderMultiSetup() {
+            const count = parseInt(document.getElementById('playerCountSelect').value);
+            const container = document.getElementById('multiPlayersContainer');
+            container.innerHTML = '';
+            for(let i=0; i<count; i++) {
+                let html = `
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-600" data-player="${i}">
+                    <div class="flex gap-3 mb-3 items-center">
+                        <span class="font-bold bg-red-900 text-red-100 px-3 py-1 rounded-md text-sm border border-red-700">演員 ${i+1}</span>
+                        <input type="text" class="player-name-input flex-1 bg-gray-900 border-b-2 border-gray-500 outline-none focus:border-red-400 text-white px-2 py-1 font-bold" placeholder="輸入名字...">
+                    </div>
+                    <div class="flex gap-2 items-center"><span class="text-sm font-bold text-gray-400">定妝造型</span>
+                        ${avatars.map((e, idx) => `<button class="avatar-btn text-2xl filter grayscale opacity-40 hover:opacity-80 transition ${idx===0?'grayscale-0 opacity-100 drop-shadow-md':''}" onclick="selectAvatar(${i}, this, '${e}')">${e}</button>`).join('')}
+                    </div>
+                </div>`;
+                container.innerHTML += html;
+                container.lastElementChild.setAttribute('data-avatar', avatars[0]);
+            }
+        }
+
+        function selectAvatar(pIdx, btn, emoji) {
+            const div = document.querySelector(`div[data-player="${pIdx}"]`);
+            div.querySelectorAll('.avatar-btn').forEach(b => { b.classList.add('grayscale', 'opacity-40'); b.classList.remove('grayscale-0', 'opacity-100', 'drop-shadow-md'); });
+            btn.classList.remove('grayscale', 'opacity-40'); btn.classList.add('grayscale-0', 'opacity-100', 'drop-shadow-md');
+            div.setAttribute('data-avatar', emoji);
+        }
+
+        function startMultiGame() {
+            const count = parseInt(document.getElementById('playerCountSelect').value);
+            const containers = document.querySelectorAll('#multiPlayersContainer > div');
+            multiPlayers = [];
+            for(let i=0; i<count; i++) {
+                const name = containers[i].querySelector('.player-name-input').value.trim();
+                const avatar = containers[i].getAttribute('data-avatar');
+                if(!name) { document.getElementById('multiError').classList.remove('hidden'); return; }
+                multiPlayers.push({name, avatar, wpm: 0, acc: 0, time: 0});
+            }
+            document.getElementById('multiError').classList.add('hidden');
+            multiTargetPhrase = getUniquePhrase(1); // 多人固定使用第二幕難度（熱血動漫）
+            currentPlayerTurn = 0;
+            document.getElementById('levelBadge').classList.add('hidden');
+            showTurnAnnouncement();
+        }
+
+        function showTurnAnnouncement() {
+            const p = multiPlayers[currentPlayerTurn];
+            document.getElementById('turnAvatar').innerText = p.avatar;
+            document.getElementById('turnPlayerName').innerText = p.name;
+            switchSection('turnAnnouncement');
+            mascotSay(`各部門注意！請 ${p.name} 就位，準備拍攝！`);
+        }
+
+        // --- 遊戲核心 ---
+        function setupRound() {
+            let pObj;
+            if(gameMode === 'single') {
+                const lvl = levels[currentLevelIndex];
+                document.getElementById('levelDisplay').innerText = lvl.name;
+                pObj = getUniquePhrase(currentLevelIndex);
+                mascotSay(`${lvl.name} 開機！不急，慢慢打準確就行！`);
+            } else {
+                pObj = multiTargetPhrase;
+                const p = multiPlayers[currentPlayerTurn];
+                document.getElementById('displayPlayerName').innerText = p.name;
+                document.getElementById('gameAvatar').innerText = p.avatar;
+                mascotSay("Camera... Action！");
+            }
+
+            currentPhraseStr = pObj.text;
+            document.getElementById('targetTextTranslation').innerText = "💬 劇本翻譯：" + pObj.translation;
+            document.getElementById('targetScene').innerText = pObj.scene;
+            document.getElementById('animationStage').innerHTML = pObj.anim;
+
+            const display = document.getElementById('targetTextDisplay');
+            display.innerHTML = '';
+            currentPhraseStr.split('').forEach(c => {
+                const span = document.createElement('span');
+                span.innerText = c; span.classList.add('char'); display.appendChild(span);
+            });
+
+            const input = document.getElementById('typingInput');
+            input.value = ''; input.disabled = false; input.classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('timeDisplay').innerText = "0.0";
+            
+            switchSection('gameSection');
+            input.focus();
+            
+            startTime = new Date().getTime();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const now = new Date().getTime();
+                document.getElementById('timeDisplay').innerText = ((now - startTime) / 1000).toFixed(1);
+            }, 100);
+        }
+
+        // --- 打字判定 ---
+        document.getElementById('typingInput').addEventListener('input', function(e) {
+            const typed = this.value;
+            const chars = document.querySelectorAll('#targetTextDisplay .char');
+            
+            chars.forEach((span, idx) => {
+                span.classList.remove('correct', 'incorrect');
+                if (idx < typed.length) {
+                    if (typed[idx] === currentPhraseStr[idx]) span.classList.add('correct');
+                    else span.classList.add('incorrect');
+                }
+            });
+        });
+
+        document.getElementById('typingInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); submitResult(); }
+        });
+
+        // --- 結算邏輯 ---
+        function submitResult() {
+            clearInterval(timerInterval);
+            const typed = document.getElementById('typingInput').value;
+            if(!typed) return;
+            const input = document.getElementById('typingInput');
+            input.disabled = true; input.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            const endTime = new Date().getTime();
+            const timeTaken = (endTime - startTime) / 1000;
+            
+            let correctChars = 0;
+            for(let i=0; i<Math.min(typed.length, currentPhraseStr.length); i++) {
+                if(typed[i] === currentPhraseStr[i]) correctChars++;
+            }
+            
+            const accuracy = Math.round((correctChars / currentPhraseStr.length) * 100) || 0;
+            const words = currentPhraseStr.length / 5;
+            const wpm = Math.round((words / timeTaken) * 60) || 0;
+
+            if(gameMode === 'single') showSingleResult(wpm, accuracy, timeTaken);
+            else showMultiResultTurn(wpm, accuracy, timeTaken);
+        }
+
+        function showSingleResult(wpm, acc, time) {
+            const lvl = levels[currentLevelIndex];
+            const passed = wpm >= lvl.targetWpm && acc >= lvl.targetAccuracy;
+            
+            document.getElementById('accRes').innerText = acc;
+            document.getElementById('timeRes').innerText = time.toFixed(1);
+            document.getElementById('wpmRes').innerText = wpm;
+            
+            const btns = document.getElementById('singleResultButtons');
+            btns.innerHTML = '';
+            
+            if(passed) {
+                document.getElementById('resultIcon').innerText = '✨';
+                document.getElementById('resultTitle').innerText = "Perfect Cut！";
+                document.getElementById('resultTitle').className = "text-2xl font-black mb-2 text-yellow-400 tracking-wider";
+                document.getElementById('resultMessage').innerText = `情緒到位！演技達標 (及格手速只要:${lvl.targetWpm} WPM, 準度:${lvl.targetAccuracy}%)`;
+                
+                singleStats.time += time; singleStats.wpmSum += wpm; singleStats.accSum += acc; singleStats.stages++;
+                
+                if(currentLevelIndex < levels.length - 1) {
+                    btns.innerHTML = `<button onclick="nextLevel()" class="btn-gold px-8 py-3 rounded-full font-bold">進入下一幕</button>`;
+                    mascotSay("演得好！手速完全達標，準備換場景！");
+                } else {
+                    btns.innerHTML = `<button onclick="showFinalSettlement()" class="btn-red px-8 py-3 rounded-full font-bold">參加首映會</button>`;
+                    mascotSay("全劇殺青！太棒了，我們來看最終票房紀錄！");
+                }
+            } else {
+                document.getElementById('resultIcon').innerText = '🎬';
+                document.getElementById('resultTitle').innerText = "NG！重來一次";
+                document.getElementById('resultTitle').className = "text-2xl font-black mb-2 text-red-500 tracking-wider";
+                document.getElementById('resultMessage').innerText = `導演要求：最少 ${lvl.targetWpm} WPM, 準度:${lvl.targetAccuracy}%，再試一次！`;
+                btns.innerHTML = `<button onclick="setupRound()" class="bg-gray-700 px-8 py-3 rounded-full font-bold text-white hover:bg-gray-600 transition">重新拍攝</button>`;
+                mascotSay("卡！沒關係，慢慢來就好，把字打對比較重要！");
+            }
+            switchSection('levelResultSection');
+        }
+
+        function nextLevel() { currentLevelIndex++; setupRound(); }
+
+        function showFinalSettlement() {
+            document.getElementById('finalTime').innerText = singleStats.time.toFixed(1);
+            document.getElementById('finalWpm').innerText = Math.round(singleStats.wpmSum / singleStats.stages);
+            document.getElementById('finalAcc').innerText = Math.round(singleStats.accSum / singleStats.stages);
+            switchSection('finalSettlementSection');
+        }
+
+        function showMultiResultTurn(wpm, acc, time) {
+            multiPlayers[currentPlayerTurn].wpm = wpm;
+            multiPlayers[currentPlayerTurn].acc = acc;
+            multiPlayers[currentPlayerTurn].time = time;
+            
+            currentPlayerTurn++;
+            if(currentPlayerTurn < multiPlayers.length) {
+                showTurnAnnouncement();
+            } else {
+                showMultiFinalResult();
+            }
+        }
+
+        function showMultiFinalResult() {
+            multiPlayers.sort((a, b) => {
+                if(b.acc !== a.acc) return b.acc - a.acc;
+                return b.time - a.time; // 準度相同比時間
+            });
+            
+            const container = document.getElementById('podiumContainer');
+            container.innerHTML = '';
+            const medals = ['🥇', '🥈', '🥉'];
+            
+            multiPlayers.forEach((p, idx) => {
+                container.innerHTML += `
+                <div class="bg-gray-800 p-4 rounded-xl flex items-center shadow-lg border ${idx===0?'border-yellow-400 bg-gray-900 transform scale-105':'border-gray-600'}">
+                    <div class="text-3xl w-12 text-center">${medals[idx]||''}</div>
+                    <div class="text-4xl mr-4 drop-shadow-md">${p.avatar}</div>
+                    <div class="flex-1">
+                        <h3 class="font-black text-lg ${idx===0?'text-yellow-400':'text-white'}">${p.name}</h3>
+                        <div class="text-sm font-bold text-gray-400 flex gap-3 mt-1">
+                            <span>準度: <span class="${idx===0?'text-green-400':'text-gray-300'}">${p.acc}%</span></span>
+                            <span>手速: <span class="text-gray-300">${p.wpm}</span></span>
+                            <span>時間: ${p.time.toFixed(1)}s</span>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            
+            switchSection('multiResultSection');
+            mascotSay(`好萊塢巨星誕生！恭喜 ${multiPlayers[0].name} 奪得小金人！`);
+        }
+    </script>
+</body>
+</html>

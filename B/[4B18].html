@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D荒野求生：自由建造版</title>
+    <!-- 引入 Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --primary: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f1c40f;
+            --water: #3498db;
+            --wood: #d35400;
+            --stone: #95a5a6;
+            --ui-bg: rgba(15, 20, 25, 0.85);
+        }
+
+        * { box-sizing: border-box; user-select: none; font-family: 'Microsoft YaHei', sans-serif; touch-action: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; }
+
+        #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* 開始與介紹畫面 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.9)), url('https://images.unsplash.com/photo-1503431128871-161d4b68bb03?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80') center/cover;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: white; z-index: 200; text-align: center; padding: 20px;
+        }
+        #start-screen h1 { font-size: 3em; color: var(--primary); margin-bottom: 10px; text-shadow: 2px 2px 5px #000; }
+        .story-box { background: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; max-width: 650px; border: 1px solid #555; margin-bottom: 20px; line-height: 1.6; text-align: left; }
+        .start-btn { padding: 15px 50px; font-size: 1.5em; background: var(--primary); color: white; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; transition: 0.2s; box-shadow: 0 0 15px var(--primary); pointer-events: auto;}
+        .start-btn:hover { transform: scale(1.05); background: #27ae60; }
+
+        /* UI 狀態列 */
+        #hud {
+            position: absolute; top: 10px; left: 10px; background: var(--ui-bg); padding: 15px;
+            border-radius: 12px; color: white; font-size: 14px; pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.2); z-index: 10;
+        }
+        .bar-container { width: 180px; height: 12px; background: #333; border-radius: 6px; margin: 3px 0 8px 0; overflow: hidden; border: 1px solid #000;}
+        .bar-fill { height: 100%; transition: width 0.2s; }
+        #hp-bar { background: var(--danger); width: 100%; }
+        #hunger-bar { background: var(--warning); width: 100%; }
+        #thirst-bar { background: var(--water); width: 100%; }
+        
+        .inv-row { display: flex; gap: 12px; margin-top: 5px; font-weight: bold; font-size: 16px; flex-wrap: wrap; max-width: 250px;}
+        .lives { font-size: 20px; margin-bottom: 5px; }
+        #safe-status { font-weight: bold; margin-top: 5px; padding: 3px 8px; border-radius: 5px; display: inline-block; background: #27ae60; }
+
+        /* 日夜時間顯示 */
+        #time-display {
+            position: absolute; top: 10px; right: 10px; background: var(--ui-bg); padding: 10px 20px;
+            border-radius: 30px; color: white; font-weight: bold; font-size: 16px;
+            border: 1px solid rgba(255,255,255,0.2); z-index: 10; display: flex; align-items: center; gap: 10px;
+        }
+
+        /* 警告遮罩 */
+        #danger-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+            box-shadow: inset 0 0 0px rgba(255, 0, 0, 0); transition: box-shadow 0.5s; z-index: 5;
+        }
+
+        /* 虛擬方向鍵 & 操作按鈕 */
+        #controls { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .action-btn { background: rgba(0,0,0,0.6); border: 2px solid white; color: white; padding: 15px 20px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px); transition: 0.1s; pointer-events: auto;}
+        .action-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.3); }
+
+        #joystick { position: absolute; bottom: 20px; left: 20px; display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px; gap: 5px; z-index: 10; }
+        .d-btn { background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; color: white; font-size: 24px; display: flex; justify-content: center; align-items: center; cursor: pointer; backdrop-filter: blur(5px); pointer-events: auto;}
+        .d-btn:active { background: rgba(255,255,255,0.4); }
+        #btn-up { grid-column: 2; grid-row: 1; } #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; } #btn-right { grid-column: 3; grid-row: 2; }
+
+        /* 建造確認選單 (預覽模式) */
+        #build-ui {
+            display: none; position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            gap: 20px; z-index: 20;
+        }
+        .build-confirm-btn { padding: 15px 25px; font-size: 18px; font-weight: bold; border-radius: 10px; border: 2px solid white; cursor: pointer; pointer-events: auto; }
+
+        /* 模態彈窗 */
+        .modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--ui-bg); border: 2px solid #aaa; color: white;
+            padding: 20px; border-radius: 12px; display: none; flex-direction: column;
+            width: 420px; max-width: 95%; z-index: 100; backdrop-filter: blur(10px); pointer-events: auto;
+        }
+        .modal h2 { margin: 0 0 10px 0; border-bottom: 1px solid #555; padding-bottom: 10px; text-align: center;}
+        .buy-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 5px;}
+        .buy-item { background: rgba(0,0,0,0.6); border: 1px solid #555; padding: 10px 5px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s;}
+        .buy-item:hover { border-color: var(--primary); background: rgba(255,255,255,0.1); }
+        .item-icon { font-size: 24px; margin-bottom: 5px; }
+        .item-cost { font-size: 11px; color: #ccc; margin-top: 5px; }
+        .close-btn { background: var(--danger); color: white; border: none; padding: 10px; margin-top: 15px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%;}
+        
+        #msg-toast { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 12px 25px; border-radius: 30px; font-weight: bold; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 50; border: 1px solid white;}
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: rgba(255,255,255,0.9); border-radius: 50%; transform: translate(-50%, -50%); z-index: 5; pointer-events: none; box-shadow: 0 0 4px #000;}
+        
+        /* 死亡動畫遮罩 */
+        #death-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: black;
+            color: red; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 3em; font-weight: bold; z-index: 300; opacity: 0; pointer-events: none; transition: opacity 1s;
+        }
+        #death-screen p { color: white; font-size: 0.4em; margin-top: 20px;}
+    </style>
+</head>
+<body>
+
+    <!-- 開始介紹畫面 -->
+    <div id="start-screen">
+        <h1>🌲 3D荒野求生：自由建造</h1>
+        <div class="story-box">
+            <h3>📖 遊戲背景與生存法則</h3>
+            <ul>
+                <li><b>自由放置建築：</b> 購買建築後會出現「綠色預覽」，移動到喜歡的位置再確認放置！</li>
+                <li><b>顯眼的物資：</b> 水果和樹枝變得巨大且會在半空中漂浮，絕不錯過。</li>
+                <li><b>海邊取水：</b> 走到島嶼邊緣的沙灘上，按下動作鍵即可收集淡水。</li>
+                <li><b>慢節奏消耗：</b> 發呆不掉飢餓，只有勞作和戰鬥會扣微量飢餓。水分則會非常緩慢地流失。</li>
+                <li><b>🌙 夜晚危機：</b> 藍月升起時若不在營火或庇護所旁，野獸會紅眼追殺你！死亡有 3 次復活機會。</li>
+            </ul>
+        </div>
+        <button class="start-btn" onclick="startGame()">開始求生</button>
+    </div>
+
+    <!-- 死亡遮罩 -->
+    <div id="death-screen">
+        <div>你倒下了...</div>
+        <p id="death-msg">即將在一道白光中醒來，時間流逝到了第二天...</p>
+    </div>
+
+    <div id="game-container"></div>
+    <div id="crosshair"></div>
+    <div id="danger-overlay"></div>
+
+    <!-- UI 狀態列 -->
+    <div id="hud" style="display:none;">
+        <div class="lives" id="ui-lives">❤️❤️❤️</div>
+        <div id="safe-status">☀️ 安全區</div>
+        <div style="margin-top: 8px;">生命值</div>
+        <div class="bar-container"><div class="bar-fill" id="hp-bar"></div></div>
+        <div>飽食度 (勞作時微量消耗)</div>
+        <div class="bar-container"><div class="bar-fill" id="hunger-bar"></div></div>
+        <div>水分 (隨時間極慢流失)</div>
+        <div class="bar-container"><div class="bar-fill" id="thirst-bar"></div></div>
+        <div class="inv-row">
+            <span>🪵 <span id="ui-wood" style="color:#d35400">0</span></span>
+            <span>🪨 <span id="ui-stone" style="color:#95a5a6">0</span></span>
+            <span>🍒 <span id="ui-berry" style="color:#e74c3c">0</span></span>
+            <span>🥩 <span id="ui-rawmeat" style="color:#c0392b">0</span></span>
+            <span>🍗 <span id="ui-cookedmeat" style="color:#f39c12">0</span></span>
+            <span>💧 <span id="ui-water" style="color:#3498db">0</span></span>
+        </div>
+    </div>
+
+    <!-- 遊戲時間 -->
+    <div id="time-display" style="display:none;">
+        <span id="time-icon">☀️</span> <span id="time-text">第 1 天 白天: 02:00</span>
+    </div>
+
+    <div id="msg-toast">提示資訊</div>
+
+    <!-- 虛擬方向鍵 -->
+    <div id="joystick" style="display:none;">
+        <div class="d-btn" id="btn-up">W</div>
+        <div class="d-btn" id="btn-left">A</div>
+        <div class="d-btn" id="btn-down">S</div>
+        <div class="d-btn" id="btn-right">D</div>
+    </div>
+
+    <!-- 操作按鈕 -->
+    <div id="controls" style="display:none;">
+        <button class="action-btn" id="btn-action" style="border-color: var(--danger);">✋ 採集/攻擊/吃喝(E)</button>
+        <button class="action-btn" onclick="openMenu('build-modal')" style="border-color: #3498db;">🔨 建造選單</button>
+    </div>
+
+    <!-- 建造預覽確認 UI -->
+    <div id="build-ui">
+        <button class="build-confirm-btn" style="background: var(--primary);" onclick="confirmBuild()">✅ 確認放置 (F)</button>
+        <button class="build-confirm-btn" style="background: var(--danger);" onclick="cancelBuild()">❌ 取消 (Q)</button>
+    </div>
+
+    <!-- 建造選單 -->
+    <div class="modal" id="build-modal">
+        <h2>🛠️ 建造與傢俱 (自由放置)</h2>
+        <div class="buy-grid">
+            <div class="buy-item" onclick="startBuild('wall')">
+                <div class="item-icon">🧱</div><div>木牆</div><div class="item-cost">5🪵</div>
+            </div>
+            <div class="buy-item" onclick="startBuild('door')">
+                <div class="item-icon">🚪</div><div>簡易門</div><div class="item-cost">5🪵</div>
+            </div>
+            <div class="buy-item" onclick="startBuild('roof')">
+                <div class="item-icon">🛖</div><div>屋頂</div><div class="item-cost">8🪵</div>
+            </div>
+            <div class="buy-item" onclick="startBuild('campfire')">
+                <div class="item-icon">🔥</div><div>營火</div><div class="item-cost">5🪵 5🪨</div>
+            </div>
+            <div class="buy-item" onclick="startBuild('pot')">
+                <div class="item-icon">🍲</div><div>烹飪鍋</div><div class="item-cost">10🪨</div>
+            </div>
+            <div class="buy-item" onclick="startBuild('bed')">
+                <div class="item-icon">🛏️</div><div>睡袋</div><div class="item-cost">15🪵</div>
+            </div>
+        </div>
+        <button class="close-btn" onclick="closeMenu('build-modal')">關閉</button>
+    </div>
+
+    <!-- 烹飪選單 -->
+    <div class="modal" id="cook-modal">
+        <h2>🍲 烹飪鍋 / 營火</h2>
+        <div class="buy-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="buy-item" onclick="cookFood('meat')">
+                <div class="item-icon">🥩➡🍗</div><div>烤肉</div><div class="item-cost">消耗: 1生肉 + 1木頭</div>
+            </div>
+            <div class="buy-item" onclick="cookFood('berry')">
+                <div class="item-icon">🍒➡🥣</div><div>水果湯</div><div class="item-cost">消耗: 3水果 + 1木頭</div>
+            </div>
+        </div>
+        <button class="close-btn" onclick="closeMenu('cook-modal')">離開烹飪</button>
+    </div>
+
+<script>
+    // --- 遊戲核心變數 ---
+    let scene, camera, renderer;
+    let dirLight, ambientLight;
+    let playerBox;
+    // 移動方向標識
+    let moveFlags = { forward: false, backward: false, left: false, right: false };
+    let playerSpeed = 15.0; 
+    
+    // 玩家狀態
+    let state = {
+        hp: 100, hunger: 100, thirst: 100, lives: 3,
+        wood: 0, stone: 0, berry: 3, rawMeat: 0, cookedMeat: 0, water: 0,
+        facingAngle: 0, isSafe: true
+    };
+
+    // 日夜系統
+    let timeState = {
+        daysLived: 1,
+        isDay: true,
+        clock: 120, // 120s 白天, 60s 黑夜
+        dayDuration: 120, nightDuration: 60
+    };
+
+    // 實體與座標
+    const MAP_SIZE = 300; // 孤島半徑為 150
+    let interactables = []; 
+    let safeZones = []; 
+    let groundItemsGroup; 
+    let animals = []; 
+
+    // 建造系統狀態
+    let buildMode = false;
+    let currentBuildType = null;
+    let previewMesh = null;
+    let buildCostW = 0, buildCostS = 0;
+
+    let isGameRunning = false;
+    let clock = new THREE.Clock();
+
+    // --- 初始化 3D 場景 ---
+    function init3D() {
+        const container = document.getElementById('game-container');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.left = -100; dirLight.shadow.camera.right = 100;
+        dirLight.shadow.camera.top = 100; dirLight.shadow.camera.bottom = -100;
+        scene.add(dirLight);
+
+        groundItemsGroup = new THREE.Group();
+        scene.add(groundItemsGroup);
+
+        buildIsland();
+        buildPlayer();
+        generateWorld();
+
+        // 定時刷新地上的巨大物資
+        setInterval(spawnRandomGroundLoot, 4000);
+
+        window.addEventListener('resize', onWindowResize);
+        setupControls();
+    }
+
+    function buildIsland() {
+        // 草地
+        const groundGeo = new THREE.CylinderGeometry(MAP_SIZE/2, MAP_SIZE/2, 1, 64);
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x3d8c40 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.position.y = -0.5; ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 沙灘
+        const sand = new THREE.Mesh(new THREE.CylinderGeometry(MAP_SIZE/2 + 10, MAP_SIZE/2 + 10, 0.8, 64), new THREE.MeshLambertMaterial({ color: 0xd4c08c }));
+        sand.position.y = -0.6; sand.receiveShadow = true;
+        scene.add(sand);
+
+        // 大海
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshLambertMaterial({ color: 0x1e5799, transparent: true, opacity: 0.8 }));
+        water.rotation.x = -Math.PI / 2; water.position.y = -1.5;
+        scene.add(water);
+    }
+
+    function buildPlayer() {
+        playerBox = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.5, 16), new THREE.MeshLambertMaterial({ color: 0x3498db }));
+        body.position.y = 0.75; body.castShadow = true;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
+        head.position.y = 1.7; head.castShadow = true;
+        const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.4), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        eyes.position.set(0, 1.7, 0.3);
+
+        playerBox.add(body); playerBox.add(head); playerBox.add(eyes);
+        playerBox.position.set(0, 0, 0);
+        scene.add(playerBox);
+
+        camera.position.set(0, 18, -22);
+        camera.lookAt(playerBox.position);
+    }
+
+    function generateWorld() {
+        // 樹木
+        for(let i=0; i<100; i++) {
+            let pos = getRandomPosition(MAP_SIZE/2 - 15, 5);
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2.5), new THREE.MeshLambertMaterial({color: 0x4a3b2c}));
+            trunk.position.y = 1.25; trunk.castShadow = true;
+            const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5, 5, 8), new THREE.MeshLambertMaterial({color: 0x2e7d32}));
+            leaves.position.y = 4; leaves.castShadow = true;
+            tree.add(trunk); tree.add(leaves);
+            tree.position.copy(pos); scene.add(tree);
+            interactables.push({ mesh: tree, type: 'tree', hp: 3, isSolid: true, radius: 1.5 });
+        }
+
+        // 石頭
+        for(let i=0; i<50; i++) {
+            let pos = getRandomPosition(MAP_SIZE/2 - 15, 5);
+            const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.2 + Math.random()), new THREE.MeshLambertMaterial({color: 0x7f8c8d}));
+            rock.position.copy(pos); rock.position.y = 0.6; rock.castShadow = true;
+            scene.add(rock);
+            interactables.push({ mesh: rock, type: 'rock', hp: 4, isSolid: true, radius: 1.8 });
+        }
+
+        // 初始野獸
+        for(let i=0; i<8; i++) spawnAnimal();
+
+        // 初始巨大地上物資
+        for(let i=0; i<30; i++) spawnRandomGroundLoot();
+    }
+
+    function spawnAnimal() {
+        let pos = getRandomPosition(MAP_SIZE/2 - 20, 15);
+        const animalGroup = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 2.0), new THREE.MeshLambertMaterial({color: 0x5d4037}));
+        body.position.y = 0.5; body.castShadow = true;
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.0), new THREE.MeshLambertMaterial({color: 0x4a2e2b}));
+        head.position.set(0, 1.0, 1.2); head.castShadow = true;
+        const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x000000}));
+        eyes.position.set(0, 1.1, 1.7);
+        
+        animalGroup.add(body); animalGroup.add(head); animalGroup.add(eyes);
+        animalGroup.position.copy(pos);
+        scene.add(animalGroup);
+
+        let animalData = { 
+            mesh: animalGroup, eyesMesh: eyes, type: 'animal', hp: 3, alive: true, 
+            isSolid: true, radius: 1.2, 
+            targetPos: pos.clone(), moveTimer: 0, attackCooldown: 0 
+        };
+        interactables.push(animalData);
+        animals.push(animalData);
+    }
+
+    // --- 巨大化物資與漂浮邏輯 ---
+    function spawnRandomGroundLoot() {
+        if (groundItemsGroup.children.length > 50) return; 
+        
+        let pos = getRandomPosition(MAP_SIZE/2 - 10, 0);
+        let rand = Math.random();
+        let mesh, type;
+
+        if (rand < 0.6) {
+            // 巨大水果
+            mesh = new THREE.Mesh(new THREE.SphereGeometry(0.7), new THREE.MeshLambertMaterial({color: 0xff3333, emissive: 0x330000}));
+            mesh.position.set(pos.x, 0.8, pos.z); type = 'berry';
+        } else {
+            // 巨大樹枝
+            mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8), new THREE.MeshLambertMaterial({color: 0xd35400}));
+            mesh.rotation.x = Math.PI/2; mesh.position.set(pos.x, 0.8, pos.z); type = 'branch';
+        }
+        
+        mesh.userData = { baseY: mesh.position.y, floatOffset: Math.random() * Math.PI * 2 };
+        groundItemsGroup.add(mesh);
+        interactables.push({ mesh: mesh, type: type, hp: 1, isSolid: false, isGround: true });
+    }
+
+    function getRandomPosition(radius, minRadius) {
+        let pos;
+        do {
+            const angle = Math.random() * Math.PI * 2;
+            const r = minRadius + Math.random() * (radius - minRadius);
+            pos = new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+        } while(pos.length() < 5); 
+        return pos;
+    }
+
+    // --- 控制與輸入 ---
+    function setupControls() {
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'KeyW': case 'ArrowUp': moveFlags.forward = true; break;
+                case 'KeyS': case 'ArrowDown': moveFlags.backward = true; break;
+                case 'KeyA': case 'ArrowLeft': moveFlags.left = true; break;
+                case 'KeyD': case 'ArrowRight': moveFlags.right = true; break;
+                case 'Space': case 'KeyE': if(isGameRunning) doAction(); break;
+                case 'KeyF': if(buildMode) confirmBuild(); break;
+                case 'KeyQ': if(buildMode) cancelBuild(); break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW': case 'ArrowUp': moveFlags.forward = false; break;
+                case 'KeyS': case 'ArrowDown': moveFlags.backward = false; break;
+                case 'KeyA': case 'ArrowLeft': moveFlags.left = false; break;
+                case 'KeyD': case 'ArrowRight': moveFlags.right = false; break;
+            }
+        });
+
+        document.getElementById('btn-action').addEventListener('pointerdown', doAction);
+
+        const bindBtn = (id, keyName) => {
+            const btn = document.getElementById(id);
+            const setFlag = (val) => (e) => { e.preventDefault(); moveFlags[keyName] = val; };
+            btn.addEventListener('pointerdown', setFlag(true));
+            btn.addEventListener('pointerup', setFlag(false));
+            btn.addEventListener('pointercancel', setFlag(false));
+            btn.addEventListener('pointerout', setFlag(false));
+        };
+        bindBtn('btn-up', 'forward'); bindBtn('btn-down', 'backward');
+        bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
+    }
+
+    // --- 遊戲主循環 ---
+    function animate() {
+        if (!isGameRunning) return;
+        requestAnimationFrame(animate);
+
+        const delta = clock.getDelta();
+        
+        if (state.hp > 0) {
+            updatePlayerMovement(delta);
+            updateTime(delta);
+            updateAnimals(delta);
+            
+            // 讓地上的巨大物資浮動和旋轉
+            let time = clock.getElapsedTime();
+            groundItemsGroup.children.forEach(item => {
+                item.rotation.y += 1.5 * delta;
+                item.position.y = item.userData.baseY + Math.sin(time * 3 + item.userData.floatOffset) * 0.3;
+            });
+
+            // 建造預覽跟隨
+            if (buildMode && previewMesh) {
+                const buildDist = 4.5;
+                const forwardVec = new THREE.Vector3(Math.sin(state.facingAngle), 0, Math.cos(state.facingAngle));
+                const targetPos = playerBox.position.clone().add(forwardVec.multiplyScalar(buildDist));
+                previewMesh.position.x = targetPos.x;
+                previewMesh.position.z = targetPos.z;
+                previewMesh.rotation.y = state.facingAngle;
+            }
+        }
+        
+        updateCamera();
+        renderer.render(scene, camera);
+    }
+
+    // --- 自由移動與牆壁滑行邏輯 ---
+    function updatePlayerMovement(delta) {
+        let moveX = 0, moveZ = 0;
+        if (moveFlags.forward) moveZ += 1;
+        if (moveFlags.backward) moveZ -= 1;
+        if (moveFlags.left) moveX += 1;
+        if (moveFlags.right) moveX -= 1;
+
+        if (moveX !== 0 || moveZ !== 0) {
+            const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize();
+            state.facingAngle = Math.atan2(moveVec.x, moveVec.z);
+            playerBox.rotation.y = state.facingAngle;
+
+            const speed = playerSpeed * delta;
+            const nextX = playerBox.position.x + moveVec.x * speed;
+            const nextZ = playerBox.position.z + moveVec.z * speed;
+
+            let inBoundsX = Math.abs(nextX) < (MAP_SIZE/2 - 2);
+            let inBoundsZ = Math.abs(nextZ) < (MAP_SIZE/2 - 2);
+
+            // 滑牆偵測
+            if (inBoundsX && !checkCollision(nextX, playerBox.position.z)) playerBox.position.x = nextX;
+            if (inBoundsZ && !checkCollision(playerBox.position.x, nextZ)) playerBox.position.z = nextZ;
+        }
+    }
+
+    function checkCollision(targetX, targetZ) {
+        for (let obj of interactables) {
+            if (!obj.isSolid) continue;
+            // 建造模式預覽模型不參與物理碰撞
+            if (obj.isPreview) continue;
+            const dist = Math.sqrt(Math.pow(targetX - obj.mesh.position.x, 2) + Math.pow(targetZ - obj.mesh.position.z, 2));
+            let radius = obj.radius || 1.5; 
+            if (dist < (0.8 + radius)) return true;
+        }
+        return false;
+    }
+
+    function updateCamera() {
+        const offset = new THREE.Vector3(0, 18, -22);
+        camera.position.lerp(playerBox.position.clone().add(offset), 0.1);
+        camera.lookAt(playerBox.position);
+    }
+
+    // --- 日夜交替與狀態更新 ---
+    function updateTime(delta) {
+        timeState.clock -= delta;
+        // 水分隨時間極慢流失
+        if (state.thirst > 0) state.thirst = Math.max(0, state.thirst - (delta * 0.15));
+
+        if (timeState.clock <= 0) {
+            timeState.isDay = !timeState.isDay;
+            timeState.clock = timeState.isDay ? timeState.dayDuration : timeState.nightDuration;
+            
+            if(timeState.isDay) {
+                timeState.daysLived++;
+                scene.background.setHex(0x87CEEB); scene.fog.color.setHex(0x87CEEB);
+                dirLight.intensity = 0.8; ambientLight.intensity = 0.6;
+                showToast(`☀️ 太陽升起，第 ${timeState.daysLived} 天開始了！`);
+                document.getElementById('danger-overlay').style.boxShadow = "none";
+                animals.forEach(a => { if(a.alive) a.eyesMesh.material.color.setHex(0x000000); }); 
+            } else {
+                scene.background.setHex(0x0b1021); scene.fog.color.setHex(0x0b1021);
+                dirLight.intensity = 0.1; dirLight.color.setHex(0x7ea0d6);
+                ambientLight.intensity = 0.3;
+                showToast("🌙 藍月升起！不在營火旁野獸會發狂攻擊！");
+                animals.forEach(a => { if(a.alive) a.eyesMesh.material.color.setHex(0xff0000); }); 
+            }
+        }
+
+        let mins = Math.floor(timeState.clock / 60);
+        let secs = Math.floor(timeState.clock % 60).toString().padStart(2, '0');
+        document.getElementById('time-text').innerText = `第 ${timeState.daysLived} 天 ${timeState.isDay ? '白天' : '黑夜'}: ${mins}:${secs}`;
+        document.getElementById('time-icon').innerText = timeState.isDay ? '☀️' : '🌙';
+
+        state.isSafe = checkSafeZone();
+        let statusUI = document.getElementById('safe-status');
+
+        if (timeState.isDay) {
+            statusUI.innerText = "☀️ 白天 (安全)";
+            statusUI.style.background = "#27ae60";
+            document.getElementById('danger-overlay').style.boxShadow = "none";
+        } else {
+            if (state.isSafe) {
+                statusUI.innerText = "🔥 庇護所內 (安全)";
+                statusUI.style.background = "#2980b9";
+                document.getElementById('danger-overlay').style.boxShadow = "none";
+            } else {
+                statusUI.innerText = "⚠️ 危險！野獸正在尋覓獵物！";
+                statusUI.style.background = "#c0392b";
+                document.getElementById('danger-overlay').style.boxShadow = "inset 0 0 50px rgba(255, 0, 0, 0.3)";
+            }
+        }
+        
+        updateUI();
+    }
+
+    function checkSafeZone() {
+        for(let z of safeZones) { if(playerBox.position.distanceTo(z.pos) < z.radius) return true; }
+        for(let obj of interactables) {
+            if(obj.type === 'campfire' && !obj.isPreview && playerBox.position.distanceTo(obj.mesh.position) < 8) return true;
+        }
+        return false;
+    }
+
+    // --- 動物 AI 邏輯 ---
+    function updateAnimals(delta) {
+        for (let i = animals.length - 1; i >= 0; i--) {
+            let animal = animals[i];
+            if (!animal.alive) continue;
+
+            let distToPlayer = animal.mesh.position.distanceTo(playerBox.position);
+
+            if (!timeState.isDay && !state.isSafe) {
+                if (distToPlayer < 35) {
+                    let dir = new THREE.Vector3().subVectors(playerBox.position, animal.mesh.position).normalize();
+                    let angle = Math.atan2(dir.x, dir.z);
+                    animal.mesh.rotation.y = angle;
+                    animal.mesh.position.addScaledVector(dir, delta * 9); 
+
+                    if (distToPlayer < 2.5 && animal.attackCooldown <= 0) {
+                        state.hp -= 20;
+                        showToast("🩸 遭到野獸猛烈攻擊 (HP -20)！");
+                        animal.attackCooldown = 1.5; 
+                        
+                        let overlay = document.getElementById('danger-overlay');
+                        overlay.style.boxShadow = "inset 0 0 150px rgba(255, 0, 0, 0.8)";
+                        setTimeout(() => { if(!timeState.isDay && !state.isSafe) overlay.style.boxShadow = "inset 0 0 50px rgba(255, 0, 0, 0.3)"; }, 300);
+
+                        if (state.hp <= 0) { die(); return; } 
+                    }
+                }
+            } else {
+                if (distToPlayer < 4 && timeState.isDay) {
+                    let dir = new THREE.Vector3().subVectors(animal.mesh.position, playerBox.position).normalize();
+                    animal.mesh.position.addScaledVector(dir, delta * 6);
+                    animal.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+                } else {
+                    animal.moveTimer -= delta;
+                    if (animal.moveTimer <= 0) {
+                        let angle = Math.random() * Math.PI * 2;
+                        let r = 5 + Math.random() * 10;
+                        animal.targetPos = animal.mesh.position.clone().add(new THREE.Vector3(Math.cos(angle)*r, 0, Math.sin(angle)*r));
+                        animal.moveTimer = 3 + Math.random() * 4;
+                    }
+                    if (animal.mesh.position.distanceTo(animal.targetPos) > 1) {
+                        let dir = new THREE.Vector3().subVectors(animal.targetPos, animal.mesh.position).normalize();
+                        animal.mesh.position.addScaledVector(dir, delta * 2);
+                        animal.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+                    }
+                }
+            }
+            if (animal.attackCooldown > 0) animal.attackCooldown -= delta;
+        }
+    }
+
+    // --- 互動與採集 (吃東西/接海水) ---
+    function doAction() {
+        if (state.hp <= 0 || buildMode) return;
+
+        const interactDist = 5.0;
+        const forwardVec = new THREE.Vector3(Math.sin(state.facingAngle), 0, Math.cos(state.facingAngle)).normalize();
+        
+        let interacted = false;
+        let closestObj = null;
+        let minDist = interactDist;
+
+        // 偵測前方物品
+        for (let i = 0; i < interactables.length; i++) {
+            let obj = interactables[i];
+            if (!obj.mesh || (obj.type==='animal' && !obj.alive) || obj.isPreview) continue;
+            
+            let dist = playerBox.position.distanceTo(obj.mesh.position);
+            if (dist < minDist) {
+                let dirToObj = new THREE.Vector3().subVectors(obj.mesh.position, playerBox.position).normalize();
+                if (forwardVec.dot(dirToObj) > 0.3 || dist < 2.0) { 
+                    closestObj = obj; minDist = dist;
+                }
+            }
+        }
+
+        if (closestObj) {
+            interacted = true;
+            switch(closestObj.type) {
+                case 'tree':
+                    closestObj.hp--; closestObj.mesh.scale.setScalar(closestObj.hp/3 + 0.4);
+                    state.hunger = Math.max(0, state.hunger - 0.5); 
+                    if(closestObj.hp <= 0) { state.wood += 3; removeObj(closestObj); showToast("獲得 木材 x3"); }
+                    else showToast("砍樹中...");
+                    break;
+                case 'rock':
+                    closestObj.hp--; closestObj.mesh.scale.setScalar(closestObj.hp/4 + 0.4);
+                    state.hunger = Math.max(0, state.hunger - 0.5); 
+                    if(closestObj.hp <= 0) { state.stone += 3; removeObj(closestObj); showToast("獲得 石頭 x3"); }
+                    else showToast("採石中...");
+                    break;
+                case 'animal':
+                    closestObj.hp--; 
+                    closestObj.mesh.children.forEach(c => c.material.color.setHex(0xff0000));
+                    setTimeout(() => { 
+                        if(closestObj.alive) {
+                            closestObj.mesh.children[0].material.color.setHex(0x5d4037);
+                            closestObj.mesh.children[1].material.color.setHex(0x4a2e2b);
+                        }
+                    }, 150);
+                    state.hunger = Math.max(0, state.hunger - 0.8); 
+                    
+                    if(closestObj.hp <= 0) { 
+                        closestObj.alive = false; closestObj.mesh.rotation.x = Math.PI/2;
+                        closestObj.mesh.position.y = 0.5; 
+                        state.rawMeat += 2; 
+                        showToast("擊殺野獸！獲得 生肉 x2"); 
+                        closestObj.isSolid = false;
+                        setTimeout(() => removeObj(closestObj), 3000); 
+                    } else showToast("攻擊野獸！");
+                    break;
+                case 'branch': state.wood += 1; removeObj(closestObj); showToast("撿起巨大樹枝 (木材+1)"); break;
+                case 'berry': state.berry += 1; removeObj(closestObj); showToast("摘取巨大水果 (水果+1)"); break;
+                case 'campfire': 
+                case 'pot': 
+                    openMenu('cook-modal'); break;
+            }
+        }
+
+        // 如果前方沒有物品，判斷是否在海邊接水
+        // 孤島邊緣大約是半徑 135~148
+        if (!interacted && playerBox.position.length() > 135) {
+            interacted = true;
+            state.water += 1;
+            showToast("🌊 收集海水... 獲取 淡水 x1！");
+        }
+
+        // 沒互動也沒接水，嘗試喝水/吃東西
+        if (!interacted) {
+            if (state.thirst < 95 && state.water > 0) {
+                state.water--; state.thirst = Math.min(100, state.thirst + 30);
+                showToast("💧 喝下淡水，感覺解渴了！");
+            } else if (state.hunger < 98) {
+                if (state.cookedMeat > 0) {
+                    state.cookedMeat--; state.hunger = Math.min(100, state.hunger + 40); state.hp = Math.min(100, state.hp + 15);
+                    showToast("🍗 吃下烤肉，恢復大量飽食與 HP！");
+                } else if (state.berry > 0) {
+                    state.berry--; state.hunger = Math.min(100, state.hunger + 10); state.hp = Math.min(100, state.hp + 2);
+                    showToast("🍒 吃下水果，清爽甘甜。");
+                } else if (state.rawMeat > 0) {
+                    state.rawMeat--; state.hunger = Math.min(100, state.hunger + 15); state.hp -= 5; 
+                    showToast("🥩 吃下生肉... 拉肚子了 (HP-5)！");
+                } else {
+                    showToast("包裡沒有食物或淡水了！");
+                }
+            } else {
+                showToast("前方沒有東西，且目前不餓也不渴。");
+            }
+        }
+        updateUI();
+    }
+
+    function removeObj(obj) {
+        if(obj.isGround) groundItemsGroup.remove(obj.mesh);
+        else scene.remove(obj.mesh);
+        const idx = interactables.indexOf(obj);
+        if(idx > -1) interactables.splice(idx, 1);
+    }
+
+    // --- 建造系統：預覽與自由放置 ---
+    function openMenu(id) { 
+        if(buildMode) return;
+        document.getElementById(id).style.display = 'flex'; 
+        moveFlags = { forward: false, backward: false, left: false, right: false }; 
+    }
+    function closeMenu(id) { document.getElementById(id).style.display = 'none'; }
+
+    // 開始建造模式 (顯示綠色預覽)
+    function startBuild(type) {
+        let costW = 0, costS = 0;
+        if(type === 'wall' || type === 'door') costW = 5;
+        if(type === 'roof') costW = 8;
+        if(type === 'campfire') { costW = 5; costS = 5; }
+        if(type === 'pot') costS = 10;
+        if(type === 'bed') costW = 15;
+
+        if (state.wood < costW || state.stone < costS) {
+            showToast("⚠️ 材料不足！"); return;
+        }
+
+        closeMenu('build-modal');
+        buildMode = true;
+        currentBuildType = type;
+        buildCostW = costW; buildCostS = costS;
+
+        // 創建半透明的綠色預覽模型
+        const previewMat = new THREE.MeshBasicMaterial({color: 0x2ecc71, transparent: true, opacity: 0.6});
+        
+        if(type === 'wall') { previewMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), previewMat); previewMesh.position.y = 1.5; }
+        if(type === 'door') { previewMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), previewMat); previewMesh.position.y = 1.5; }
+        if(type === 'roof') { previewMesh = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 4.2), previewMat); previewMesh.position.y = 3.1; }
+        if(type === 'campfire') { 
+            previewMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.5), previewMat); previewMesh.position.y = 0.25; 
+        }
+        if(type === 'pot') { previewMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 0.8), previewMat); previewMesh.position.y = 0.4; }
+        if(type === 'bed') { previewMesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 3), previewMat); previewMesh.position.y = 0.15; }
+
+        scene.add(previewMesh);
+        document.getElementById('build-ui').style.display = 'flex';
+        showToast("進入建造模式：請移動以選擇放置位置。");
+    }
+
+    // 確認放置 (扣除材料、替換為真實模型)
+    function confirmBuild() {
+        if(!buildMode || !previewMesh) return;
+
+        // 正式扣除材料
+        state.wood -= buildCostW; state.stone -= buildCostS;
+        
+        const type = currentBuildType;
+        const finalPos = previewMesh.position.clone();
+        const finalRot = previewMesh.rotation.y;
+
+        // 移除預覽
+        scene.remove(previewMesh);
+        previewMesh = null;
+        buildMode = false;
+        document.getElementById('build-ui').style.display = 'none';
+
+        // 生成真實模型
+        let mesh;
+        if(type === 'wall') { mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshLambertMaterial({color: 0x8e44ad})); }
+        if(type === 'door') { mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshLambertMaterial({color: 0x2980b9, transparent: true, opacity: 0.5})); }
+        if(type === 'roof') { mesh = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 4.2), new THREE.MeshLambertMaterial({color: 0xd35400, transparent: true, opacity: 0.7})); }
+        if(type === 'campfire') { 
+            mesh = new THREE.Group();
+            const logs = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2), new THREE.MeshLambertMaterial({color: 0x4a2311}));
+            const fire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 8), new THREE.MeshBasicMaterial({color: 0xe67e22}));
+            fire.position.y = 0.6; mesh.add(logs); mesh.add(fire);
+            const pLight = new THREE.PointLight(0xe67e22, 1, 15);
+            pLight.position.y = 1; mesh.add(pLight);
+        }
+        if(type === 'pot') { mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 0.8), new THREE.MeshLambertMaterial({color: 0x2c3e50})); }
+        if(type === 'bed') { mesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 3), new THREE.MeshLambertMaterial({color: 0x16a085})); }
+
+        mesh.position.copy(finalPos); 
+        mesh.rotation.y = finalRot; 
+        mesh.castShadow = true;
+        scene.add(mesh);
+        
+        interactables.push({ mesh: mesh, type: type, isSolid: (type!=='roof'), radius: type==='wall'? 2.0 : 1.5 });
+        showToast("✅ 放置成功！");
+        updateUI();
+    }
+
+    // 取消放置
+    function cancelBuild() {
+        if(!buildMode) return;
+        scene.remove(previewMesh);
+        previewMesh = null;
+        buildMode = false;
+        document.getElementById('build-ui').style.display = 'none';
+        showToast("❌ 已取消建造");
+    }
+
+    // --- 烹飪系統 ---
+    function cookFood(type) {
+        if(type === 'meat') {
+            if(state.rawMeat >= 1 && state.wood >= 1) {
+                state.rawMeat--; state.wood--; state.cookedMeat++; showToast("獲得 烤肉");
+            } else showToast("材料不足");
+        }
+        if(type === 'berry') {
+            if(state.berry >= 3 && state.wood >= 1) {
+                state.berry -= 3; state.wood--; state.cookedMeat++; showToast("獲得 水果湯 (視同烤肉)");
+            } else showToast("材料不足");
+        }
+        updateUI();
+    }
+
+    // --- 流程控制與死亡復活 ---
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('time-display').style.display = 'flex';
+        document.getElementById('controls').style.display = 'flex';
+        if (window.innerWidth < 768 || ('ontouchstart' in window)) document.getElementById('joystick').style.display = 'grid';
+
+        init3D();
+        isGameRunning = true; clock.start(); animate();
+    }
+
+    function die() {
+        state.lives--;
+        updateUI();
+        moveFlags = { forward: false, backward: false, left: false, right: false }; 
+        if(buildMode) cancelBuild();
+        
+        let deathScreen = document.getElementById('death-screen');
+        deathScreen.style.opacity = 1;
+        deathScreen.style.pointerEvents = 'auto';
+
+        if (state.lives > 0) {
+            document.getElementById('death-msg').innerText = "你將在白光中醒來，時間流逝到了第二天...";
+            setTimeout(() => {
+                playerBox.position.set(0, 0, 0);
+                state.hp = 100; 
+                state.hunger = Math.max(50, state.hunger); 
+                state.thirst = Math.max(50, state.thirst); 
+                timeState.isDay = true;
+                timeState.clock = timeState.dayDuration;
+                timeState.daysLived++;
+                
+                scene.background.setHex(0x87CEEB); scene.fog.color.setHex(0x87CEEB);
+                dirLight.intensity = 0.8; ambientLight.intensity = 0.6;
+                animals.forEach(a => { if(a.alive) a.eyesMesh.material.color.setHex(0x000000); });
+                document.getElementById('danger-overlay').style.boxShadow = "none";
+
+                updateUI();
+                deathScreen.style.opacity = 0;
+                deathScreen.style.pointerEvents = 'none';
+                showToast("你在第一天降落的地方重新醒來...");
+            }, 3000);
+        } else {
+            document.getElementById('death-msg').innerText = "生命耗盡！世界即將崩塌重置...";
+            setTimeout(() => { location.reload(); }, 4000); 
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('hp-bar').style.width = state.hp + '%';
+        document.getElementById('hunger-bar').style.width = state.hunger + '%';
+        document.getElementById('thirst-bar').style.width = state.thirst + '%';
+        
+        document.getElementById('ui-wood').innerText = state.wood;
+        document.getElementById('ui-stone').innerText = state.stone;
+        document.getElementById('ui-berry').innerText = state.berry;
+        document.getElementById('ui-rawmeat').innerText = state.rawMeat;
+        document.getElementById('ui-cookedmeat').innerText = state.cookedMeat;
+        document.getElementById('ui-water').innerText = state.water;
+        
+        let hearts = "";
+        for(let i=0; i<3; i++) hearts += (i < state.lives) ? "❤️" : "🖤";
+        document.getElementById('ui-lives').innerText = hearts;
+    }
+
+    let toastTimeout;
+    function showToast(msg) {
+        let toast = document.getElementById('msg-toast');
+        toast.innerText = msg; toast.style.opacity = 1;
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => { toast.style.opacity = 0; }, 2500);
+    }
+
+    function onWindowResize() {
+        if (!camera || !renderer) return;
+        camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        if((window.innerWidth < 768 || ('ontouchstart' in window)) && isGameRunning) document.getElementById('joystick').style.display = 'grid';
+        else document.getElementById('joystick').style.display = 'none';
+    }
+</script>
+</body>
+</html>

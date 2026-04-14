@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>單詞配對樂</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #ffc0cb, #87ceeb); /* 粉藍漸變 */
+            background-attachment: fixed;
+            overflow: hidden; /* 強制整頁隱藏卷軸 */
+            margin: 0;
+            touch-action: none; /* 避免手機瀏覽器預設下拉刷新 */
+        }
+
+        /* 3D 樣式卡片 */
+        .card {
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 4px 0px #d1d5db, 0 8px 10px rgba(0,0,0,0.1);
+            border: 2px solid #1f2937;
+            background-color: #ffffff;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 8px 0px #d1d5db, 0 15px 20px rgba(0,0,0,0.15);
+        }
+
+        .card.selected {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0px #93c5fd, 0 10px 15px rgba(59,130,246,0.3);
+        }
+
+        .card.matched {
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.5);
+            pointer-events: none;
+        }
+
+        /* 錯誤抖動動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0) translateY(-2px); }
+            20%, 60% { transform: translateX(-6px) translateY(-2px); }
+            40%, 80% { transform: translateX(6px) translateY(-2px); }
+        }
+        .shake {
+            animation: shake 0.5s ease-in-out;
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+            box-shadow: 0 6px 0px #fca5a5 !important;
+        }
+
+        /* 漫畫對話框 */
+        .speech-bubble {
+            position: relative;
+            background: #ffffff;
+            border: 2px solid #1f2937;
+            border-radius: 0.75rem;
+            padding: 0.5rem 1rem;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 8px 10px 8px 0;
+            border-style: solid;
+            border-color: transparent #1f2937 transparent transparent;
+            display: block;
+            width: 0;
+        }
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 6px 8px 6px 0;
+            border-style: solid;
+            border-color: transparent #ffffff transparent transparent;
+            display: block;
+            width: 0;
+            z-index: 1;
+        }
+
+        /* 勝利畫面動畫 */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .bounce-anim {
+            animation: bounce 1s infinite;
+        }
+
+        canvas {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+        }
+
+        /* 完全隱藏卷軸 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        * {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col items-center py-2 sm:py-4 overflow-hidden">
+
+    <canvas id="confetti-canvas" class="hidden"></canvas>
+
+    <!-- 頂部 Header (強制橫排，縮小手機版佔用高度) -->
+    <header class="w-full max-w-4xl px-2 sm:px-4 flex flex-row justify-between items-center mb-1 sm:mb-2 z-10 shrink-0">
+        <h1 class="text-xl sm:text-3xl md:text-4xl font-black text-white drop-shadow-md tracking-wider whitespace-nowrap" style="-webkit-text-stroke: 1px #1f2937;">
+            單詞配對樂
+        </h1>
+        
+        <div class="flex flex-row items-center gap-1 sm:gap-3">
+            <div class="bg-white border-2 border-gray-800 rounded-lg px-2 py-1 md:px-6 md:py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)] font-bold text-xs sm:text-sm md:text-xl text-center">
+                分: <span id="score-display" class="text-blue-600 font-black">0</span>
+            </div>
+            <div class="bg-white border-2 border-gray-800 rounded-lg px-2 py-1 md:px-6 md:py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)] font-bold text-xs sm:text-sm md:text-xl text-center">
+                時: <span id="time-display" class="text-red-500 font-black">1:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 狗角色與對話框 (狀態提示區) -->
+    <div class="w-full max-w-4xl px-2 sm:px-4 flex items-center justify-center md:justify-start mb-2 sm:mb-4 z-10 shrink-0">
+        <div class="flex items-center gap-3 sm:gap-6">
+            <!-- 史努比真實圖片 (縮小手機版尺寸) -->
+            <div class="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 relative shrink-0">
+                <img id="snoopy-img" src="image_6c8144.png" alt="Snoopy" onerror="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/en/5/53/Snoopy_Peanuts.png';" class="w-full h-full object-contain transition-all duration-500 drop-shadow-xl" />
+            </div>
+            
+            <div class="speech-bubble text-xs sm:text-sm md:text-lg font-bold text-gray-800 leading-tight" id="dialogue-text">
+                哈囉！點擊兩張卡片，<br>幫我找出正確的電腦單詞吧！
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲卡片區域 (使用 min-h-0 讓內部網格自動適應剩餘高度，不產生卷軸) -->
+    <main class="w-full max-w-4xl px-2 sm:px-4 z-10 flex-grow min-h-0 overflow-hidden flex flex-col justify-center">
+        <!-- 這裡取消了 pb-2，並將高度設為 h-full -->
+        <div id="game-board" class="w-full h-full grid gap-1.5 sm:gap-3">
+            <!-- 卡片將由 JS 動態生成，卡片本身的高度和寬度會被 grid-rows 強制壓縮 -->
+        </div>
+    </main>
+
+    <!-- 底部重置按鈕 -->
+    <footer class="w-full max-w-4xl px-2 sm:px-4 flex justify-center z-10 mt-2 mb-1 sm:mb-2 shrink-0">
+        <button onclick="showStartModal()" class="bg-yellow-400 hover:bg-yellow-300 text-gray-900 border-2 border-gray-900 shadow-[3px_3px_0px_rgba(0,0,0,0.8)] hover:-translate-y-1 transition-all rounded-lg sm:rounded-xl px-4 py-1.5 sm:px-8 sm:py-2 font-bold text-sm sm:text-lg tracking-wide flex items-center gap-1 sm:gap-2">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            重置遊戲
+        </button>
+    </footer>
+
+    <!-- 遊戲玩法說明彈出視窗 -->
+    <div id="start-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 px-4">
+        <div class="bg-white border-4 border-gray-900 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-[8px_8px_0px_rgba(0,0,0,0.5)] max-h-[90vh] overflow-y-auto">
+            
+            <!-- 新增：輸入名字區塊 -->
+            <div class="mb-6 bg-blue-50 border-3 border-gray-900 rounded-2xl p-4 shadow-[inset_0_3px_6px_rgba(0,0,0,0.05)]">
+                <label for="player-name" class="block text-xl sm:text-2xl font-black text-gray-800 mb-3">請輸入你的名字</label>
+                <input type="text" id="player-name" class="w-full border-3 border-gray-900 rounded-xl px-4 py-2 text-center font-bold text-lg sm:text-xl focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all" placeholder="你的大名是？">
+                <p id="name-error" class="text-red-500 font-bold mt-2 hidden animate-pulse">請先輸入名字才能開始喔！</p>
+            </div>
+
+            <h2 class="text-2xl sm:text-3xl font-black text-blue-500 mb-4" style="-webkit-text-stroke: 1px #1f2937;">遊戲玩法說明</h2>
+            <div class="text-left text-base sm:text-lg font-bold text-gray-700 mb-6 space-y-2">
+                <p>🐶 找出所有匹配的<span class="text-blue-500">中文</span>和<span class="text-blue-500">英文</span>電腦單詞。</p>
+                <p>✅ 答對一對 <span class="text-green-500">+10 分</span></p>
+                <p>❌ 答錯一次 <span class="text-red-500">-5 分</span></p>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-gray-800 mb-4 border-t-2 border-dashed border-gray-300 pt-4">請選擇難度：</h3>
+            <div class="flex flex-col gap-2.5">
+                <button onclick="startGame('easy')" class="w-full bg-green-400 hover:bg-green-300 text-gray-900 border-2 border-gray-900 shadow-[3px_3px_0px_rgba(0,0,0,0.8)] rounded-xl px-4 py-2 font-bold text-base sm:text-lg transition-all active:translate-y-1">
+                    簡單 (1分鐘, 8對)
+                </button>
+                <button onclick="startGame('normal')" class="w-full bg-yellow-400 hover:bg-yellow-300 text-gray-900 border-2 border-gray-900 shadow-[3px_3px_0px_rgba(0,0,0,0.8)] rounded-xl px-4 py-2 font-bold text-base sm:text-lg transition-all active:translate-y-1">
+                    普通 (1分半, 10對)
+                </button>
+                <button onclick="startGame('hard')" class="w-full bg-red-400 hover:bg-red-300 text-gray-900 border-2 border-gray-900 shadow-[3px_3px_0px_rgba(0,0,0,0.8)] rounded-xl px-4 py-2 font-bold text-base sm:text-lg transition-all active:translate-y-1">
+                    困難 (2分鐘, 12對)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 時間到 (失敗) 彈出視窗 -->
+    <div id="lose-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden items-center justify-center z-50 px-4">
+        <div class="bg-white border-4 border-gray-900 rounded-3xl p-8 max-w-md w-full text-center shadow-[8px_8px_0px_rgba(0,0,0,0.5)] transform scale-90 transition-transform duration-300" id="lose-modal-content">
+            <h2 class="text-4xl font-black text-gray-500 mb-2" style="-webkit-text-stroke: 1px #1f2937;">時間到！</h2>
+            <p class="text-xl font-bold text-gray-700 mb-6">史努比覺得很可惜呢...</p>
+            
+            <p class="text-2xl font-black mb-6 border-b-2 border-dashed border-gray-300 pb-4">
+                最終得分: <span id="lose-final-score" class="text-blue-600">0</span> 分
+            </p>
+
+            <button onclick="showStartModal()" class="w-full bg-blue-500 hover:bg-blue-400 text-white border-3 border-gray-900 shadow-[4px_4px_0px_rgba(0,0,0,0.8)] rounded-xl px-6 py-3 font-bold text-xl transition-all hover:-translate-y-1">
+                再試一次
+            </button>
+        </div>
+    </div>
+
+    <!-- 勝利慶祝彈出視窗 -->
+    <div id="win-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden items-center justify-center z-40 px-4">
+        <div class="bg-white border-4 border-gray-900 rounded-3xl p-8 max-w-md w-full text-center shadow-[8px_8px_0px_rgba(0,0,0,0.5)] transform scale-90 transition-transform duration-300" id="win-modal-content">
+            <h2 class="text-4xl font-black text-red-500 mb-2" style="-webkit-text-stroke: 1px #1f2937;">太棒了！</h2>
+            <p class="text-xl font-bold text-gray-700 mb-6">全部配對成功！</p>
+            
+            <div class="flex justify-center items-end gap-4 mb-6 text-5xl sm:text-6xl bounce-anim">
+                <span>🐶</span> 
+                <span class="mb-4">🐥</span> 
+                <span>👦</span> 
+            </div>
+
+            <p class="text-2xl font-black mb-6 border-b-2 border-dashed border-gray-300 pb-4">
+                最終得分: <span id="final-score" class="text-blue-600">0</span> 分
+            </p>
+
+            <button onclick="showStartModal()" class="w-full bg-blue-500 hover:bg-blue-400 text-white border-3 border-gray-900 shadow-[4px_4px_0px_rgba(0,0,0,0.8)] rounded-xl px-6 py-3 font-bold text-xl transition-all hover:-translate-y-1">
+                再玩一次
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const vocabData = {
+            easy: [
+                { id: 1, en: 'Computer', zh: '電腦', icon: '💻' },
+                { id: 2, en: 'Keyboard', zh: '鍵盤', icon: '⌨️' },
+                { id: 3, en: 'Mouse', zh: '滑鼠', icon: '🖱️' },
+                { id: 4, en: 'Monitor', zh: '螢幕', icon: '🖥️' },
+                { id: 5, en: 'Internet', zh: '網路', icon: '🌐' },
+                { id: 6, en: 'Software', zh: '軟體', icon: '💿' },
+                { id: 7, en: 'Hardware', zh: '硬體', icon: '⚙️' },
+                { id: 8, en: 'Database', zh: '資料庫', icon: '🗄️' }
+            ],
+            normal: [
+                { id: 1, en: 'Computer', zh: '電腦', icon: '💻' },
+                { id: 2, en: 'Keyboard', zh: '鍵盤', icon: '⌨️' },
+                { id: 3, en: 'Mouse', zh: '滑鼠', icon: '🖱️' },
+                { id: 4, en: 'Monitor', zh: '螢幕', icon: '🖥️' },
+                { id: 9, en: 'Browser', zh: '瀏覽器', icon: '🧭' },
+                { id: 10, en: 'Password', zh: '密碼', icon: '🔑' },
+                { id: 11, en: 'Download', zh: '下載', icon: '⬇️' },
+                { id: 12, en: 'Server', zh: '伺服器', icon: '🗄️' },
+                { id: 13, en: 'Virus', zh: '病毒', icon: '🦠' },
+                { id: 14, en: 'Cloud', zh: '雲端', icon: '☁️' }
+            ],
+            hard: [
+                { id: 15, en: 'Encryption', zh: '加密', icon: '🔐' },
+                { id: 16, en: 'Firewall', zh: '防火牆', icon: '🧱' },
+                { id: 17, en: 'Motherboard', zh: '主機板', icon: '🎛️' },
+                { id: 18, en: 'Processor', zh: '處理器', icon: '🧠' },
+                { id: 19, en: 'Bandwidth', zh: '頻寬', icon: '📈' },
+                { id: 20, en: 'Terminal', zh: '終端機', icon: '📟' },
+                { id: 21, en: 'Framework', zh: '框架', icon: '🏗️' },
+                { id: 22, en: 'Debugging', zh: '除錯', icon: '🐛' },
+                { id: 23, en: 'Algorithm', zh: '演算法', icon: '📐' },
+                { id: 24, en: 'Deployment', zh: '部署', icon: '🚀' },
+                { id: 25, en: 'Protocol', zh: '協定', icon: '🤝' },
+                { id: 26, en: 'Database', zh: '資料庫', icon: '🗃️' }
+            ]
+        };
+
+        let currentVocabulary = [];
+        let currentDifficulty = 'easy';
+        let cards = [];
+        let score = 0;
+        let selectedCards = [];
+        let matchedPairs = 0;
+        let isAnimating = false;
+        let timeLeft = 60;
+        let timerId = null;
+        let isPlaying = false;
+        let playerName = ''; // 新增玩家名字變數
+
+        function showStartModal() {
+            isPlaying = false;
+            clearInterval(timerId);
+            
+            document.getElementById('start-modal').classList.remove('hidden');
+            document.getElementById('start-modal').classList.add('flex');
+            document.getElementById('name-error')?.classList.add('hidden'); // 隱藏錯誤提示
+            
+            // 新增：每次回到開始畫面時，清空輸入框與玩家名字
+            document.getElementById('player-name').value = '';
+            playerName = '';
+            
+            hideWinModal();
+            hideLoseModal();
+            stopConfetti();
+            
+            setDogExpression('idle', '哈囉！輸入名字並選擇難度，<br>幫我找出正確的電腦單詞吧！');
+        }
+
+        function startGame(difficulty) {
+            // 檢查是否輸入名字
+            const nameInput = document.getElementById('player-name').value.trim();
+            if (!nameInput) {
+                document.getElementById('name-error').classList.remove('hidden');
+                document.getElementById('player-name').focus();
+                return; // 阻止遊戲開始
+            }
+            document.getElementById('name-error').classList.add('hidden');
+            playerName = nameInput;
+
+            currentDifficulty = difficulty;
+            currentVocabulary = vocabData[difficulty];
+
+            if (difficulty === 'easy') timeLeft = 60;
+            else if (difficulty === 'normal') timeLeft = 90;
+            else if (difficulty === 'hard') timeLeft = 120;
+
+            const board = document.getElementById('game-board');
+            // 清除之前的 grid 類別，加入固定切割高度與寬度的 class
+            board.className = 'w-full h-full grid gap-1.5 sm:gap-3'; 
+            
+            // 使用嚴格切割網格：無論螢幕多高，都平均分配。不會有溢出！
+            if (difficulty === 'easy') {
+                // 16張 = 4行4列
+                board.classList.add('grid-cols-4', 'grid-rows-4');
+            } else if (difficulty === 'normal') {
+                // 20張 = 手機:4欄x5列 / 電腦:5欄x4列
+                board.classList.add('grid-cols-4', 'grid-rows-5', 'sm:grid-cols-5', 'sm:grid-rows-4');
+            } else if (difficulty === 'hard') {
+                // 24張 = 手機:4欄x6列 / 電腦:6欄x4列
+                board.classList.add('grid-cols-4', 'grid-rows-6', 'sm:grid-cols-6', 'sm:grid-rows-4');
+            }
+
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('start-modal').classList.remove('flex');
+            
+            initGame();
+            updateTimerDisplay();
+            isPlaying = true;
+            
+            clearInterval(timerId);
+            timerId = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 0) endGameLose();
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const timeDisplay = document.getElementById('time-display');
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timeDisplay.innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timeLeft <= 10 && timeLeft > 0) {
+                timeDisplay.classList.add('animate-pulse', 'text-red-600');
+                timeDisplay.classList.remove('text-red-500');
+            } else {
+                timeDisplay.classList.remove('animate-pulse', 'text-red-600');
+                timeDisplay.classList.add('text-red-500');
+            }
+        }
+
+        function initGame() {
+            score = 0;
+            matchedPairs = 0;
+            selectedCards = [];
+            isAnimating = false;
+            updateScore();
+            hideWinModal();
+            hideLoseModal();
+            stopConfetti();
+            setDogExpression('idle', `計時開始！<br>${playerName}，快找找看！`);
+
+            cards = [];
+            currentVocabulary.forEach(word => {
+                cards.push({ pairId: word.id, text: word.en, type: 'en', icon: word.icon });
+                cards.push({ pairId: word.id, text: word.zh, type: 'zh', icon: word.icon });
+            });
+
+            for (let i = cards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cards[i], cards[j]] = [cards[j], cards[i]];
+            }
+
+            renderCards();
+        }
+
+        function renderCards() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                // 放棄 aspect-square，改用 w-full h-full min-h-0，讓卡片填滿該格且不超出高度
+                cardEl.className = `card rounded-xl p-1 sm:p-2 flex flex-col items-center justify-center text-center select-none w-full h-full min-h-0 overflow-hidden`;
+                cardEl.dataset.index = index;
+                cardEl.onclick = () => handleCardClick(index);
+
+                if (card.type === 'zh') {
+                    const iconSize = currentDifficulty === 'hard' ? 'text-lg sm:text-2xl' : 'text-2xl sm:text-3xl';
+                    const textSize = currentDifficulty === 'hard' ? 'text-[11px] sm:text-sm' : 'text-sm sm:text-base';
+                    cardEl.innerHTML = `
+                        <div class="${iconSize} pointer-events-none leading-none">${card.icon}</div>
+                        <div class="font-bold ${textSize} text-gray-800 pointer-events-none break-words w-full leading-tight my-auto">${card.text}</div>
+                        <div class="text-[9px] text-gray-400 pointer-events-none font-bold uppercase leading-none mt-auto pt-1">中文</div>
+                    `;
+                } else {
+                    const textSize = currentDifficulty === 'hard' ? 'text-[11px] sm:text-base' : 'text-sm sm:text-lg';
+                    cardEl.innerHTML = `
+                        <div class="font-black ${textSize} text-blue-600 pointer-events-none break-words w-full my-auto leading-tight line-clamp-3">${card.text}</div>
+                        <div class="text-[9px] text-gray-400 pointer-events-none font-bold uppercase leading-none mt-auto pt-1">ENG</div>
+                    `;
+                }
+                        
+                board.appendChild(cardEl);
+            });
+        }
+
+        function handleCardClick(index) {
+            if (!isPlaying || isAnimating) return;
+            
+            const cardEl = document.querySelector(`.card[data-index="${index}"]`);
+            if (cardEl.classList.contains('matched') || cardEl.classList.contains('selected')) return;
+
+            cardEl.classList.add('selected');
+            selectedCards.push({ index, ...cards[index] });
+
+            if (selectedCards.length === 2) {
+                checkMatch();
+            } else {
+                setDogExpression('idle', '還差一張！');
+            }
+        }
+
+        function checkMatch() {
+            isAnimating = true;
+            const [card1, card2] = selectedCards;
+            const cardEl1 = document.querySelector(`.card[data-index="${card1.index}"]`);
+            const cardEl2 = document.querySelector(`.card[data-index="${card2.index}"]`);
+
+            if (card1.pairId === card2.pairId && card1.type !== card2.type) {
+                score += 10;
+                matchedPairs++;
+                updateScore();
+                setDogExpression('happy', '恭喜答對！+10 分');
+
+                setTimeout(() => {
+                    cardEl1.classList.remove('selected');
+                    cardEl2.classList.remove('selected');
+                    cardEl1.classList.add('matched');
+                    cardEl2.classList.add('matched');
+                    selectedCards = [];
+                    isAnimating = false;
+
+                    if (matchedPairs === currentVocabulary.length) {
+                        showWinAnimation();
+                    }
+                }, 600);
+            } else {
+                score -= 5;
+                updateScore();
+                setDogExpression('sad', '哎呀錯了！-5 分');
+
+                cardEl1.classList.add('shake');
+                cardEl2.classList.add('shake');
+
+                setTimeout(() => {
+                    cardEl1.classList.remove('selected', 'shake');
+                    cardEl2.classList.remove('selected', 'shake');
+                    selectedCards = [];
+                    isAnimating = false;
+                    setDogExpression('idle', '沒關係，繼續挑戰！');
+                }, 800);
+            }
+        }
+
+        function updateScore() {
+            document.getElementById('score-display').innerText = score;
+        }
+
+        function setDogExpression(emotion, text) {
+            const snoopyImg = document.getElementById('snoopy-img');
+            snoopyImg.className = 'w-full h-full object-contain transition-all duration-500 drop-shadow-xl';
+
+            if (emotion === 'happy') {
+                snoopyImg.classList.add('animate-bounce');
+            } else if (emotion === 'sad') {
+                snoopyImg.classList.add('grayscale', 'opacity-70', 'rotate-12', 'translate-y-2');
+            }
+
+            document.getElementById('dialogue-text').innerHTML = text;
+        }
+
+        function showWinAnimation() {
+            isPlaying = false;
+            clearInterval(timerId);
+            
+            const modal = document.getElementById('win-modal');
+            const content = document.getElementById('win-modal-content');
+            document.getElementById('final-score').innerText = score;
+            
+            setDogExpression('happy', `太強了 ${playerName}！<br>全過關啦！`);
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            setTimeout(() => {
+                content.classList.remove('scale-90');
+                content.classList.add('scale-100');
+            }, 50);
+
+            startConfetti();
+        }
+
+        function hideWinModal() {
+            const modal = document.getElementById('win-modal');
+            const content = document.getElementById('win-modal-content');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            content.classList.add('scale-90');
+            content.classList.remove('scale-100');
+        }
+
+        function endGameLose() {
+            isPlaying = false;
+            clearInterval(timerId);
+            setDogExpression('sad', `${playerName}，時間到了...`);
+            
+            const modal = document.getElementById('lose-modal');
+            const content = document.getElementById('lose-modal-content');
+            document.getElementById('lose-final-score').innerText = score;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            setTimeout(() => {
+                content.classList.remove('scale-90');
+                content.classList.add('scale-100');
+            }, 50);
+        }
+
+        function hideLoseModal() {
+            const modal = document.getElementById('lose-modal');
+            const content = document.getElementById('lose-modal-content');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            content.classList.add('scale-90');
+            content.classList.remove('scale-100');
+        }
+
+        const canvas = document.getElementById('confetti-canvas');
+        const ctx = canvas.getContext('2d');
+        let confettiParticles = [];
+        let animationId;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function createConfettiParticle(x, y, isLeft) {
+            const colors = ['#fde047', '#60a5fa', '#f87171', '#34d399', '#c084fc'];
+            return {
+                x: x, y: y,
+                size: Math.random() * 8 + 5,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                velocityX: isLeft ? (Math.random() * 10 + 2) : -(Math.random() * 10 + 2),
+                velocityY: -(Math.random() * 15 + 5),
+                rotation: Math.random() * 360,
+                rotationSpeed: Math.random() * 10 - 5,
+                gravity: 0.5
+            };
+        }
+
+        function startConfetti() {
+            canvas.classList.remove('hidden');
+            resizeCanvas();
+            confettiParticles = [];
+            for (let i = 0; i < 80; i++) {
+                confettiParticles.push(createConfettiParticle(0, canvas.height * 0.2, true));
+                confettiParticles.push(createConfettiParticle(canvas.width, canvas.height * 0.2, false));
+            }
+            renderConfetti();
+        }
+
+        function renderConfetti() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let active = false;
+
+            confettiParticles.forEach(p => {
+                p.x += p.velocityX;
+                p.y += p.velocityY;
+                p.velocityY += p.gravity;
+                p.rotation += p.rotationSpeed;
+
+                if (p.y < canvas.height) active = true;
+
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation * Math.PI / 180);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+                ctx.restore();
+            });
+
+            if (active) {
+                animationId = requestAnimationFrame(renderConfetti);
+            } else if(!document.getElementById('win-modal').classList.contains('hidden')) {
+                startConfetti();
+            }
+        }
+
+        function stopConfetti() {
+            canvas.classList.add('hidden');
+            cancelAnimationFrame(animationId);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        window.onload = showStartModal;
+    </script>
+</body>
+</html>

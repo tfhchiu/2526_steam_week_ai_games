@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Grammar of Doom - 語法解謎 (無盡深淵版)</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 FontAwesome 圖標 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- 引入奇幻與恐怖風格字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #050000;
+            background-image: radial-gradient(circle at center, #1a0202 0%, #050000 100%);
+            color: #d6d3d1;
+            overflow-x: hidden;
+        }
+
+        .fantasy-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* 恐怖雜訊濾鏡遮罩 */
+        .noise-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+            opacity: 0.04;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* 霓虹血液閃爍動畫 */
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; text-shadow: 0 0 10px #dc2626, 0 0 20px #991b1b, 0 0 30px #450a0a; }
+            20%, 24%, 55% { opacity: 0.4; text-shadow: none; }
+        }
+        .text-flicker {
+            animation: flicker 4s infinite alternate;
+        }
+
+        /* 顫抖/受傷動畫 (加劇) */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0) scale(1); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-12px) rotate(-3deg) scale(1.02); }
+            20%, 40%, 60%, 80% { transform: translateX(12px) rotate(3deg) scale(1.02); }
+        }
+        .damage-shake {
+            animation: shake 0.5s ease-in-out;
+            border-color: #991b1b !important;
+            box-shadow: 0 0 40px rgba(220, 38, 38, 0.6) !important;
+            background-color: #2e0202 !important;
+        }
+
+        /* 漸顯動畫 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.8s forwards;
+        }
+
+        /* 恐怖風格選項按鈕 */
+        .option-btn {
+            background: linear-gradient(145deg, #171717, #0a0a0a);
+            border: 1px solid #3f3f46;
+            transition: all 0.3s ease;
+        }
+        .option-btn:hover:not(:disabled) {
+            border-color: #dc2626;
+            box-shadow: 0 0 15px rgba(220, 38, 38, 0.4);
+            transform: translateX(5px);
+        }
+        .option-btn.correct {
+            background: linear-gradient(145deg, #064e3b, #022c22);
+            border-color: #059669;
+            color: #a7f3d0;
+        }
+        .option-btn.wrong {
+            background: linear-gradient(145deg, #450a0a, #2e0202);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        .glow-blood {
+            text-shadow: 0 0 15px rgba(220, 38, 38, 0.9);
+        }
+        
+        .creepy-border {
+            border: 2px solid #3f3f46;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.9);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- 全螢幕雜訊特效 -->
+    <div class="noise-overlay"></div>
+
+    <!-- 主遊戲容器 -->
+    <div id="game-container" class="w-full max-w-2xl bg-neutral-950 creepy-border rounded-lg relative overflow-hidden transition-colors duration-300">
+        
+        <!-- 頂部狀態列 -->
+        <div class="bg-black px-6 py-3 border-b border-red-900/50 flex justify-between items-center z-10 relative">
+            <div class="fantasy-font text-xl text-red-600 font-bold tracking-widest text-flicker">
+                DOOM
+            </div>
+            <div class="flex items-center gap-3 text-2xl" id="hp-container">
+                <!-- HP 會由 JS 動態生成 -->
+            </div>
+        </div>
+
+        <!-- 遊戲內容區 -->
+        <div class="p-6 sm:p-8 min-h-[450px] flex flex-col relative z-10" id="stage">
+            
+            <!-- 開始畫面 -->
+            <div id="screen-start" class="text-center py-10 flex-1 flex flex-col justify-center fade-in">
+                <i class="fa-solid fa-book-skull text-7xl text-red-800 mb-6 drop-shadow-[0_0_15px_rgba(153,27,27,0.8)] animate-pulse"></i>
+                <h1 class="fantasy-font text-5xl sm:text-6xl font-black text-red-600 mb-4 text-flicker">GRAMMAR<br>OF DOOM</h1>
+                <p class="text-stone-400 mb-10 leading-relaxed max-w-md mx-auto">
+                    你步入了每次都會<span class="text-red-500">重組變異</span>的血肉地牢。<br>
+                    未知的故事與扭曲的怪物潛伏在前方，唯有<span class="text-red-500 font-bold">正確的文法</span>能保護你。<br>
+                    你的理智能撐過這 10 個隨機的房間嗎...？
+                </p>
+                <button onclick="startGame()" class="mx-auto bg-red-900 hover:bg-red-800 text-stone-200 fantasy-font font-bold py-4 px-10 rounded border border-red-700 shadow-[0_0_20px_rgba(220,38,38,0.4)] hover:shadow-[0_0_30px_rgba(220,38,38,0.7)] transition-all tracking-widest text-xl">
+                    獻祭靈魂 (ENTER)
+                </button>
+            </div>
+
+            <!-- 謎題畫面 -->
+            <div id="screen-puzzle" class="hidden flex-1 flex flex-col fade-in">
+                <div class="mb-6 text-center border-b border-stone-800 pb-4">
+                    <span class="text-red-700 text-sm tracking-widest uppercase font-bold" id="room-level">Chamber I</span>
+                    <h2 class="text-3xl font-bold text-stone-200 mt-2 fantasy-font" id="room-name">滴血的長廊</h2>
+                </div>
+                
+                <div class="flex-1 flex flex-col items-center justify-center mb-6">
+                    <div id="room-icon" class="text-6xl text-stone-600 mb-6 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
+                        <i class="fa-solid fa-door-closed"></i>
+                    </div>
+                    <p id="room-desc" class="text-stone-400 text-center mb-8 italic leading-relaxed px-4">
+                        一扇刻著古老文字的鐵門擋住了去路。門上的謎語需要一個正確的動詞形式來補全。
+                    </p>
+                    
+                    <!-- 題目句子 -->
+                    <div class="bg-black/80 p-5 rounded border border-red-900/50 w-full text-center shadow-[inset_0_0_20px_rgba(0,0,0,1)] mb-8">
+                        <p id="question-text" class="text-xl sm:text-2xl text-stone-300 font-medium leading-relaxed">
+                            "I am looking forward to <span class="text-red-500 border-b-2 border-red-600 px-2 font-bold">_____</span> you."
+                        </p>
+                    </div>
+
+                    <!-- 選項 -->
+                    <div id="options-container" class="grid grid-cols-1 gap-4 w-full px-2">
+                        <!-- 選項由 JS 產生 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 結算/死亡畫面 -->
+            <div id="screen-end" class="hidden text-center py-10 flex-1 flex flex-col justify-center fade-in">
+                <div id="end-icon" class="text-7xl mb-8"></div>
+                <h1 id="end-title" class="fantasy-font text-5xl font-black mb-4 tracking-wider"></h1>
+                <p id="end-msg" class="text-stone-400 mb-10 leading-relaxed text-lg max-w-md mx-auto"></p>
+                <button onclick="resetGame()" class="mx-auto bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold py-3 px-10 rounded border border-stone-600 transition-all hover:border-red-500 hover:text-red-400">
+                    輪迴重生 (Resurrect)
+                </button>
+            </div>
+
+        </div>
+
+        <!-- 文法解析彈出層 -->
+        <div id="explanation-modal" class="absolute inset-0 bg-black/95 backdrop-blur-md hidden flex-col items-center justify-center p-6 z-20 fade-in border-t-4 border-stone-700">
+            <i class="fa-solid fa-unlock-keyhole text-5xl text-stone-400 mb-6 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]"></i>
+            <h3 class="text-3xl font-bold text-stone-200 mb-2 fantasy-font tracking-widest">封印解除</h3>
+            <div class="bg-neutral-900 border border-stone-700 p-5 rounded text-left w-full max-w-lg mb-8 shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                <h4 class="text-stone-400 font-bold mb-3 border-b border-stone-700 pb-2"><i class="fa-solid fa-scroll mr-2"></i>禁忌知識 (解析)</h4>
+                <p id="explanation-text" class="text-stone-300 text-base leading-relaxed"></p>
+            </div>
+            <button onclick="nextRoom()" class="bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold py-3 px-8 rounded transition-all border border-stone-500 hover:border-stone-300 shadow-[0_0_15px_rgba(0,0,0,0.8)]">
+                深入黑暗 <i class="fa-solid fa-chevron-right ml-2 text-sm"></i>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 龐大題庫 (20個事件)，遊戲每次將隨機挑選 10 個 ---
+        const allLevelsPool = [
+            {
+                roomName: "滴血的長廊",
+                icon: "fa-skull text-stone-400",
+                desc: "牆壁滲出鮮血，一個怨靈要求你用正確的介系詞短語來平息牠的痛苦。",
+                question: "The survival of your soul depends entirely <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> your next choice.",
+                options: ["on", "in", "with", "at"],
+                correctOption: "on",
+                explanation: "「depend on」是固定的動詞片語，意思是「依賴、取決於」。"
+            },
+            {
+                roomName: "腐肉藤蔓",
+                icon: "fa-disease text-green-800",
+                desc: "天花板垂下長滿眼球的藤蔓，它們散發著屍臭味。你需要解開動名詞謎語。",
+                question: "The possessed girl denied <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> the cursed flesh from the altar.",
+                options: ["eating", "to eat", "eat", "eaten"],
+                correctOption: "eating",
+                explanation: "動詞「deny (否認)」後面必須接「動名詞 (V-ing)」。例如：deny eating (否認吃過)。"
+            },
+            {
+                roomName: "凝視之眼",
+                icon: "fa-eye text-red-600 animate-pulse",
+                desc: "一顆巨大的血紅眼球緩緩睜開。它傳達了「意志」的法則。",
+                question: "The ancient ritual insists that the sacrifice <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> pure and untainted.",
+                options: ["be", "is", "was", "being"],
+                correctOption: "be",
+                explanation: "這是意志動詞用法。當遇到 insist (堅持) 等字時，that 子句動詞必須是「原形動詞」，因為省略了助動詞 should。"
+            },
+            {
+                roomName: "怨靈的詛咒",
+                icon: "fa-spider text-stone-500",
+                desc: "一隻巨大的骸骨蜘蛛從陰影爬出。你必須分辨情緒的來源。",
+                question: "The <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> screams from the basement made my blood run cold.",
+                options: ["terrifying", "terrified", "terrify", "to terrify"],
+                correctOption: "terrifying",
+                explanation: "分詞當形容詞：事物「令人感到恐懼的」用現在分詞 terrifying；人「感到恐懼的」用過去分詞 terrified。尖叫聲是令人恐懼的。"
+            },
+            {
+                roomName: "無頭行刑者",
+                icon: "fa-gavel text-stone-400",
+                desc: "無頭劊子手的巨斧無比鋒利，唯有「倒裝句」能架開攻擊！",
+                question: "Not only <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> my sanity, but he also shattered my bones!",
+                options: ["did he destroy", "he destroyed", "he did destroy", "destroyed he"],
+                correctOption: "did he destroy",
+                explanation: "當否定副詞 (Not only) 放在句首時，後面的句子必須使用「倒裝」結構（助動詞 + 主詞 + 動詞）。"
+            },
+            {
+                roomName: "巫蠱娃娃",
+                icon: "fa-child text-red-900",
+                desc: "滿地是被針刺穿的布娃娃。考驗你對「使役動詞」的掌控。",
+                question: "The dark witch made the cursed doll <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> to life and hunt us.",
+                options: ["come", "to come", "came", "coming"],
+                correctOption: "come",
+                explanation: "使役動詞 make (迫使/使得) 後面接主動受詞時，必須使用「原形動詞」(make + O. + V原)。"
+            },
+            {
+                roomName: "泣血的雕像",
+                icon: "fa-monument text-stone-600",
+                desc: "惡魔石像要求你用「未來完成式」預言死亡時間。",
+                question: "By the time the sun rises, the shadow <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> all the light in this room.",
+                options: ["will have consumed", "will consume", "have consumed", "are consuming"],
+                correctOption: "will have consumed",
+                explanation: "句子有「By the time + 現在式(表未來)」，主要子句要搭配「未來完成式 (will have + p.p.)」，表示未來某時前會「已經完成」的動作。"
+            },
+            {
+                roomName: "噬魂之鏡",
+                icon: "fa-user-ninja text-stone-500",
+                desc: "鏡中的你正露出詭異微笑。你必須知道如何「停止」這行為。",
+                question: "You must stop <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> into the mirror immediately, or your soul will be trapped forever.",
+                options: ["looking", "to look", "look", "looked"],
+                correctOption: "looking",
+                explanation: "「stop V-ing」是「停止正在做的動作」；「stop to V」是「停下來轉去做某事」。你必須「停止注視(looking)」。"
+            },
+            {
+                roomName: "潘朵拉的魔盒",
+                icon: "fa-box-open text-red-800",
+                desc: "人骨寶箱上刻著「假設語氣」詛咒。選錯就會被撕裂。",
+                question: "If you <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> the warning written in blood, we wouldn't be surrounded by demons now!",
+                options: ["had read", "read", "would read", "have read"],
+                correctOption: "had read",
+                explanation: "這是與過去事實相反的第三條件句 (Third Conditional)。If 子句必須使用過去完成式 (had + p.p.)。"
+            },
+            {
+                roomName: "終焉祭壇",
+                icon: "fa-dungeon text-red-600",
+                desc: "邪神的名字無法被念出，只能用「關係代名詞」指稱。",
+                question: "The forgotten God, <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> true name is forbidden, slowly materialized.",
+                options: ["whose", "who", "which", "that"],
+                correctOption: "whose",
+                explanation: "這裡需要一個關係代名詞的所有格修飾名詞 (true name)，表示「牠的真實名字」。只有 whose 具備所有格功用。"
+            },
+            {
+                roomName: "嘆息之橋",
+                icon: "fa-bridge-water text-stone-500",
+                desc: "橋下流淌著靈魂的哀嚎，你必須習慣這一切才能走過去。",
+                question: "As a mortal, I am not used to <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> the cries of the damned.",
+                options: ["hearing", "hear", "heard", "be heard"],
+                correctOption: "hearing",
+                explanation: "「be used to」表示「習慣於...」，後面的 to 是介系詞，必須接名詞或「動名詞 (V-ing)」。"
+            },
+            {
+                roomName: "午夜鐘樓",
+                icon: "fa-clock text-amber-700",
+                desc: "十二聲鐘響。喪鐘為誰而鳴？你該知道時間已經不多了。",
+                question: "The bells chime twelve. It is high time we <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> this cursed place.",
+                options: ["left", "leave", "leaving", "have left"],
+                correctOption: "left",
+                explanation: "「It is time / high time + 主詞 + 過去式動詞」是一種假設語氣用法，表示「早該做某事了（但還沒做）」。"
+            },
+            {
+                roomName: "泥沼巨怪",
+                icon: "fa-hand-holding-droplet text-green-900",
+                desc: "巨大的泥怪伸出觸手。唯有保護咒語能阻止牠的侵蝕。",
+                question: "The glowing amulet prevented the swamp monster <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> me alive.",
+                options: ["from devouring", "to devour", "devour", "devouring"],
+                correctOption: "from devouring",
+                explanation: "「prevent/keep/stop + 某人事物 + from + V-ing」為固定用法，表示「阻止...免於發生...」。"
+            },
+            {
+                roomName: "幻象迷宮",
+                icon: "fa-road-spikes text-stone-500",
+                desc: "牆壁不斷變化。儘管有警告，你仍身陷其中。",
+                question: "<span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> the blood-written warning signs, the foolish adventurer entered the maze.",
+                options: ["Despite", "Although", "Even though", "However"],
+                correctOption: "Despite",
+                explanation: "「Despite」是介系詞，後面只能接「名詞/名詞片語」(the warning signs)；Although/Even though 必須接完整的子句。"
+            },
+            {
+                roomName: "冰霜女妖",
+                icon: "fa-snowflake text-blue-200",
+                desc: "極寒的怨氣凍結了骨髓。你需要形容這種極致的寒冷。",
+                question: "It was <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> cold a night that my blood literally froze in my veins.",
+                options: ["so", "such", "very", "too"],
+                correctOption: "so",
+                explanation: "「so + 形容詞 + a/an + 單數名詞 + that」是固定句型，表示「如此...以至於...」。如果用 such，要寫成 such a cold night。"
+            },
+            {
+                roomName: "骸骨王座",
+                icon: "fa-chair text-stone-300",
+                desc: "骸骨之王端坐其上，你不下跪，他就會取走你的頭顱。",
+                question: "You had better <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> to the King of Bones, or he will take your skull.",
+                options: ["bow", "to bow", "bowing", "bowed"],
+                correctOption: "bow",
+                explanation: "助動詞片語「had better (最好...)」後面必須直接加上「原形動詞」。"
+            },
+            {
+                roomName: "靈魂天平",
+                icon: "fa-scale-balanced text-amber-600",
+                desc: "阿努比斯的天平前，你不能有一絲的猶豫或恐懼。",
+                question: "To pass this final gate, you must possess <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> fear nor hesitation.",
+                options: ["neither", "either", "both", "not only"],
+                correctOption: "neither",
+                explanation: "「neither A nor B」為對等連接詞片語，表示「既不是A也不是B / 兩者皆非」。"
+            },
+            {
+                roomName: "嗜血魔蝙蝠",
+                icon: "fa-bat text-red-900",
+                desc: "黑暗中蝙蝠群襲來，一切發生得太快。",
+                question: "No sooner had the demon bat bitten my neck <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> I felt the venom spreading.",
+                options: ["than", "when", "then", "that"],
+                correctOption: "than",
+                explanation: "「No sooner + 過去完成式倒裝 + than + 過去式」是固定句型，表示「一...就...」。No sooner 必定搭配 than。"
+            },
+            {
+                roomName: "幽冥契約",
+                icon: "fa-file-signature text-stone-400",
+                desc: "惡魔遞上一份契約。除非你簽下靈魂，否則無法離開。",
+                question: "You will not escape this realm <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> you sign the contract with your blood.",
+                options: ["unless", "if", "except", "without"],
+                correctOption: "unless",
+                explanation: "「unless (除非)」引導條件子句，相當於 if... not，表示「除非你簽約，否則無法逃離」。"
+            },
+            {
+                roomName: "亡者之影",
+                icon: "fa-user-secret text-stone-600",
+                desc: "影子脫離了你的腳底，彷彿它擁有了自己的生命。",
+                question: "The shadowy reflection moved entirely on its own, as if it <span class='text-red-500 border-b-2 border-red-600 px-2'>_____</span> alive.",
+                options: ["were", "was", "is", "be"],
+                correctOption: "were",
+                explanation: "「as if (彷彿)」後面常接與現在事實相反的假設語氣，be 動詞不論主詞人稱，一律使用 were。"
+            }
+        ];
+
+        // --- 遊戲狀態變數 ---
+        let currentRunLevels = []; // 本次探險隨機抽出的關卡
+        let currentLevelIndex = 0;
+        let hp = 3;
+        const maxHp = 3;
+        const totalRoomsPerRun = 10; // 每次探險挑戰的房間數
+        let isAnswering = false;
+
+        // --- DOM 元素 ---
+        const uiHpContainer = document.getElementById('hp-container');
+        const container = document.getElementById('game-container');
+        
+        const screenStart = document.getElementById('screen-start');
+        const screenPuzzle = document.getElementById('screen-puzzle');
+        const screenEnd = document.getElementById('screen-end');
+        
+        const roomLevel = document.getElementById('room-level');
+        const roomName = document.getElementById('room-name');
+        const roomIcon = document.getElementById('room-icon');
+        const roomDesc = document.getElementById('room-desc');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        
+        const explanationModal = document.getElementById('explanation-modal');
+        const explanationText = document.getElementById('explanation-text');
+
+        // --- 核心工具：陣列洗牌 (Fisher-Yates Shuffle) ---
+        function shuffleArray(array) {
+            const newArr = [...array];
+            for (let i = newArr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+            }
+            return newArr;
+        }
+
+        // 更新 HP 顯示
+        function updateHP() {
+            uiHpContainer.innerHTML = '';
+            for (let i = 0; i < maxHp; i++) {
+                if (i < hp) {
+                    uiHpContainer.innerHTML += '<i class="fa-solid fa-heart text-red-700 drop-shadow-[0_0_8px_rgba(185,28,28,0.8)]"></i>';
+                } else {
+                    uiHpContainer.innerHTML += '<i class="fa-solid fa-skull text-stone-600 opacity-50"></i>';
+                }
+            }
+        }
+
+        // 開始遊戲 (Rogue-like 隨機抽題)
+        function startGame() {
+            hp = maxHp;
+            currentLevelIndex = 0;
+            
+            // 從總題庫隨機挑選 10 題作為本次探險內容
+            const shuffledPool = shuffleArray(allLevelsPool);
+            currentRunLevels = shuffledPool.slice(0, totalRoomsPerRun);
+            
+            updateHP();
+            
+            screenStart.classList.add('hidden');
+            screenEnd.classList.add('hidden');
+            screenPuzzle.classList.remove('hidden');
+            
+            loadLevel();
+        }
+
+        // 載入關卡
+        function loadLevel() {
+            isAnswering = false;
+            explanationModal.classList.add('hidden');
+            
+            // 重置動畫
+            screenPuzzle.classList.remove('fade-in');
+            void screenPuzzle.offsetWidth; 
+            screenPuzzle.classList.add('fade-in');
+
+            const level = currentRunLevels[currentLevelIndex];
+            
+            const romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+            
+            roomLevel.textContent = `Chamber ${romanNumerals[currentLevelIndex]} of X`;
+            roomName.textContent = level.roomName;
+            roomIcon.innerHTML = `<i class="fa-solid ${level.icon}"></i>`;
+            roomDesc.textContent = level.desc;
+            questionText.innerHTML = `"${level.question}"`;
+            
+            // 將選項進行隨機洗牌，確保答案位置每次不同
+            const randomizedOptions = shuffleArray(level.options);
+            
+            // 渲染選項
+            optionsContainer.innerHTML = '';
+            randomizedOptions.forEach((optText) => {
+                const isCorrect = (optText === level.correctOption);
+                const btn = document.createElement('button');
+                btn.className = 'option-btn w-full text-left px-5 py-4 rounded text-stone-300 font-medium flex justify-between items-center text-lg';
+                btn.innerHTML = `<span>${optText}</span> <i class="fa-solid fa-circle text-stone-700 text-xs hidden marker-icon"></i>`;
+                btn.onclick = () => checkAnswer(btn, isCorrect, level);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        // 檢查答案
+        function checkAnswer(btn, isCorrect, level) {
+            if (isAnswering) return;
+            isAnswering = true;
+
+            const allBtns = optionsContainer.querySelectorAll('button');
+            allBtns.forEach(b => b.disabled = true);
+
+            if (isCorrect) {
+                btn.classList.add('correct');
+                btn.querySelector('.marker-icon').classList.replace('fa-circle', 'fa-check');
+                btn.querySelector('.marker-icon').classList.replace('text-stone-700', 'text-emerald-400');
+                btn.querySelector('.marker-icon').classList.remove('hidden');
+
+                setTimeout(() => {
+                    explanationText.textContent = level.explanation;
+                    explanationModal.classList.remove('hidden');
+                }, 700);
+                
+            } else {
+                btn.classList.add('wrong');
+                btn.querySelector('.marker-icon').classList.replace('fa-circle', 'fa-xmark');
+                btn.querySelector('.marker-icon').classList.replace('text-stone-700', 'text-red-400');
+                btn.querySelector('.marker-icon').classList.remove('hidden');
+                
+                // 找出並標示正確答案給玩家看
+                allBtns.forEach(b => {
+                    if (b.innerText.trim() === level.correctOption) {
+                        b.classList.add('border-emerald-600', 'text-emerald-300', 'bg-neutral-900');
+                    }
+                });
+
+                takeDamage();
+
+                setTimeout(() => {
+                    if (hp > 0) {
+                        btn.classList.remove('wrong');
+                        btn.querySelector('.marker-icon').classList.add('hidden');
+                        allBtns.forEach(b => {
+                            b.disabled = false;
+                            b.classList.remove('border-emerald-600', 'text-emerald-300', 'bg-neutral-900');
+                        });
+                        isAnswering = false;
+                    }
+                }, 1200); // 延長一點時間讓玩家看清楚正確答案
+            }
+        }
+
+        // 受到傷害
+        function takeDamage() {
+            hp--;
+            updateHP();
+            
+            container.classList.add('damage-shake');
+            setTimeout(() => {
+                container.classList.remove('damage-shake');
+                if (hp <= 0) {
+                    gameOver();
+                }
+            }, 500);
+        }
+
+        // 前往下一間房間
+        function nextRoom() {
+            currentLevelIndex++;
+            if (currentLevelIndex >= totalRoomsPerRun) {
+                victory();
+            } else {
+                loadLevel();
+            }
+        }
+
+        // 遊戲結束
+        function gameOver() {
+            screenPuzzle.classList.add('hidden');
+            explanationModal.classList.add('hidden');
+            
+            document.getElementById('end-icon').innerHTML = '<i class="fa-solid fa-ghost text-red-700 glow-blood animate-bounce"></i>';
+            document.getElementById('end-title').textContent = "YOU DIED";
+            document.getElementById('end-title').className = "fantasy-font text-6xl font-black mb-4 text-red-600 glow-blood text-flicker";
+            document.getElementById('end-msg').textContent = "你的理智已經耗盡，肉體被地牢吞噬。因為地牢空間是不斷變幻的，下次探險你將面臨完全不同的考驗...";
+            
+            screenEnd.classList.remove('hidden');
+        }
+
+        // 遊戲勝利
+        function victory() {
+            screenPuzzle.classList.add('hidden');
+            explanationModal.classList.add('hidden');
+            
+            document.getElementById('end-icon').innerHTML = '<i class="fa-solid fa-crown text-stone-300 drop-shadow-[0_0_30px_rgba(255,255,255,0.8)]"></i>';
+            document.getElementById('end-title').textContent = "SURVIVOR";
+            document.getElementById('end-title').className = "fantasy-font text-6xl font-black mb-4 text-stone-200 tracking-widest";
+            document.getElementById('end-msg').textContent = `難以置信！你用純粹的知識淨化了這個充滿惡靈的地方。帶著殘存的 ${hp} 點理智逃出深淵。休息一下，地牢的結構很快就會重組...`;
+            
+            screenEnd.classList.remove('hidden');
+        }
+
+        // 重新開始
+        function resetGame() {
+            startGame(); // 重新觸發會重新洗牌並抽題
+        }
+
+        // 初始化顯示 HP
+        updateHP();
+    </script>
+</body>
+</html>

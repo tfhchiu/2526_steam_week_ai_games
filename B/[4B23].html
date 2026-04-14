@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STEAM Week: 電腦單字大挑戰</title>
+    <style>
+        :root {
+            --primary-color: #ff9a9e;
+            --secondary-color: #fad0c4;
+            --accent-color: #a1c4fd;
+            --success-color: #84fab0;
+            --error-color: #ff9a9e;
+            --text-color: #5a5a5a;
+            --bg-gradient: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft JhengHei', cursive, sans-serif;
+            background: var(--bg-gradient);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        #game-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            width: 95%;
+            max-width: 850px;
+            text-align: center;
+            border: 8px solid white;
+            position: relative;
+        }
+
+        h1 { 
+            color: #ff6b6b; 
+            margin-top: 0;
+            margin-bottom: 15px; 
+            font-size: 2.2rem;
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.8);
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 25px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            background: #fff;
+            padding: 10px;
+            border-radius: 50px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .timer { color: #e67e22; }
+        .score { color: #2ecc71; }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            perspective: 1000px;
+        }
+
+        .card {
+            background: white;
+            border: 3px solid var(--accent-color);
+            border-radius: 20px;
+            padding: 15px 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 90px;
+            font-weight: bold;
+            font-size: 1rem;
+            box-shadow: 0 6px 0px var(--accent-color);
+            position: relative;
+            top: 0;
+            user-select: none;
+            word-break: break-all;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            background: var(--secondary-color);
+            border-color: #ffb8b8;
+        }
+
+        .card:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0px var(--accent-color);
+        }
+
+        .card.selected {
+            background: var(--accent-color);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--accent-color);
+        }
+
+        .card.matched {
+            animation: matchPop 0.5s forwards;
+            pointer-events: none;
+        }
+
+        @keyframes matchPop {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); background: var(--success-color); }
+            100% { transform: scale(0); opacity: 0; visibility: hidden; }
+        }
+
+        .card.wrong {
+            background: var(--error-color);
+            color: white;
+            border-color: #ff5e62;
+            box-shadow: 0 6px 0px #ff5e62;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% {transform: translateX(0);}
+            20% {transform: translateX(-8px);}
+            40% {transform: translateX(8px);}
+            60% {transform: translateX(-8px);}
+            80% {transform: translateX(8px);}
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 107, 107, 0.3);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: 0.5s;
+        }
+
+        .modal {
+            background: white;
+            padding: 3rem;
+            border-radius: 40px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            border: 10px solid var(--secondary-color);
+            max-width: 400px;
+        }
+
+        .modal h2 { color: #ff6b6b; font-size: 2.5rem; margin-top: 0; }
+        .modal p { font-size: 1.2rem; line-height: 1.6; margin-bottom: 25px; }
+
+        button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 15px 45px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 6px 0px #d64545;
+        }
+
+        button:hover { 
+            background: #ff4757; 
+            transform: translateY(-3px); 
+            box-shadow: 0 9px 0px #d64545;
+        }
+
+        button:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0px #d64545;
+        }
+
+        .hidden { display: none !important; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .game-grid { grid-template-columns: repeat(3, 1fr); }
+            h1 { font-size: 1.5rem; }
+            .card { font-size: 0.85rem; min-height: 70px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>🎮 STEAM 電腦大挑戰</h1>
+    <div class="stats">
+        <div class="timer">⏳ 剩餘: <span id="time-left">60</span>s</div>
+        <div class="score">⭐ 得分: <span id="score">0</span></div>
+    </div>
+
+    <div class="game-grid" id="game-grid">
+        <!-- JS dynamic content -->
+    </div>
+</div>
+
+<!-- Start/End Overlay -->
+<div id="overlay">
+    <div class="modal" id="modal-content">
+        <h2 id="modal-title">準備好了嗎？</h2>
+        <p id="modal-msg">在 60 秒內配對所有電腦單字與其解釋！<br>考考你的 STEAM 常識！</p>
+        <button onclick="startGame()">開始挑戰</button>
+    </div>
+</div>
+
+<script>
+    const vocabulary = [
+        { word: "CPU", def: "電腦大腦 (中央處理器)" },
+        { word: "RAM", def: "暫存記憶體 (快取)" },
+        { word: "Hardware", def: "實體零件 (硬體)" },
+        { word: "Software", def: "安裝的程式 (軟體)" },
+        { word: "Firewall", def: "網路防線 (防火牆)" },
+        { word: "Motherboard", def: "主電路板" },
+        { word: "Resolution", def: "畫面清晰度 (解析度)" },
+        { word: "Algorithm", def: "解題步驟 (演算法)" }
+    ];
+
+    let firstCard = null;
+    let secondCard = null;
+    let score = 0;
+    let timeLeft = 60;
+    let timerId = null;
+    let lockBoard = false;
+
+    function startGame() {
+        document.getElementById('overlay').classList.add('hidden');
+        resetGame();
+        if (timerId) clearInterval(timerId);
+        timerId = setInterval(updateTimer, 1000);
+    }
+
+    function resetGame() {
+        score = 0;
+        timeLeft = 60;
+        document.getElementById('score').innerText = score;
+        document.getElementById('time-left').innerText = timeLeft;
+        
+        let cardData = [];
+        vocabulary.forEach(item => {
+            cardData.push({ text: item.word, match: item.word });
+            cardData.push({ text: item.def, match: item.word });
+        });
+
+        // Shuffle cards
+        cardData.sort(() => Math.random() - 0.5);
+
+        const grid = document.getElementById('game-grid');
+        grid.innerHTML = '';
+        
+        cardData.forEach((data) => {
+            const card = document.createElement('div');
+            card.classList.add('card');
+            card.dataset.match = data.match;
+            card.innerText = data.text;
+            card.onclick = () => handleCardClick(card);
+            grid.appendChild(card);
+        });
+    }
+
+    function handleCardClick(card) {
+        if (lockBoard || card === firstCard || card.classList.contains('matched')) return;
+
+        card.classList.add('selected');
+
+        if (!firstCard) {
+            firstCard = card;
+            return;
+        }
+
+        secondCard = card;
+        checkMatch();
+    }
+
+    function checkMatch() {
+        lockBoard = true;
+        let isMatch = firstCard.dataset.match === secondCard.dataset.match;
+
+        if (isMatch) {
+            score += 10;
+            document.getElementById('score').innerText = score;
+            
+            // Success feedback
+            setTimeout(() => {
+                firstCard.classList.add('matched');
+                secondCard.classList.add('matched');
+                resetBoard();
+                if (score === vocabulary.length * 10) winGame();
+            }, 300);
+        } else {
+            firstCard.classList.add('wrong');
+            secondCard.classList.add('wrong');
+            setTimeout(() => {
+                firstCard.classList.remove('selected', 'wrong');
+                secondCard.classList.remove('selected', 'wrong');
+                resetBoard();
+            }, 1000);
+        }
+    }
+
+    function resetBoard() {
+        [firstCard, secondCard] = [null, null];
+        lockBoard = false;
+    }
+
+    function updateTimer() {
+        timeLeft--;
+        document.getElementById('time-left').innerText = timeLeft;
+        if (timeLeft <= 0) endGame();
+    }
+
+    function endGame() {
+        clearInterval(timerId);
+        document.getElementById('overlay').classList.remove('hidden');
+        document.getElementById('modal-title').innerText = "時間到！⏰";
+        document.getElementById('modal-msg').innerText = `你的得分是：${score}\n電腦知識也是一種超能力喔！`;
+    }
+
+    function winGame() {
+        clearInterval(timerId);
+        document.getElementById('overlay').classList.remove('hidden');
+        document.getElementById('modal-title').innerText = "太厲害了！🏆";
+        document.getElementById('modal-msg').innerText = `全對！剩餘時間：${timeLeft}s\n你是實至名歸的 STEAM 小達人！`;
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可愛水果 - 單字記憶翻牌</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Nunito', sans-serif;
+            background-color: #fffbeb; /* amber-50 */
+            background-image: radial-gradient(#fde68a 2px, transparent 2px); /* amber-200 */
+            background-size: 30px 30px;
+            color: #4b5563;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 3D 翻牌效果 */
+        .card-scene {
+            perspective: 1000px;
+        }
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 3px solid transparent;
+        }
+        /* 卡牌背面 (蓋著時的樣子) */
+        .card-front {
+            background: linear-gradient(135deg, #fca5a5, #f87171); /* red-300 to red-400 */
+            cursor: pointer;
+            border-color: #fca5a5;
+        }
+        .card-front::after {
+            content: '❓';
+            font-size: 2.5rem;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
+        }
+        .card-front:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        /* 卡牌正面 (翻開時的樣子) */
+        .card-back {
+            transform: rotateY(180deg);
+            background: white;
+            border-color: #fed7aa; /* orange-200 */
+            text-align: center;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            word-break: break-word;
+        }
+        
+        /* 狀態樣式 */
+        .card.matched .card-inner .card-back {
+            border-color: #34d399; /* emerald-400 */
+            background-color: #ecfdf5; /* emerald-50 */
+            animation: bounce-sm 0.5s;
+        }
+        .card.mismatched .card-inner .card-back {
+            border-color: #f87171; /* red-400 */
+            background-color: #fef2f2; /* red-50 */
+            animation: shake 0.4s;
+        }
+
+        @keyframes bounce-sm {
+            0%, 100% { transform: rotateY(180deg) scale(1); }
+            50% { transform: rotateY(180deg) scale(1.1); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: rotateY(180deg) translateX(0); }
+            25% { transform: rotateY(180deg) translateX(-5px); }
+            75% { transform: rotateY(180deg) translateX(5px); }
+        }
+
+        /* 隱藏區塊用 */
+        .hidden-screen { display: none !important; }
+
+        .btn-primary {
+            background: linear-gradient(to right, #f59e0b, #f97316);
+            color: white;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(245, 158, 11, 0.4);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-3xl relative">
+        
+        <!-- ================= 畫面 1：首頁 ================= -->
+        <div id="screen-start" class="flex flex-col items-center justify-center min-h-[80vh] w-full gap-8 transition-opacity duration-500">
+            <div class="text-center bg-white/80 p-8 rounded-3xl shadow-xl backdrop-blur-sm border-2 border-orange-100">
+                <div class="text-6xl mb-4 animate-bounce">🍎🍌🍇</div>
+                <h1 class="text-4xl md:text-5xl font-black text-orange-500 mb-4 tracking-wide">水果配驚大挑戰</h1>
+                <p class="text-gray-600 max-w-md mx-auto font-bold text-lg mb-8">
+                    選擇難度，翻開卡牌找出對應的「英文」與「中文」！
+                </p>
+
+                <div class="flex flex-col md:flex-row gap-4 justify-center">
+                    <button onclick="initGame('easy')" class="bg-green-400 hover:bg-green-500 text-white text-xl py-3 px-6 rounded-full font-black border-4 border-white transition-all transform hover:-translate-y-1 shadow-md">
+                        🌱 簡單 (4對)
+                    </button>
+                    <button onclick="initGame('medium')" class="btn-primary text-xl py-3 px-6 rounded-full font-black border-4 border-white transition-all transform hover:-translate-y-1 shadow-md">
+                        ⭐ 普通 (8對)
+                    </button>
+                    <button onclick="initGame('hard')" class="bg-red-400 hover:bg-red-500 text-white text-xl py-3 px-6 rounded-full font-black border-4 border-white transition-all transform hover:-translate-y-1 shadow-md">
+                        🔥 困難 (12對)
+                    </button>
+                </div>
+                
+                <div class="mt-8 flex flex-col md:flex-row justify-center gap-4 md:gap-8 text-orange-400 font-bold bg-orange-50 py-3 px-6 rounded-2xl text-sm md:text-base">
+                    <div>簡單：<span id="best-easy">尚無紀錄</span></div>
+                    <div>普通：<span id="best-medium">尚無紀錄</span></div>
+                    <div>困難：<span id="best-hard">尚無紀錄</span></div>
+                </div>
+
+                <!-- 新增：觀看排行榜按鈕 -->
+                <button onclick="showLeaderboard()" class="mt-4 text-orange-500 hover:text-orange-600 font-black flex items-center justify-center gap-1 mx-auto transition-colors bg-white px-6 py-2 rounded-full shadow-sm border border-orange-100">
+                    🏆 觀看排行榜
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= 畫面 2：遊戲主體 ================= -->
+        <div id="screen-game" class="hidden-screen flex flex-col w-full max-w-3xl mx-auto min-h-[80vh] py-4">
+            
+            <!-- 狀態列 -->
+            <div class="flex justify-between items-center mb-4 bg-white/80 px-6 py-3 rounded-2xl shadow-sm border-2 border-orange-100">
+                <div>
+                    <div class="text-sm text-gray-500 font-bold">經過時間</div>
+                    <div class="text-2xl text-orange-500 font-black" id="timer-display">0.0s</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500 font-bold">配對進度</div>
+                    <div class="text-2xl text-emerald-500 font-black"><span id="match-count">0</span><span id="total-count" class="text-gray-400 text-lg">/8</span></div>
+                </div>
+            </div>
+
+            <!-- 網格卡牌區 -->
+            <div id="game-board" class="grid gap-3 md:gap-4">
+                <!-- JS 動態生成卡牌 -->
+            </div>
+            
+            <button onclick="returnToMenu()" class="mt-6 mx-auto block text-gray-400 hover:text-orange-500 transition-colors font-bold bg-white px-6 py-2 rounded-full shadow-sm">
+                放棄並回主選單
+            </button>
+        </div>
+
+        <!-- ================= 畫面 3：結算畫面 ================= -->
+        <div id="screen-end" class="hidden-screen flex flex-col items-center justify-center min-h-[80vh] w-full gap-6 py-8">
+            <div class="bg-white/90 p-8 rounded-3xl shadow-xl backdrop-blur-sm border-2 border-orange-100 text-center w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <div class="text-6xl mb-4">🎉</div>
+                <h2 class="text-4xl font-black text-emerald-500 mb-2">太棒了！</h2>
+                <p class="text-gray-500 font-bold mb-6">你成功配對了所有水果！</p>
+                
+                <div class="bg-orange-50 rounded-2xl p-4 mb-6">
+                    <p class="text-gray-500 font-bold mb-1">完成時間</p>
+                    <p class="text-5xl text-orange-500 font-black" id="final-time">0.0s</p>
+                    
+                    <!-- 新增：排行榜登錄區塊 (取代原本的破紀錄文字) -->
+                    <div id="leaderboard-entry" class="hidden mt-4 pt-4 border-t border-orange-200">
+                        <!-- JS 會動態注入輸入框 -->
+                    </div>
+                </div>
+
+                <!-- 展開問題解析區塊 -->
+                <button onclick="toggleReview()" class="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-bold text-lg py-3 rounded-xl transition-colors mb-4 flex justify-between items-center px-6">
+                    <span>📖 展開單字解析</span>
+                    <span id="review-icon">▼</span>
+                </button>
+
+                <div id="review-panel" class="hidden text-left mb-6 space-y-3">
+                    <!-- JS 動態生成單字解析 -->
+                </div>
+
+                <button onclick="initGame(currentDifficulty)" class="w-full btn-primary font-black text-xl py-4 rounded-full border-4 border-white mb-3 mt-2">
+                    再玩一次
+                </button>
+                <button onclick="returnToMenu()" class="w-full bg-gray-100 text-gray-600 hover:bg-gray-200 font-bold text-lg py-3 rounded-full transition-colors">
+                    回主選單
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= 畫面 4：排行榜畫面 ================= -->
+        <div id="screen-leaderboard" class="hidden-screen flex flex-col items-center justify-center min-h-[80vh] w-full gap-6 py-8">
+            <div class="bg-white/90 p-8 rounded-3xl shadow-xl backdrop-blur-sm border-2 border-orange-100 text-center w-full max-w-md">
+                <div class="text-5xl mb-4">🏆</div>
+                <h2 class="text-3xl font-black text-orange-500 mb-6">英雄排行榜</h2>
+                
+                <!-- 難度切換 -->
+                <div class="flex justify-center gap-2 mb-6">
+                    <button onclick="renderLeaderboard('easy')" id="lb-btn-easy" class="px-4 py-1 rounded-full font-bold transition-colors bg-green-400 text-white shadow-sm border-2 border-transparent">簡單</button>
+                    <button onclick="renderLeaderboard('medium')" id="lb-btn-medium" class="px-4 py-1 rounded-full font-bold transition-colors bg-gray-100 text-gray-500 hover:bg-gray-200 border-2 border-transparent">普通</button>
+                    <button onclick="renderLeaderboard('hard')" id="lb-btn-hard" class="px-4 py-1 rounded-full font-bold transition-colors bg-gray-100 text-gray-500 hover:bg-gray-200 border-2 border-transparent">困難</button>
+                </div>
+
+                <!-- 列表 -->
+                <div class="bg-orange-50 rounded-2xl p-4 mb-6 min-h-[220px]">
+                    <ul id="leaderboard-list" class="space-y-3 text-left">
+                        <!-- JS 動態生成排行榜 -->
+                    </ul>
+                </div>
+
+                <button onclick="returnToMenu()" class="w-full bg-gray-200 text-gray-700 hover:bg-gray-300 font-bold text-lg py-3 rounded-full transition-colors">
+                    回主選單
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 水果單字庫 (簡單可愛版，包含表情符號，擴充至12種，並加入描述與例句)
+        const wordsData = [
+            { id: 1, en: "Apple 🍎", zh: "蘋果", desc: "紅色或綠色的脆甜水果", sentence: "An ___ a day keeps the doctor away." },
+            { id: 2, en: "Banana 🍌", zh: "香蕉", desc: "黃色長條形，猴子最愛", sentence: "Monkeys love to eat ___s." },
+            { id: 3, en: "Orange 🍊", zh: "橘子", desc: "富含維他命C的橙色水果", sentence: "I drank a glass of ___ juice." },
+            { id: 4, en: "Grape 🍇", zh: "葡萄", desc: "紫色或綠色的一串串小果實", sentence: "Wine is made from ___s." },
+            { id: 5, en: "Watermelon 🍉", zh: "西瓜", desc: "夏天必吃的綠皮紅肉大水果", sentence: "We ate sweet ___ at the beach." },
+            { id: 6, en: "Strawberry 🍓", zh: "草莓", desc: "表面有小點點的紅色愛心水果", sentence: "I like ___ ice cream." },
+            { id: 7, en: "Mango 🥭", zh: "芒果", desc: "熱帶的黃色香甜水果", sentence: "___ sticky rice is a tasty dessert." },
+            { id: 8, en: "Peach 🍑", zh: "桃子", desc: "粉紅色，表面有絨毛的水果", sentence: "The ___ is soft and very sweet." },
+            { id: 9, en: "Cherry 🍒", zh: "櫻桃", desc: "小巧鮮紅，常放在蛋糕上", sentence: "There is a ___ on top of the cake." },
+            { id: 10, en: "Pineapple 🍍", zh: "鳳梨", desc: "外表有刺，頭頂長葉子的熱帶水果", sentence: "SpongeBob lives in a ___." },
+            { id: 11, en: "Kiwi 🥝", zh: "奇異果", desc: "棕色毛茸茸，果肉是綠色的", sentence: "A ___ bird shares its name with this fruit." },
+            { id: 12, en: "Lemon 🍋", zh: "檸檬", desc: "非常酸的黃色水果", sentence: "I put a slice of ___ in my tea." }
+        ];
+
+        // 遊戲狀態變數
+        let cards = [];
+        let currentRoundWords = []; // 儲存當局單字用於解析
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let isLocked = false;
+        let currentDifficulty = 'medium';
+        let totalPairs = 8;
+        const MAX_LEADERBOARD_RECORDS = 5; // 排行榜最多顯示5名
+        
+        // 計時器與紀錄變數
+        let startTime;
+        let timerInterval;
+        let finalTimeSec = 0;
+
+        // 畫面切換控制
+        const screens = {
+            start: document.getElementById('screen-start'),
+            game: document.getElementById('screen-game'),
+            end: document.getElementById('screen-end'),
+            leaderboard: document.getElementById('screen-leaderboard')
+        };
+
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hidden-screen'));
+            screens[screenName].classList.remove('hidden-screen');
+        }
+
+        // 取得排行榜資料
+        function getLeaderboardData(difficulty) {
+            const data = localStorage.getItem(`fruitLB_${difficulty}`);
+            return data ? JSON.parse(data) : [];
+        }
+
+        // 更新首頁的最佳紀錄顯示 (改為讀取排行榜第一名)
+        function updateBestTimeDisplay() {
+            const levels = ['easy', 'medium', 'hard'];
+            levels.forEach(level => {
+                const lb = getLeaderboardData(level);
+                const display = document.getElementById(`best-${level}`);
+                if (lb.length > 0) {
+                    display.innerText = parseFloat(lb[0].time).toFixed(1) + ' 秒';
+                } else {
+                    display.innerText = '尚無紀錄';
+                }
+            });
+        }
+
+        // 遊戲初始化
+        function initGame(difficulty) {
+            currentDifficulty = difficulty;
+            
+            // 根據難度設定配對數
+            if (difficulty === 'easy') totalPairs = 4;
+            else if (difficulty === 'medium') totalPairs = 8;
+            else if (difficulty === 'hard') totalPairs = 12;
+
+            showScreen('game');
+            matchedPairs = 0;
+            flippedCards = [];
+            isLocked = false;
+            document.getElementById('match-count').innerText = matchedPairs;
+            document.getElementById('total-count').innerText = '/' + totalPairs;
+            
+            // 修復錯誤：因為上一個版本移除了 new-record-msg，改為隱藏 leaderboard-entry
+            const leaderboardEntry = document.getElementById('leaderboard-entry');
+            if (leaderboardEntry) leaderboardEntry.classList.add('hidden');
+            
+            // 產生牌組 (隨機挑選對應數量的單字)
+            cards = [];
+            currentRoundWords = [...wordsData].sort(() => 0.5 - Math.random()).slice(0, totalPairs);
+
+            currentRoundWords.forEach(word => {
+                if (difficulty === 'easy') {
+                    // 簡單：英文配中文
+                    cards.push({ id: word.id, text: word.en, type: 'short' });
+                    cards.push({ id: word.id, text: word.zh, type: 'short', color: 'text-orange-600' });
+                } else if (difficulty === 'medium') {
+                    // 普通：英文配中文描述
+                    cards.push({ id: word.id, text: word.en, type: 'short' });
+                    cards.push({ id: word.id, text: word.desc, type: 'long', color: 'text-blue-600' });
+                } else if (difficulty === 'hard') {
+                    // 困難：英文配英文例句填空
+                    cards.push({ id: word.id, text: word.en, type: 'short' });
+                    cards.push({ id: word.id, text: word.sentence, type: 'long', color: 'text-purple-600' });
+                }
+            });
+            
+            // 洗牌卡片位置
+            for (let i = cards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cards[i], cards[j]] = [cards[j], cards[i]];
+            }
+
+            // 渲染網格
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            
+            // 根據難度動態調整排版 (減少手機版的欄位數，避免卡片太窄導致文字擠在一起)
+            if (difficulty === 'easy') {
+                board.className = 'grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-2xl mx-auto w-full';
+            } else if (difficulty === 'medium') {
+                board.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4';
+            } else if (difficulty === 'hard') {
+                board.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
+            }
+            
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                // 增加 min-h-[120px] 確保卡片有足夠的高度，不會把文字擠扁
+                cardEl.className = 'card card-scene w-full h-full min-h-[120px] md:min-h-[140px] cursor-pointer';
+                cardEl.dataset.id = card.id;
+                
+                // 依據字數長短設定不同的字體大小與行距 (加入 leading-relaxed 讓長句子不擁擠)
+                const textClass = card.type === 'short' 
+                    ? 'text-xl md:text-2xl font-black' 
+                    : 'text-sm md:text-base font-bold leading-relaxed px-2';
+                
+                const colorClass = card.color || 'text-gray-700';
+                
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-face card-front"></div>
+                        <div class="card-face card-back p-1 md:p-2 rounded-xl">
+                            <span class="${textClass} ${colorClass}">${card.text}</span>
+                        </div>
+                    </div>
+                `;
+                
+                cardEl.addEventListener('click', () => flipCard(cardEl));
+                board.appendChild(cardEl);
+            });
+
+            // 開始計時 (精確到小數點後1位即可，比較簡單)
+            startTime = Date.now();
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 100); 
+        }
+
+        function updateTimer() {
+            const currentTime = Date.now();
+            const elapsed = (currentTime - startTime) / 1000;
+            document.getElementById('timer-display').innerText = elapsed.toFixed(1) + 's';
+        }
+
+        // 翻牌邏輯
+        function flipCard(cardEl) {
+            if (isLocked) return;
+            if (cardEl.classList.contains('flipped')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push(cardEl);
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isLocked = true;
+            const [card1, card2] = flippedCards;
+            const match = card1.dataset.id === card2.dataset.id;
+
+            if (match) {
+                // 配對成功
+                matchedPairs++;
+                document.getElementById('match-count').innerText = matchedPairs;
+                
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                
+                flippedCards = [];
+                isLocked = false;
+                
+                if (matchedPairs === totalPairs) {
+                    clearInterval(timerInterval);
+                    setTimeout(endGame, 500);
+                }
+            } else {
+                // 配對失敗
+                card1.classList.add('mismatched');
+                card2.classList.add('mismatched');
+                
+                setTimeout(() => {
+                    card1.classList.remove('flipped', 'mismatched');
+                    card2.classList.remove('flipped', 'mismatched');
+                    flippedCards = [];
+                    isLocked = false;
+                }, 800); // 稍微縮短蓋回來的時間，讓遊戲節奏變快
+            }
+        }
+
+        // 遊戲結束
+        function endGame() {
+            showScreen('end');
+            finalTimeSec = ((Date.now() - startTime) / 1000).toFixed(1);
+            document.getElementById('final-time').innerText = finalTimeSec + 's';
+
+            // 準備展開解析區塊的內容
+            const reviewPanel = document.getElementById('review-panel');
+            reviewPanel.innerHTML = currentRoundWords.map(w => `
+                <div class="bg-white p-3 rounded-lg border border-orange-100 shadow-sm">
+                    <div class="font-black text-lg text-gray-700 mb-1">${w.en} <span class="text-orange-500 text-sm ml-2">${w.zh}</span></div>
+                    <div class="text-sm text-blue-600 font-bold mb-1">💡 ${w.desc}</div>
+                    <div class="text-sm text-purple-600 italic">📝 ${w.sentence.replace('___', '<span class="border-b-2 border-purple-400 inline-block w-6"></span>')}</div>
+                </div>
+            `).join('');
+            reviewPanel.classList.add('hidden');
+            document.getElementById('review-icon').innerText = '▼';
+
+            // 檢查是否進入排行榜 (前5名)
+            const lb = getLeaderboardData(currentDifficulty);
+            const isTopRecord = lb.length < MAX_LEADERBOARD_RECORDS || parseFloat(finalTimeSec) < lb[lb.length - 1].time;
+            
+            const entryDiv = document.getElementById('leaderboard-entry');
+            
+            // 重置輸入區塊狀態 (以防玩家再玩一次)
+            entryDiv.innerHTML = `
+                <p class="text-emerald-500 font-bold mb-2 animate-bounce">✨ 進入排行榜啦！ ✨</p>
+                <div class="flex gap-2 justify-center">
+                    <input type="text" id="player-name" placeholder="輸入名字" maxlength="8" class="border-2 border-orange-200 rounded-lg px-3 py-1 w-32 focus:outline-none focus:border-orange-400 text-center font-bold text-gray-700">
+                    <button onclick="saveScore()" class="bg-emerald-400 hover:bg-emerald-500 text-white font-bold py-1 px-4 rounded-lg transition-colors shadow-sm">儲存</button>
+                </div>
+            `;
+            
+            if (isTopRecord) {
+                entryDiv.classList.remove('hidden');
+            } else {
+                entryDiv.classList.add('hidden');
+            }
+        }
+
+        // 儲存分數到排行榜
+        function saveScore() {
+            const nameInput = document.getElementById('player-name').value.trim() || '無名英雄';
+            const lb = getLeaderboardData(currentDifficulty);
+            
+            lb.push({ name: nameInput, time: parseFloat(finalTimeSec) });
+            // 排序：時間短的在前面
+            lb.sort((a, b) => a.time - b.time);
+            // 只保留前 N 名
+            if (lb.length > MAX_LEADERBOARD_RECORDS) {
+                lb.length = MAX_LEADERBOARD_RECORDS;
+            }
+            
+            localStorage.setItem(`fruitLB_${currentDifficulty}`, JSON.stringify(lb));
+            
+            // 隱藏輸入框，顯示提示
+            document.getElementById('leaderboard-entry').innerHTML = `<p class="text-emerald-500 font-bold mb-2">✅ 已成功儲存紀錄！</p>`;
+            updateBestTimeDisplay();
+        }
+
+        // 顯示排行榜畫面
+        function showLeaderboard() {
+            showScreen('leaderboard');
+            renderLeaderboard('medium'); // 預設顯示普通難度
+        }
+
+        // 渲染排行榜列表
+        function renderLeaderboard(difficulty) {
+            // 更新按鈕樣式
+            const diffs = ['easy', 'medium', 'hard'];
+            const colors = { easy: 'bg-green-400 text-white', medium: 'bg-orange-400 text-white', hard: 'bg-red-400 text-white' };
+            
+            diffs.forEach(d => {
+                const btn = document.getElementById(`lb-btn-${d}`);
+                btn.className = `px-4 py-1 rounded-full font-bold transition-colors shadow-sm border-2 border-transparent ${d === difficulty ? colors[d] : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`;
+            });
+
+            // 讀取並顯示資料
+            const lb = getLeaderboardData(difficulty);
+            const list = document.getElementById('leaderboard-list');
+            
+            if (lb.length === 0) {
+                list.innerHTML = `<li class="text-center text-gray-400 py-8 font-bold">目前還沒有紀錄喔<br>快來挑戰吧！</li>`;
+                return;
+            }
+
+            list.innerHTML = lb.map((record, index) => {
+                let medal = `<span class="inline-block w-6 text-center text-gray-400 font-black">${index + 1}.</span>`;
+                if (index === 0) medal = `🥇`;
+                if (index === 1) medal = `🥈`;
+                if (index === 2) medal = `🥉`;
+                
+                return `
+                    <li class="flex justify-between items-center bg-white p-3 rounded-xl border border-orange-100 shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">${medal}</span>
+                            <span class="font-black text-gray-700">${record.name}</span>
+                        </div>
+                        <div class="font-bold text-orange-500">${record.time.toFixed(1)}s</div>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function returnToMenu() {
+            clearInterval(timerInterval);
+            updateBestTimeDisplay();
+            showScreen('start');
+        }
+
+        // 切換解析區塊顯示狀態
+        function toggleReview() {
+            const panel = document.getElementById('review-panel');
+            const icon = document.getElementById('review-icon');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                icon.innerText = '▲';
+            } else {
+                panel.classList.add('hidden');
+                icon.innerText = '▼';
+            }
+        }
+
+        // 初始化執行
+        updateBestTimeDisplay();
+    </script>
+</body>
+</html>

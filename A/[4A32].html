@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>色彩邏輯 - 益智解謎遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #fafaf9; /* stone-50 */
+            color: #1c1917; /* stone-900 */
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .peg {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #e7e5e4; /* stone-200 */
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .peg-small {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid #d6d3d1;
+            background-color: transparent;
+        }
+
+        .peg-active {
+            border-color: #44403c; /* stone-700 */
+            box-shadow: 0 0 0 4px rgba(68, 64, 60, 0.1);
+            transform: scale(1.1);
+        }
+
+        /* 顏色定義 */
+        .color-0 { background-color: #f43f5e; border-color: #f43f5e; } /* rose-500 */
+        .color-1 { background-color: #3b82f6; border-color: #3b82f6; } /* blue-500 */
+        .color-2 { background-color: #10b981; border-color: #10b981; } /* emerald-500 */
+        .color-3 { background-color: #f59e0b; border-color: #f59e0b; } /* amber-500 */
+        .color-4 { background-color: #8b5cf6; border-color: #8b5cf6; } /* violet-500 */
+        .color-5 { background-color: #14b8a6; border-color: #14b8a6; } /* teal-500 */
+
+        /* 回饋提示顏色 */
+        .feedback-exact { background-color: #1c1917; border-color: #1c1917; } /* 全對 (黑) */
+        .feedback-partial { background-color: #fff; border-color: #a8a29e; } /* 半對 (白) */
+
+        /* 動畫 */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-4px); }
+            40% { transform: translateX(4px); }
+            60% { transform: translateX(-4px); }
+            80% { transform: translateX(4px); }
+        }
+        .shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        .board-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border-radius: 12px;
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 8px;
+            border: 1px solid #f5f5f4;
+        }
+
+        .board-row.current-row {
+            border-color: #a8a29e;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            background-color: #fdfaf9;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-4">
+
+    <!-- 頂部標題與說明 -->
+    <div class="max-w-md w-full mb-6 text-center">
+        <h1 class="text-3xl font-black text-stone-800 tracking-tight mb-2">色彩邏輯</h1>
+        <p class="text-stone-500 text-sm mb-4">
+            猜出隱藏的 4 個顏色密碼。<br>
+            <span class="inline-block w-2 h-2 rounded-full bg-stone-900 mr-1"></span>位置與顏色皆對
+            <span class="inline-block w-2 h-2 rounded-full border border-stone-400 bg-white ml-3 mr-1"></span>僅顏色對
+        </p>
+    </div>
+
+    <!-- 遊戲主體 -->
+    <div class="max-w-md w-full flex flex-col gap-6">
+        
+        <!-- 遊戲面板 (歷史紀錄 + 當前猜測) -->
+        <div id="board" class="flex flex-col gap-2">
+            <!-- JavaScript 會動態生成行 -->
+        </div>
+
+        <!-- 顏色選擇器與控制區 -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 mt-2">
+            <div class="text-xs font-bold text-stone-400 mb-3 uppercase tracking-wider text-center">選擇顏色填入空白處</div>
+            <div class="flex justify-center gap-3 mb-6">
+                <button onclick="pickColor(0)" class="peg color-0 hover:scale-110 transition-transform outline-none"></button>
+                <button onclick="pickColor(1)" class="peg color-1 hover:scale-110 transition-transform outline-none"></button>
+                <button onclick="pickColor(2)" class="peg color-2 hover:scale-110 transition-transform outline-none"></button>
+                <button onclick="pickColor(3)" class="peg color-3 hover:scale-110 transition-transform outline-none"></button>
+                <button onclick="pickColor(4)" class="peg color-4 hover:scale-110 transition-transform outline-none"></button>
+                <button onclick="pickColor(5)" class="peg color-5 hover:scale-110 transition-transform outline-none"></button>
+            </div>
+
+            <!-- 提交按鈕 -->
+            <button id="submit-btn" onclick="submitGuess()" disabled 
+                class="w-full py-3.5 rounded-xl font-bold text-white transition-all duration-200 
+                       bg-stone-300 cursor-not-allowed
+                       disabled:bg-stone-200 disabled:text-stone-400
+                       active:scale-95 outline-none tracking-wide">
+                提交驗證
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲結束模態框 -->
+    <div id="result-modal" class="fixed inset-0 bg-stone-900/60 backdrop-blur-sm hidden flex-col items-center justify-center z-50 px-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full transform scale-95 transition-transform duration-300" id="modal-content">
+            <h2 id="modal-title" class="text-3xl font-black mb-2 text-stone-800">遊戲結束</h2>
+            <p id="modal-desc" class="text-stone-500 mb-6">正解為：</p>
+            
+            <div id="secret-reveal" class="flex justify-center gap-3 mb-8">
+                <!-- 顯示正確答案 -->
+            </div>
+
+            <button onclick="initGame()" class="w-full bg-stone-800 hover:bg-stone-900 text-white font-bold py-3 px-6 rounded-xl transition-all active:scale-95 outline-none">
+                再來一局
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const MAX_GUESSES = 8;
+        const CODE_LENGTH = 4;
+        const NUM_COLORS = 6;
+
+        let secretCode = [];
+        let currentGuess = [-1, -1, -1, -1];
+        let guessHistory = [];
+        let currentRowIndex = 0;
+        let activeSlotIndex = 0; // 當前正在編輯的孔位
+        let gameOver = false;
+
+        // 初始化遊戲
+        function initGame() {
+            // 生成隨機密碼 (允許顏色重複)
+            secretCode = Array.from({length: CODE_LENGTH}, () => Math.floor(Math.random() * NUM_COLORS));
+            
+            currentGuess = [-1, -1, -1, -1];
+            guessHistory = [];
+            currentRowIndex = 0;
+            activeSlotIndex = 0;
+            gameOver = false;
+
+            hideModal();
+            renderBoard();
+            updateSubmitButton();
+        }
+
+        // 隱藏/顯示模態框
+        function hideModal() {
+            const modal = document.getElementById('result-modal');
+            const content = document.getElementById('modal-content');
+            modal.classList.add('opacity-0');
+            content.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+        }
+
+        function showModal(isWin) {
+            const modal = document.getElementById('result-modal');
+            const content = document.getElementById('modal-content');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+            const reveal = document.getElementById('secret-reveal');
+
+            title.innerText = isWin ? '破解成功！' : '挑戰失敗';
+            title.className = `text-3xl font-black mb-2 ${isWin ? 'text-emerald-600' : 'text-rose-600'}`;
+            desc.innerText = isWin ? `你用了 ${currentRowIndex} 次猜出密碼` : '正確密碼是：';
+
+            // 顯示正確答案
+            reveal.innerHTML = secretCode.map(c => `<div class="peg color-${c} animate-pop"></div>`).join('');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // 觸發重繪以播放動畫
+            void modal.offsetWidth; 
+            modal.classList.remove('opacity-0');
+            content.classList.replace('scale-95', 'scale-100');
+        }
+
+        // 選擇編輯的孔位
+        function selectSlot(index) {
+            if (gameOver || guessHistory.length !== currentRowIndex) return;
+            activeSlotIndex = index;
+            renderBoard();
+        }
+
+        // 選擇顏色填入孔位
+        function pickColor(colorIndex) {
+            if (gameOver) return;
+            
+            currentGuess[activeSlotIndex] = colorIndex;
+            
+            // 自動跳到下一個未填寫的孔位
+            let nextEmpty = currentGuess.findIndex(c => c === -1);
+            if (nextEmpty !== -1) {
+                activeSlotIndex = nextEmpty;
+            } else if (activeSlotIndex < 3) {
+                activeSlotIndex++;
+            }
+
+            renderBoard();
+            updateSubmitButton();
+        }
+
+        // 更新提交按鈕狀態
+        function updateSubmitButton() {
+            const btn = document.getElementById('submit-btn');
+            const isComplete = !currentGuess.includes(-1);
+            
+            if (isComplete && !gameOver) {
+                btn.disabled = false;
+                btn.className = "w-full py-3.5 rounded-xl font-bold text-white transition-all duration-200 bg-stone-800 hover:bg-stone-700 shadow-lg active:scale-95 outline-none tracking-wide";
+            } else {
+                btn.disabled = true;
+                btn.className = "w-full py-3.5 rounded-xl font-bold text-white transition-all duration-200 bg-stone-200 text-stone-400 cursor-not-allowed outline-none tracking-wide";
+            }
+        }
+
+        // 提交猜測並驗證
+        function submitGuess() {
+            if (currentGuess.includes(-1) || gameOver) return;
+
+            // 計算回饋 (Exact = 黑釘, Partial = 白釘)
+            let exact = 0;
+            let partial = 0;
+            let guessCopy = [...currentGuess];
+            let secretCopy = [...secretCode];
+
+            // 1. 先計算完全一致 (顏色與位置皆對)
+            for (let i = 0; i < CODE_LENGTH; i++) {
+                if (guessCopy[i] === secretCopy[i]) {
+                    exact++;
+                    guessCopy[i] = -2; // 標記為已處理
+                    secretCopy[i] = -3;
+                }
+            }
+
+            // 2. 計算部分一致 (顏色對但位置錯)
+            for (let i = 0; i < CODE_LENGTH; i++) {
+                if (guessCopy[i] !== -2) {
+                    let matchIndex = secretCopy.indexOf(guessCopy[i]);
+                    if (matchIndex !== -1) {
+                        partial++;
+                        secretCopy[matchIndex] = -3; // 標記為已處理
+                    }
+                }
+            }
+
+            // 儲存歷史
+            guessHistory.push({
+                guess: [...currentGuess],
+                feedback: { exact, partial }
+            });
+
+            // 檢查勝負
+            if (exact === CODE_LENGTH) {
+                gameOver = true;
+                renderBoard();
+                setTimeout(() => showModal(true), 500);
+            } else if (currentRowIndex >= MAX_GUESSES - 1) {
+                gameOver = true;
+                currentRowIndex++;
+                renderBoard();
+                setTimeout(() => showModal(false), 500);
+            } else {
+                // 繼續下一局
+                currentRowIndex++;
+                currentGuess = [-1, -1, -1, -1];
+                activeSlotIndex = 0;
+                renderBoard();
+                updateSubmitButton();
+            }
+        }
+
+        // 渲染遊戲面板
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            for (let i = 0; i < MAX_GUESSES; i++) {
+                const isCurrentRow = i === currentRowIndex && !gameOver;
+                const isPastRow = i < guessHistory.length;
+                
+                const rowDiv = document.createElement('div');
+                rowDiv.className = `board-row ${isCurrentRow ? 'current-row animate-pop' : ''}`;
+
+                // 左側：4個顏色孔位
+                const slotsDiv = document.createElement('div');
+                slotsDiv.className = "flex gap-3";
+                
+                for (let j = 0; j < CODE_LENGTH; j++) {
+                    const slot = document.createElement('div');
+                    
+                    if (isPastRow) {
+                        // 歷史紀錄
+                        const color = guessHistory[i].guess[j];
+                        slot.className = `peg color-${color}`;
+                    } else if (isCurrentRow) {
+                        // 當前正在猜測的行
+                        const color = currentGuess[j];
+                        const isActive = j === activeSlotIndex;
+                        slot.className = `peg ${color !== -1 ? 'color-' + color : 'bg-stone-100'} ${isActive ? 'peg-active' : ''}`;
+                        slot.onclick = () => selectSlot(j);
+                    } else {
+                        // 未來的行
+                        slot.className = "peg bg-stone-100 border-stone-200 opacity-50 cursor-default";
+                    }
+                    slotsDiv.appendChild(slot);
+                }
+
+                // 右側：回饋小圓點 (2x2 網格)
+                const feedbackDiv = document.createElement('div');
+                feedbackDiv.className = "grid grid-cols-2 gap-1.5 p-1";
+                
+                let feedbackPegs = [];
+                if (isPastRow) {
+                    const { exact, partial } = guessHistory[i].feedback;
+                    for (let k = 0; k < exact; k++) feedbackPegs.push('feedback-exact');
+                    for (let k = 0; k < partial; k++) feedbackPegs.push('feedback-partial');
+                }
+                
+                // 補齊 4 個小圓點
+                while (feedbackPegs.length < CODE_LENGTH) {
+                    feedbackPegs.push('');
+                }
+
+                feedbackPegs.forEach(fbClass => {
+                    const fbPeg = document.createElement('div');
+                    fbPeg.className = `peg-small ${fbClass}`;
+                    feedbackDiv.appendChild(fbPeg);
+                });
+
+                rowDiv.appendChild(slotsDiv);
+                rowDiv.appendChild(feedbackDiv);
+                board.appendChild(rowDiv);
+            }
+        }
+
+        // 啟動遊戲
+        initGame();
+    </script>
+</body>
+</html>

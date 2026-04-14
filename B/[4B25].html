@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電腦單字極速配對</title>
+    <style>
+        /* 第四階段: 美術與視覺設計 (科技駭客風) */
+        :root {
+            --bg-color: #0b0f19;
+            --neon-blue: #00f3ff;
+            --neon-green: #00ff66;
+            --card-bg: #1a2235;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-image: radial-gradient(circle, #1a2235 10%, transparent 11%);
+            background-size: 20px 20px;
+        }
+        h1 {
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue);
+            font-size: 2.5rem;
+        }
+        button {
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+            transition: all 0.3s ease;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+        button:hover {
+            background: var(--neon-blue);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+        
+        /* 畫面切換 */
+        .screen { display: none; text-align: center; }
+        .screen.active { display: block; }
+
+        /* 遊戲板 (4x4 網格) */
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            perspective: 1000px;
+        }
+        
+        /* 卡牌設計 */
+        .card {
+            width: 100px;
+            height: 100px;
+            position: relative;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+        .card.flipped, .card.matched {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            box-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+        }
+        .card-front {
+            background-color: var(--card-bg);
+            border: 2px solid var(--neon-blue);
+            color: transparent; /* 蓋上時不顯示文字 */
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,243,255,0.1) 10px, rgba(0,243,255,0.1) 20px);
+        }
+        .card-back {
+            background-color: var(--card-bg);
+            border: 2px solid var(--neon-blue);
+            color: white;
+            transform: rotateY(180deg);
+        }
+        .card.matched .card-back {
+            border-color: var(--neon-green);
+            box-shadow: 0 0 15px var(--neon-green);
+            color: var(--neon-green);
+        }
+
+        /* 計時器與倒數 */
+        #timer-display {
+            font-size: 2rem;
+            color: var(--neon-blue);
+            margin-bottom: 10px;
+        }
+        #countdown-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 25, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 8rem;
+            color: var(--neon-blue);
+            text-shadow: 0 0 20px var(--neon-blue);
+            z-index: 100;
+        }
+
+        /* 排行榜 */
+        #leaderboard-list {
+            list-style: none;
+            padding: 0;
+            font-size: 1.5rem;
+        }
+        #leaderboard-list li { margin: 10px 0; border-bottom: 1px dashed var(--neon-blue); padding-bottom: 5px; }
+        
+        /* 輸入名字彈窗 */
+        input[type="text"] {
+            padding: 10px;
+            font-size: 1.2rem;
+            background: transparent;
+            border: 2px solid var(--neon-blue);
+            color: white;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="countdown-overlay">3</div>
+
+    <div id="start-screen" class="screen active">
+        <h1>[ 電腦生字配對系統 ]</h1>
+        <p>找出對應的英文與中文解釋！</p>
+        <button onclick="startCountdown()">> 開始遊戲_</button>
+        <button onclick="showScreen('leaderboard-screen'); renderLeaderboard();">> 英雄榜_</button>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div id="timer-display">0.00 秒</div>
+        <div id="game-board"></div>
+        <br>
+        <button onclick="showScreen('start-screen')">> 放棄並返回_</button>
+    </div>
+
+    <div id="result-screen" class="screen">
+        <h1 style="color: var(--neon-green);">系統破解成功！</h1>
+        <p id="final-time" style="font-size: 2rem;"></p>
+        <div id="new-record-div" style="display: none;">
+            <p>恭喜進入史上前三名！請留下你的代號：</p>
+            <input type="text" id="player-name" maxlength="8" placeholder="輸入英文或數字"><br>
+            <button onclick="saveRecord()">> 儲存紀錄_</button>
+        </div>
+        <br>
+        <button onclick="showScreen('start-screen')" id="back-btn">> 返回主選單_</button>
+    </div>
+
+    <div id="leaderboard-screen" class="screen">
+        <h1>[ 最高機密紀錄 ]</h1>
+        <ul id="leaderboard-list"></ul>
+        <button onclick="showScreen('start-screen')">> 返回主選單_</button>
+    </div>
+
+    <script>
+        // --- 遊戲數據設定 ---
+        const words = [
+            { id: 1, en: "CPU", ch: "中央處理器" },
+            { id: 2, en: "Keyboard", ch: "鍵盤" },
+            { id: 3, en: "Mouse", ch: "滑鼠" },
+            { id: 4, en: "Monitor", ch: "螢幕" },
+            { id: 5, en: "Hardware", ch: "硬體" },
+            { id: 6, en: "Software", ch: "軟體" },
+            { id: 7, en: "Network", ch: "網路" },
+            { id: 8, en: "Browser", ch: "瀏覽器" }
+        ];
+
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let timerInterval;
+        let startTime;
+        let finalTimeMs = 0;
+
+        // --- 畫面控制 ---
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        // --- 遊戲初始化與倒數 ---
+        function startCountdown() {
+            showScreen('game-screen');
+            document.getElementById('game-board').innerHTML = '';
+            document.getElementById('timer-display').innerText = '0.00 秒';
+            
+            let count = 3;
+            const overlay = document.getElementById('countdown-overlay');
+            overlay.style.display = 'flex';
+            overlay.innerText = count;
+
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    overlay.innerText = count;
+                } else if (count === 0) {
+                    overlay.innerText = "START!";
+                } else {
+                    clearInterval(countInterval);
+                    overlay.style.display = 'none';
+                    initGame();
+                }
+            }, 1000);
+        }
+
+        function initGame() {
+            matchedPairs = 0;
+            flippedCards = [];
+            cards = [];
+            
+            // 建立卡牌陣列 (一對兩張，一張英文一張中文)
+            words.forEach(word => {
+                cards.push({ id: word.id, text: word.en, type: 'en' });
+                cards.push({ id: word.id, text: word.ch, type: 'ch' });
+            });
+
+            // 隨機打亂演算法 (Fisher-Yates Shuffle)
+            for (let i = cards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cards[i], cards[j]] = [cards[j], cards[i]];
+            }
+
+            // 渲染卡牌
+            const board = document.getElementById('game-board');
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.classList.add('card');
+                cardEl.dataset.id = card.id;
+                cardEl.dataset.index = index;
+                
+                cardEl.innerHTML = `
+                    <div class="card-face card-front"></div>
+                    <div class="card-face card-back">${card.text}</div>
+                `;
+                cardEl.addEventListener('click', () => flipCard(cardEl));
+                board.appendChild(cardEl);
+            });
+
+            // 開始計時 (精確到小數點後兩位)
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsedTime = (Date.now() - startTime) / 1000;
+                document.getElementById('timer-display').innerText = elapsedTime.toFixed(2) + ' 秒';
+            }, 10); // 每 10 毫秒更新一次
+        }
+
+        // --- 翻牌與配對邏輯 ---
+        function flipCard(cardEl) {
+            // 防止翻開超過兩張，或點擊已經翻開/配對的卡
+            if (flippedCards.length >= 2 || cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push(cardEl);
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            
+            if (card1.dataset.id === card2.dataset.id) {
+                // 配對成功
+                setTimeout(() => {
+                    card1.classList.add('matched');
+                    card2.classList.add('matched');
+                    matchedPairs++;
+                    flippedCards = [];
+                    
+                    if (matchedPairs === 8) {
+                        endGame();
+                    }
+                }, 300);
+            } else {
+                // 配對失敗，蓋回去
+                setTimeout(() => {
+                    card1.classList.remove('flipped');
+                    card2.classList.remove('flipped');
+                    flippedCards = [];
+                }, 800);
+            }
+        }
+
+        // --- 遊戲結束與紀錄系統 (localStorage) ---
+        function endGame() {
+            clearInterval(timerInterval);
+            finalTimeMs = (Date.now() - startTime) / 1000;
+            
+            setTimeout(() => {
+                showScreen('result-screen');
+                document.getElementById('final-time').innerText = `耗時：${finalTimeMs.toFixed(2)} 秒`;
+                checkLeaderboard();
+            }, 500);
+        }
+
+        function getLeaderboard() {
+            const records = localStorage.getItem('techGameLeaderboard');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function checkLeaderboard() {
+            const leaderboard = getLeaderboard();
+            const newRecordDiv = document.getElementById('new-record-div');
+            const backBtn = document.getElementById('back-btn');
+
+            // 如果排行榜未滿 3 人，或者比第三名快
+            if (leaderboard.length < 3 || finalTimeMs < leaderboard[leaderboard.length - 1].time) {
+                newRecordDiv.style.display = 'block';
+                backBtn.style.display = 'none'; // 強制先儲存
+            } else {
+                newRecordDiv.style.display = 'none';
+                backBtn.style.display = 'inline-block';
+            }
+        }
+
+        function saveRecord() {
+            const nameInput = document.getElementById('player-name').value.trim() || 'Anonymous';
+            let leaderboard = getLeaderboard();
+            
+            leaderboard.push({ name: nameInput, time: finalTimeMs });
+            // 依照時間由小到大排序 (越快越好)
+            leaderboard.sort((a, b) => a.time - b.time);
+            // 只保留前三名
+            leaderboard = leaderboard.slice(0, 3);
+            
+            localStorage.setItem('techGameLeaderboard', JSON.stringify(leaderboard));
+            
+            document.getElementById('new-record-div').style.display = 'none';
+            document.getElementById('back-btn').style.display = 'inline-block';
+            
+            showScreen('leaderboard-screen');
+            renderLeaderboard();
+        }
+
+        function renderLeaderboard() {
+            const leaderboard = getLeaderboard();
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
+            
+            if (leaderboard.length === 0) {
+                list.innerHTML = '<li>目前無資料，快來挑戰！</li>';
+                return;
+            }
+
+            leaderboard.forEach((record, index) => {
+                list.innerHTML += `<li>TOP ${index + 1} : ${record.name} - <span style="color:var(--neon-green)">${record.time.toFixed(2)} 秒</span></li>`;
+            });
+        }
+    </script>
+</body>
+</html>

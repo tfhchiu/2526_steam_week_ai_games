@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第三人稱森林射擊</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #1a1a1a;
+            user-select: none;
+        }
+        /* 準心 */
+        #crosshair {
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            width: 6px; 
+            height: 6px;
+            background: rgba(255, 255, 255, 0.8); 
+            border: 1px solid rgba(0,0,0,0.5);
+            border-radius: 50%; 
+            transform: translate(-50%, -50%); 
+            pointer-events: none;
+            transition: transform 0.05s, background 0.05s;
+            z-index: 5;
+        }
+        #crosshair.active {
+            transform: translate(-50%, -50%) scale(2);
+            background: #ffff00;
+        }
+        /* 狀態 UI */
+        #ui {
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            color: #eee; 
+            background: rgba(20, 30, 20, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 15px 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            font-size: 18px; 
+            font-weight: bold;
+            pointer-events: none;
+            line-height: 1.6;
+            z-index: 5;
+        }
+        /* 右上角結束按鈕 */
+        #hudEndBtn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #8b0000;
+            color: white;
+            border: 1px solid #ff4c4c;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: all 0.2s;
+            z-index: 5;
+        }
+        #hudEndBtn:hover {
+            background: #ff3333;
+            transform: scale(1.05);
+        }
+        /* 畫面中央提示訊息 */
+        #message {
+            position: absolute; 
+            top: 20%; 
+            left: 50%; 
+            transform: translate(-50%, -50%) scale(0.8);
+            color: #ffff00; 
+            font-size: 36px; 
+            font-weight: 900;
+            text-shadow: 0px 4px 10px rgba(0,0,0,0.8), 0px 0px 4px rgba(255,0,0,0.8); 
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            opacity: 0;
+            z-index: 2;
+        }
+        #message.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        /* 遮罩畫面 */
+        #blocker {
+            position: absolute; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(10, 15, 10, 0.85);
+            backdrop-filter: blur(5px);
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            color: #ddd;
+            z-index: 10;
+            text-align: center;
+        }
+        #blocker h1 {
+            color: #a8d08d;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            font-size: 52px;
+            text-shadow: 2px 2px 5px #000;
+        }
+        .instructions {
+            background: rgba(30,40,30,0.8);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #4CAF50;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            font-size: 18px;
+            line-height: 1.8;
+            color: #ccc;
+        }
+        .btn {
+            padding: 15px 50px;
+            font-size: 22px;
+            font-weight: bold;
+            background: #2e7d32;
+            color: white;
+            border: 2px solid #a8d08d;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        .btn:hover { 
+            background: #4CAF50;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <!-- 遊戲 UI -->
+    <div id="ui">
+        剩餘敵人數量：<span id="enemyCount" style="color: #ff4c4c; font-size: 24px;">5</span><br>
+        武器狀態：<span style="color: #4CAF50;">步槍 (已上膛)</span>
+    </div>
+    
+    <button id="hudEndBtn">結束任務</button>
+
+    <div id="crosshair"></div>
+    <div id="message"></div>
+
+    <!-- 暫停與說明選單 -->
+    <div id="blocker">
+        <h1>森林特戰任務</h1>
+        <div class="instructions">
+            <p><b>WASD</b> - 移動角色 &nbsp;|&nbsp; <b>C</b> - 蹲下</p>
+            <p><b>方向鍵 (左右)</b> - 轉動角色 &nbsp;|&nbsp; <b>方向鍵 (上下)</b> - 視角抬頭/低頭</p>
+            <p><b>空白鍵 (Space) / 滑鼠左鍵</b> - 開火射擊</p>
+            <p style="color: #888; font-size: 16px; margin-top: 15px; border-top: 1px solid #555; padding-top: 10px;">
+                💡 提示：這是一個第三人稱視角，你的武器會指向螢幕中央的準心高度。<br>
+                利用樹木作為掩體，將敵人全部擊斃。
+            </p>
+        </div>
+        <button class="btn" id="startBtn">進入戰場</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // --- 遊戲狀態 ---
+        let gameActive = false;
+        const particles = []; 
+        const bullets = [];
+
+        // --- 基本場景設定 (真實樹林氛圍) ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2a3028); 
+        scene.fog = new THREE.FogExp2(0x2a3028, 0.02);  // 深綠色迷霧
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+        document.body.appendChild(renderer.domElement);
+
+        // --- 燈光設定 ---
+        const ambientLight = new THREE.AmbientLight(0x445544, 1.2); 
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xfff0dd, 0.8); 
+        directionalLight.position.set(50, 80, 30);
+        directionalLight.castShadow = true; 
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 200;
+        directionalLight.shadow.camera.left = -80;
+        directionalLight.shadow.camera.right = 80;
+        directionalLight.shadow.camera.top = 80;
+        directionalLight.shadow.camera.bottom = -80;
+        scene.add(directionalLight);
+
+        // --- 地圖與障礙物 (真實森林) ---
+        const obstacles = [];
+        const obstacleData = []; 
+        
+        // 深色草地
+        const floorGeo = new THREE.PlaneGeometry(160, 160);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1f331f, roughness: 1.0 }); 
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true; 
+        scene.add(floor);
+        
+        // 生成 80 棵樹木
+        for(let i = 0; i < 80; i++) {
+            const tree = new THREE.Group();
+            
+            // 樹幹
+            const trunkRadius = 0.4 + Math.random() * 0.4;
+            const trunkHeight = 3 + Math.random() * 4;
+            const trunkGeo = new THREE.CylinderGeometry(trunkRadius * 0.7, trunkRadius, trunkHeight, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.9 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = trunkHeight / 2;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            tree.add(trunk);
+
+            // 樹冠 (多層次圓錐模擬針葉樹)
+            const leavesGeo = new THREE.ConeGeometry(trunkRadius * 4, trunkHeight * 1.5, 7);
+            const leavesMat = new THREE.MeshStandardMaterial({ color: 0x1b4d22, roughness: 0.8 });
+            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+            leaves.position.y = trunkHeight * 0.8;
+            leaves.castShadow = true;
+            tree.add(leaves);
+            
+            let bx, bz;
+            do {
+                bx = (Math.random() - 0.5) * 140;
+                bz = (Math.random() - 0.5) * 140;
+            } while(Math.abs(bx) < 10 && Math.abs(bz) < 10); // 避開中心點
+            
+            tree.position.set(bx, 0, bz);
+            scene.add(tree);
+            
+            obstacles.push(trunk);
+            obstacleData.push({ x: bx, z: bz, radius: trunkRadius });
+        }
+
+        // --- 玩家模型與第三人稱視角 ---
+        let playerYaw = 0;   // 角色左右轉向
+        let camPitch = 0.2;  // 相機俯仰角 (預設稍微往下看)
+        const camDist = 6;   // 相機距離角色的距離
+        
+        const playerGroup = new THREE.Group();
+        playerGroup.position.set(0, 0, 0);
+        scene.add(playerGroup);
+
+        // 玩家身體
+        const bodyGeo = new THREE.BoxGeometry(1, 2, 0.8);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x334455 }); // 戰術裝備色
+        const playerBody = new THREE.Mesh(bodyGeo, bodyMat);
+        playerBody.position.y = 1;
+        playerBody.castShadow = true;
+        playerGroup.add(playerBody);
+
+        // 頭部
+        const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+        const playerHead = new THREE.Mesh(headGeo, headMat);
+        playerHead.position.y = 2.3;
+        playerHead.castShadow = true;
+        playerGroup.add(playerHead);
+
+        // 槍枝模型
+        const gunGeo = new THREE.BoxGeometry(0.15, 0.2, 1.2);
+        const gunMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const gun = new THREE.Mesh(gunGeo, gunMat);
+        // 槍拿在右手邊
+        gun.position.set(0.6, 1.2, -0.6);
+        playerGroup.add(gun);
+
+        const keys = { 
+            w: false, a: false, s: false, d: false, c: false, 
+            arrowup: false, arrowdown: false, arrowleft: false, arrowright: false
+        };
+        let isCrouching = false;
+
+        document.addEventListener('keydown', e => {
+            const k = e.key.toLowerCase();
+            if(keys.hasOwnProperty(k)) keys[k] = true;
+            if(k === 'c') isCrouching = true;
+            
+            if(e.code === 'Space' && gameActive) {
+                e.preventDefault(); 
+                shootGun();
+            }
+        });
+        document.addEventListener('keyup', e => {
+            const k = e.key.toLowerCase();
+            if(keys.hasOwnProperty(k)) keys[k] = false;
+            if(k === 'c') isCrouching = false;
+        });
+
+        renderer.domElement.addEventListener('mousedown', e => {
+            if(gameActive && e.button === 0) shootGun();
+        });
+
+        // --- 敵人設定 ---
+        const enemies = [];
+        const enemyGeo = new THREE.BoxGeometry(1, 2, 1);
+        
+        for(let i = 0; i < 5; i++) {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x8b0000 }); // 紅色敵軍
+            const enemy = new THREE.Mesh(enemyGeo, mat);
+            enemy.position.y = 1;
+            enemy.castShadow = true;
+            enemy.receiveShadow = true;
+
+            enemy.position.set((Math.random() - 0.5) * 100, 1, (Math.random() - 0.5) * 100);
+            scene.add(enemy);
+
+            enemies.push({
+                mesh: enemy,
+                state: 'patrol', 
+                speed: 0.03,     
+                targetAngle: Math.random() * Math.PI * 2,
+                health: 100,
+                isDying: false
+            });
+        }
+
+        // --- 碰撞檢測 (圓柱體檢測) ---
+        function checkCollision(pos) {
+            const pRadius = 0.5; 
+            for(let ob of obstacleData) {
+                let dx = pos.x - ob.x;
+                let dz = pos.z - ob.z;
+                let dist = Math.sqrt(dx*dx + dz*dz);
+                if(dist < (pRadius + ob.radius)) return true;
+            }
+            return false;
+        }
+
+        // --- 射擊與特效 ---
+        function showMessage(text, color) {
+            const msgEl = document.getElementById('message');
+            msgEl.innerText = text;
+            msgEl.style.color = color;
+            msgEl.classList.add('show');
+            setTimeout(() => { msgEl.classList.remove('show'); }, 1500);
+        }
+
+        let lastShootTime = 0;
+        function shootGun() {
+            const now = Date.now();
+            if(now - lastShootTime < 250) return; // 射速限制
+            lastShootTime = now;
+
+            // 準心動畫
+            const ch = document.getElementById('crosshair');
+            ch.classList.add('active');
+            setTimeout(() => { ch.classList.remove('active'); }, 100);
+
+            // 槍口火光 (暫時讓槍體閃爍)
+            gun.material.color.setHex(0xffff00);
+            setTimeout(() => { gun.material.color.setHex(0x111111); }, 50);
+
+            // 產生實體子彈
+            const bGeo = new THREE.SphereGeometry(0.1, 8, 8);
+            const bMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const bullet = new THREE.Mesh(bGeo, bMat);
+
+            // 計算子彈起點 (槍口位置)
+            const barrelLocal = new THREE.Vector3(0.6, 1.2, -1.2);
+            const startPos = barrelLocal.applyMatrix4(playerGroup.matrixWorld);
+            bullet.position.copy(startPos);
+
+            // 計算子彈飛行方向 (角色面朝方向 + 相機俯仰角)
+            const direction = new THREE.Vector3(0, Math.sin(camPitch), -Math.cos(camPitch));
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerYaw).normalize();
+
+            scene.add(bullet);
+            bullets.push({ mesh: bullet, dir: direction, speed: 1.5, life: 60 });
+        }
+
+        function createBlood(pos) {
+            const particleGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            for(let i=0; i<15; i++) {
+                const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const p = new THREE.Mesh(particleGeo, mat);
+                p.position.copy(pos);
+                p.velocity = new THREE.Vector3((Math.random()-0.5)*0.5, Math.random()*0.5, (Math.random()-0.5)*0.5);
+                scene.add(p);
+                particles.push({ mesh: p, life: 1.0 });
+            }
+        }
+
+        // --- 遊戲主循環 ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if(gameActive) {
+                // 1. 角色視角與旋轉 (完全使用鍵盤控制)
+                if(keys.arrowleft) playerYaw += 0.05;
+                if(keys.arrowright) playerYaw -= 0.05;
+                if(keys.arrowup) camPitch += 0.03;
+                if(keys.arrowdown) camPitch -= 0.03;
+                
+                camPitch = Math.max(-0.5, Math.min(0.8, camPitch)); // 限制抬頭/低頭角度
+                playerGroup.rotation.y = playerYaw; // 角色隨之轉動
+                
+                // 槍口根據俯仰角微調
+                gun.rotation.x = camPitch;
+
+                // 2. 玩家移動
+                let currentSpeed = isCrouching ? 0.05 : 0.12; 
+                let dir = new THREE.Vector3();
+                let front = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerYaw);
+                let right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerYaw);
+
+                if(keys.w) dir.add(front);
+                if(keys.s) dir.sub(front);
+                if(keys.a) dir.sub(right);
+                if(keys.d) dir.add(right);
+
+                dir.normalize().multiplyScalar(currentSpeed);
+
+                let nextPos = playerGroup.position.clone();
+                nextPos.x += dir.x;
+                if(!checkCollision(nextPos)) playerGroup.position.x += dir.x;
+
+                nextPos = playerGroup.position.clone();
+                nextPos.z += dir.z;
+                if(!checkCollision(nextPos)) playerGroup.position.z += dir.z;
+
+                // 蹲下動畫
+                let targetScaleY = isCrouching ? 0.5 : 1.0;
+                playerBody.scale.y += (targetScaleY - playerBody.scale.y) * 0.2;
+                playerHead.position.y = isCrouching ? 1.5 : 2.3;
+                gun.position.y = isCrouching ? 0.8 : 1.2;
+
+                // 3. 第三人稱相機跟隨
+                // 算出相機在角色後方的位置
+                const camX = playerGroup.position.x + Math.sin(playerYaw) * camDist;
+                const camY = playerGroup.position.y + 2.5 - Math.sin(camPitch) * camDist; // 根據俯仰角調整高度
+                const camZ = playerGroup.position.z + Math.cos(playerYaw) * camDist;
+                
+                camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.2);
+                
+                // 相機看向角色前方一點的位置 (營造越肩視角)
+                const lookTarget = playerGroup.position.clone().add(new THREE.Vector3(0, 2, 0));
+                lookTarget.add(new THREE.Vector3(0, Math.sin(camPitch)*5, 0));
+                lookTarget.add(new THREE.Vector3(0, 0, -5).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerYaw));
+                camera.lookAt(lookTarget);
+
+                // 4. 子彈邏輯
+                for(let i = bullets.length - 1; i >= 0; i--) {
+                    let b = bullets[i];
+                    b.mesh.position.add(b.dir.clone().multiplyScalar(b.speed));
+                    b.life--;
+
+                    // 子彈碰撞敵人判定
+                    let hit = false;
+                    for(let e of enemies) {
+                        if(!e.isDying && b.mesh.position.distanceTo(e.mesh.position) < 1.5) {
+                            e.health -= 50;
+                            hit = true;
+                            createBlood(b.mesh.position);
+                            
+                            if(e.health <= 0) {
+                                e.isDying = true;
+                                document.getElementById('enemyCount').innerText = enemies.filter(en => !en.isDying).length;
+                                if(enemies.filter(en => !en.isDying).length === 0) {
+                                    setTimeout(() => showMessage("🏆 任務完成！清剿完畢！", "#4CAF50"), 500);
+                                }
+                            }
+                            break; // 一顆子彈只能打中一個人
+                        }
+                    }
+
+                    if(hit || b.life <= 0) {
+                        scene.remove(b.mesh);
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // 5. 敵人 AI 更新
+                for(let i = enemies.length - 1; i >= 0; i--) {
+                    let e = enemies[i];
+                    
+                    if(e.isDying) {
+                        e.mesh.rotation.x -= 0.1; // 倒下動畫
+                        e.mesh.position.y -= 0.05;
+                        if(e.mesh.position.y < -1) {
+                            scene.remove(e.mesh);
+                            enemies.splice(i, 1);
+                        }
+                        continue; 
+                    }
+                    
+                    let dist = e.mesh.position.distanceTo(playerGroup.position);
+                    
+                    if(dist < 15) e.state = 'chase';
+                    else e.state = 'patrol';
+
+                    if(e.state === 'patrol') {
+                        e.mesh.translateZ(-e.speed);
+                        if(Math.random() < 0.01) e.targetAngle += (Math.random() - 0.5) * Math.PI;
+                        let angleDiff = e.targetAngle - e.mesh.rotation.y;
+                        e.mesh.rotation.y += angleDiff * 0.05;
+
+                    } else if (e.state === 'chase') {
+                        let targetRot = Math.atan2(playerGroup.position.x - e.mesh.position.x, playerGroup.position.z - e.mesh.position.z);
+                        e.mesh.rotation.y = targetRot + Math.PI;
+                        if(dist > 2) e.mesh.translateZ(-(e.speed * 1.5));
+                    }
+                }
+
+                // 6. 粒子更新
+                for(let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.mesh.position.add(p.velocity);
+                    p.velocity.y -= 0.02; // 重力
+                    p.life -= 0.02;
+                    p.mesh.scale.setScalar(Math.max(0, p.life));
+                    if(p.life <= 0) {
+                        scene.remove(p.mesh);
+                        particles.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 初始化與事件綁定 ---
+        const blocker = document.getElementById('blocker');
+        const startBtn = document.getElementById('startBtn');
+        const hudEndBtn = document.getElementById('hudEndBtn');
+
+        startBtn.addEventListener('click', () => {
+            blocker.style.display = 'none';
+            gameActive = true;
+        });
+        
+        hudEndBtn.addEventListener('click', () => {
+            gameActive = false; 
+            blocker.style.display = 'flex';
+            blocker.innerHTML = `
+                <h1>任務終止</h1>
+                <p style="font-size: 24px; color: #aaa; margin-bottom: 30px;">直升機已撤離，下次再來！</p>
+                <button class="btn" onclick="location.reload()">重新部署</button>
+            `;
+        });
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>

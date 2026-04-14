@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科技先鋒：電腦單字打字遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 隱藏滾動條，保持畫面整潔 */
+        body {
+            overflow: hidden;
+        }
+        /* 正確輸入時的彈跳動畫 */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); color: #4ade80; }
+            100% { transform: scale(1); }
+        }
+        .animate-pop {
+            animation: pop 0.3s ease-in-out;
+        }
+        /* 錯誤時的震動動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.2s ease-in-out;
+        }
+        /* 游標閃爍動畫 */
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+        .cursor-blink {
+            animation: blink 1s step-start infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <!-- 頂部資訊欄 -->
+    <header class="p-6 flex justify-between items-center border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm z-10">
+        <div>
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                電腦單字打字特訓
+            </h1>
+            <p class="text-slate-400 text-sm mt-1">適合初中生 • 邊打邊記單字</p>
+        </div>
+        <div class="text-right">
+            <div class="text-sm text-slate-400">最高分數</div>
+            <div class="text-2xl font-mono font-bold text-yellow-400" id="high-score-display">0</div>
+        </div>
+    </header>
+
+    <!-- 主要遊戲區域 -->
+    <main class="flex-grow flex flex-col items-center justify-center p-4 relative">
+        
+        <!-- 狀態面板 (時間與分數) -->
+        <div class="flex gap-12 mb-12 text-center transition-opacity duration-300" id="stats-panel" style="opacity: 0;">
+            <div class="bg-slate-800/50 rounded-2xl p-4 min-w-[120px] border border-slate-700">
+                <div class="text-slate-400 text-sm mb-1">剩餘時間</div>
+                <div class="text-4xl font-mono font-bold text-cyan-400" id="time-display">60</div>
+            </div>
+            <div class="bg-slate-800/50 rounded-2xl p-4 min-w-[120px] border border-slate-700">
+                <div class="text-slate-400 text-sm mb-1">目前分數</div>
+                <div class="text-4xl font-mono font-bold text-indigo-400" id="score-display">0</div>
+            </div>
+        </div>
+
+        <!-- 遊戲開始前的覆蓋層 -->
+        <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 transition-opacity duration-500">
+            <div class="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            </div>
+            <h2 class="text-3xl font-bold mb-4 text-white">準備好挑戰了嗎？</h2>
+            <p class="text-slate-400 mb-8 text-center max-w-md">
+                在 60 秒內輸入畫面上出現的英文單字。<br>
+                注意大小寫與拼字，順便記下它們的中文意思吧！
+            </p>
+            <div class="flex flex-col gap-4 items-center">
+                <button id="start-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-10 rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] transition-all transform hover:scale-105 active:scale-95 text-xl">
+                    開始遊戲
+                </button>
+                <button id="leaderboard-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 px-8 rounded-full border border-slate-700 transition-all transform hover:scale-105 active:scale-95 text-lg flex items-center gap-2 mt-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    查看排行榜
+                </button>
+            </div>
+        </div>
+
+        <!-- 單字顯示區 -->
+        <div id="game-area" class="text-center w-full max-w-3xl hidden">
+            <!-- 中文翻譯 -->
+            <div id="chinese-meaning" class="text-2xl md:text-3xl text-slate-400 mb-6 font-medium tracking-wide">
+                (準備開始)
+            </div>
+            
+            <!-- 英文單字展示 (每個字母分開以便上色) -->
+            <div id="word-display" class="text-5xl md:text-7xl font-mono font-bold tracking-widest mb-10 h-24 flex justify-center items-center drop-shadow-lg">
+                <!-- 字母將由 JS 動態生成 -->
+            </div>
+
+            <!-- 隱藏的輸入框，用於捕獲手機鍵盤或直接輸入 -->
+            <!-- 這裡使用可見但融合背景的設計，讓體驗更直覺 -->
+            <input 
+                type="text" 
+                id="type-input" 
+                autocomplete="off" 
+                autocapitalize="off" 
+                spellcheck="false"
+                class="w-full md:w-2/3 mx-auto block bg-slate-800 text-white text-3xl font-mono text-center rounded-2xl py-4 border-2 border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 outline-none transition-all shadow-inner"
+                placeholder="在此輸入單字..."
+            >
+            <p class="text-slate-500 text-sm mt-4">您可以直接使用鍵盤輸入</p>
+        </div>
+
+    </main>
+
+    <!-- 遊戲結束結算畫面 (Modal) -->
+    <div id="game-over-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 p-10 rounded-3xl shadow-2xl border border-slate-700 text-center max-w-md w-full transform scale-95 transition-transform duration-300" id="modal-content">
+            <h2 class="text-4xl font-bold text-white mb-2">時間到！</h2>
+            <p class="text-slate-400 mb-8">來看看你的特訓成果</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">本次得分</div>
+                    <div class="text-5xl font-mono font-bold text-indigo-400 mt-2" id="final-score">0</div>
+                </div>
+                <div class="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">準確率</div>
+                    <div class="text-5xl font-mono font-bold text-cyan-400 mt-2" id="final-accuracy">0%</div>
+                </div>
+            </div>
+
+            <button id="restart-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all hover:shadow-[0_0_20px_rgba(79,70,229,0.5)] active:scale-95 text-lg">
+                再玩一次
+            </button>
+        </div>
+    </div>
+
+    <!-- 排行榜畫面 (Modal) -->
+    <div id="leaderboard-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 text-center max-w-sm w-full transform scale-95 transition-transform duration-300" id="leaderboard-content-box">
+            <div class="flex justify-center mb-4">
+                <div class="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold text-white mb-6">本地排行榜</h2>
+            
+            <ul id="leaderboard-list" class="space-y-3 mb-8 text-left min-h-[150px]">
+                <!-- 排行榜項目將由 JS 動態生成 -->
+            </ul>
+
+            <button id="close-leaderboard-btn" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-all active:scale-95 text-lg">
+                關閉
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 單字庫 (適合初中生的電腦/網路相關單字) ---
+        const vocabulary = [
+            { word: 'computer', meaning: '電腦' },
+            { word: 'keyboard', meaning: '鍵盤' },
+            { word: 'mouse', meaning: '滑鼠' },
+            { word: 'screen', meaning: '螢幕' },
+            { word: 'monitor', meaning: '顯示器' },
+            { word: 'internet', meaning: '網際網路' },
+            { word: 'network', meaning: '網路' },
+            { word: 'software', meaning: '軟體' },
+            { word: 'hardware', meaning: '硬體' },
+            { word: 'download', meaning: '下載' },
+            { word: 'upload', meaning: '上傳' },
+            { word: 'password', meaning: '密碼' },
+            { word: 'website', meaning: '網站' },
+            { word: 'browser', meaning: '瀏覽器' },
+            { word: 'virus', meaning: '病毒' },
+            { word: 'hacker', meaning: '駭客' },
+            { word: 'email', meaning: '電子郵件' },
+            { word: 'folder', meaning: '資料夾' },
+            { word: 'file', meaning: '檔案' },
+            { word: 'button', meaning: '按鈕' },
+            { word: 'click', meaning: '點擊' },
+            { word: 'laptop', meaning: '筆記型電腦' },
+            { word: 'tablet', meaning: '平板電腦' },
+            { word: 'printer', meaning: '印表機' },
+            { word: 'router', meaning: '路由器' },
+            { word: 'server', meaning: '伺服器' },
+            { word: 'memory', meaning: '記憶體' },
+            { word: 'storage', meaning: '儲存空間' },
+            { word: 'update', meaning: '更新' },
+            { word: 'system', meaning: '系統' },
+            { word: 'digital', meaning: '數位的' },
+            { word: 'online', meaning: '上線的 (連網的)' },
+            { word: 'offline', meaning: '離線的' },
+            { word: 'search', meaning: '搜尋' },
+            { word: 'window', meaning: '視窗' },
+            { word: 'program', meaning: '程式' },
+            { word: 'code', meaning: '程式碼' },
+            { word: 'data', meaning: '資料' },
+            { word: 'pixel', meaning: '像素' },
+            { word: 'account', meaning: '帳號' }
+        ];
+
+        // --- 遊戲變數 ---
+        const GAME_DURATION = 60; // 遊戲時間 (秒)
+        let timeRemaining = GAME_DURATION;
+        let score = 0;
+        let isPlaying = false;
+        let currentWordObj = {};
+        let timerInterval;
+        
+        // 統計用變數
+        let totalKeystrokes = 0;
+        let correctKeystrokes = 0;
+
+        // --- DOM 元素 ---
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.getElementById('start-btn');
+        const gameArea = document.getElementById('game-area');
+        const statsPanel = document.getElementById('stats-panel');
+        
+        const wordDisplay = document.getElementById('word-display');
+        const chineseMeaning = document.getElementById('chinese-meaning');
+        const typeInput = document.getElementById('type-input');
+        
+        const timeDisplay = document.getElementById('time-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const highScoreDisplay = document.getElementById('high-score-display');
+        
+        const gameOverModal = document.getElementById('game-over-modal');
+        const modalContent = document.getElementById('modal-content');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const finalAccuracyDisplay = document.getElementById('final-accuracy');
+        const restartBtn = document.getElementById('restart-btn');
+
+        const leaderboardBtn = document.getElementById('leaderboard-btn');
+        const leaderboardModal = document.getElementById('leaderboard-modal');
+        const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const leaderboardContentBox = document.getElementById('leaderboard-content-box');
+
+        // 初始化最高分與排行榜 (從 LocalStorage 讀取)
+        let highScore = localStorage.getItem('typingGameHighScore') || 0;
+        highScoreDisplay.innerText = highScore;
+
+        let leaderboard = JSON.parse(localStorage.getItem('typingGameLeaderboard')) || [];
+        // 向下相容：如果排行榜是空的但有過去的最高分紀錄，先把它加進去
+        if (leaderboard.length === 0 && highScore > 0) {
+            leaderboard.push({ score: parseInt(highScore), date: new Date().toLocaleDateString() });
+            localStorage.setItem('typingGameLeaderboard', JSON.stringify(leaderboard));
+        }
+
+        // --- 遊戲邏輯函數 ---
+
+        // 隨機獲取一個單字
+        function getRandomWord() {
+            const randomIndex = Math.floor(Math.random() * vocabulary.length);
+            return vocabulary[randomIndex];
+        }
+
+        // 渲染單字到畫面上 (將每個字母包裝成 span)
+        function renderNewWord() {
+            currentWordObj = getRandomWord();
+            chineseMeaning.innerText = currentWordObj.meaning;
+            
+            // 清空目前的顯示
+            wordDisplay.innerHTML = '';
+            
+            // 將單字拆分成字母並建立 span
+            currentWordObj.word.split('').forEach(char => {
+                const charSpan = document.createElement('span');
+                charSpan.innerText = char;
+                charSpan.className = 'transition-colors duration-100 ease-in-out text-slate-300';
+                wordDisplay.appendChild(charSpan);
+            });
+        }
+
+        // 處理使用者輸入
+        function handleInput() {
+            if (!isPlaying) return;
+
+            const typedText = typeInput.value.toLowerCase();
+            const charSpans = wordDisplay.querySelectorAll('span');
+            
+            let isCurrentInputCorrect = true;
+            let currentCorrectCount = 0;
+
+            // 檢查每一個輸入的字母
+            charSpans.forEach((charSpan, index) => {
+                const typedChar = typedText[index];
+
+                // 尚未輸入到這個字母
+                if (typedChar == null) {
+                    charSpan.className = 'transition-colors duration-100 ease-in-out text-slate-300';
+                } 
+                // 輸入正確
+                else if (typedChar === charSpan.innerText) {
+                    charSpan.className = 'transition-colors duration-100 ease-in-out text-green-400';
+                    currentCorrectCount++;
+                } 
+                // 輸入錯誤
+                else {
+                    charSpan.className = 'transition-colors duration-100 ease-in-out text-red-500 bg-red-500/20 rounded';
+                    isCurrentInputCorrect = false;
+                }
+            });
+
+            // 統計擊鍵 (用於計算準確率) - 簡單做法：每次輸入長度增加視為一次敲擊
+            // 這裡簡化處理，實際準確率計算在遊戲結束時用 (總答對字母數 / 總字元數) 來估算
+
+            // 檢查是否完全答對整個單字
+            if (typedText === currentWordObj.word) {
+                // 加分
+                score += currentWordObj.word.length; // 字越長分數越高
+                scoreDisplay.innerText = score;
+                
+                correctKeystrokes += currentWordObj.word.length;
+                totalKeystrokes += currentWordObj.word.length;
+
+                // 動畫回饋
+                wordDisplay.classList.add('animate-pop');
+                setTimeout(() => wordDisplay.classList.remove('animate-pop'), 300);
+
+                // 清空輸入框，載入下個單字
+                typeInput.value = '';
+                renderNewWord();
+            } 
+            // 如果輸入長度等於單字長度，但有錯，給予震動提示
+            else if (typedText.length === currentWordObj.word.length) {
+                wordDisplay.classList.add('animate-shake');
+                setTimeout(() => wordDisplay.classList.remove('animate-shake'), 200);
+            }
+        }
+
+        // 開始計時
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                timeDisplay.innerText = timeRemaining;
+
+                // 時間快到時變紅
+                if (timeRemaining <= 10) {
+                    timeDisplay.classList.remove('text-cyan-400');
+                    timeDisplay.classList.add('text-red-500', 'animate-pulse');
+                }
+
+                if (timeRemaining === 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        // 開始遊戲
+        function startGame() {
+            // 初始化變數
+            timeRemaining = GAME_DURATION;
+            score = 0;
+            totalKeystrokes = 0;
+            correctKeystrokes = 0;
+            isPlaying = true;
+
+            // 更新介面
+            timeDisplay.innerText = timeRemaining;
+            timeDisplay.classList.remove('text-red-500', 'animate-pulse');
+            timeDisplay.classList.add('text-cyan-400');
+            scoreDisplay.innerText = score;
+            typeInput.value = '';
+
+            // 隱藏開始畫面，顯示遊戲區
+            startScreen.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                gameArea.classList.remove('hidden');
+                statsPanel.style.opacity = '1';
+                typeInput.focus();
+            }, 500);
+
+            // 載入第一個單字並開始計時
+            renderNewWord();
+            startTimer();
+        }
+
+        // 結束遊戲
+        function endGame() {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            
+            // 更新排行榜 (保存前5名)
+            if (score > 0) {
+                const today = new Date().toLocaleDateString();
+                leaderboard.push({ score: score, date: today });
+                leaderboard.sort((a, b) => b.score - a.score); // 分數由高到低排序
+                leaderboard = leaderboard.slice(0, 5); // 只保留前五名
+                localStorage.setItem('typingGameLeaderboard', JSON.stringify(leaderboard));
+            }
+
+            // 更新最高分顯示
+            if (leaderboard.length > 0) {
+                highScore = leaderboard[0].score;
+                localStorage.setItem('typingGameHighScore', highScore);
+                highScoreDisplay.innerText = highScore;
+            }
+
+            // 計算準確率 (防止除以零)
+            // 由於簡單設計，這裡的準確率以 (得分 / (得分 + 錯誤剩餘在框內的字元數)) 粗略估計
+            // 為了鼓勵學生，我們給一個較為寬鬆的計算方式
+            let accuracy = 100;
+            if (score > 0) {
+                const mistakes = typeInput.value.length; // 結束時還留在框內的通常是打錯的
+                accuracy = Math.max(0, Math.round((score / (score + mistakes)) * 100));
+            } else {
+                accuracy = 0;
+            }
+
+            // 顯示結算畫面
+            finalScoreDisplay.innerText = score;
+            finalAccuracyDisplay.innerText = accuracy + '%';
+            
+            gameOverModal.classList.remove('hidden');
+            // 延遲一點點以觸發 CSS 動畫
+            setTimeout(() => {
+                gameOverModal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+            
+            typeInput.blur();
+        }
+
+        // 重新開始
+        function resetGame() {
+            gameOverModal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => {
+                gameOverModal.classList.add('hidden');
+                startGame();
+            }, 300);
+        }
+
+        // 顯示排行榜
+        function showLeaderboard() {
+            leaderboardList.innerHTML = '';
+            
+            if (leaderboard.length === 0) {
+                leaderboardList.innerHTML = '<li class="text-slate-500 text-center py-4">暫無紀錄，快來挑戰吧！</li>';
+            } else {
+                leaderboard.forEach((entry, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center bg-slate-900/50 p-3 rounded-xl border border-slate-700';
+                    
+                    // 前三名給予特別的顏色
+                    let rankColor = 'text-slate-400';
+                    if (index === 0) rankColor = 'text-yellow-400 font-bold text-lg';
+                    else if (index === 1) rankColor = 'text-slate-300 font-bold text-lg';
+                    else if (index === 2) rankColor = 'text-amber-600 font-bold text-lg';
+
+                    li.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 text-center ${rankColor}">#${index + 1}</span>
+                            <span class="text-slate-500 text-sm">${entry.date}</span>
+                        </div>
+                        <span class="font-mono font-bold text-indigo-400 text-xl">${entry.score}</span>
+                    `;
+                    leaderboardList.appendChild(li);
+                });
+            }
+
+            leaderboardModal.classList.remove('hidden');
+            setTimeout(() => {
+                leaderboardModal.classList.remove('opacity-0');
+                leaderboardContentBox.classList.remove('scale-95');
+                leaderboardContentBox.classList.add('scale-100');
+            }, 10);
+        }
+
+        // 關閉排行榜
+        function hideLeaderboard() {
+            leaderboardModal.classList.add('opacity-0');
+            leaderboardContentBox.classList.remove('scale-100');
+            leaderboardContentBox.classList.add('scale-95');
+            setTimeout(() => {
+                leaderboardModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- 事件監聽器 ---
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', resetGame);
+        leaderboardBtn.addEventListener('click', showLeaderboard);
+        closeLeaderboardBtn.addEventListener('click', hideLeaderboard);
+        
+        // 監聽輸入框變化
+        typeInput.addEventListener('input', handleInput);
+
+        // 點擊遊戲區域任何地方都保持輸入框聚焦
+        document.body.addEventListener('click', (e) => {
+            if (isPlaying && !gameOverModal.classList.contains('hidden') === false) {
+                typeInput.focus();
+            }
+        });
+
+    </script>
+</body>
+</html>

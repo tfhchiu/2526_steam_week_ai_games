@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Tech Repair - 溫馨電腦維修小舖</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* ⭐ 全新溫馨星露谷配色 ⭐ */
+            --bg-wallpaper: #f4ecd8; /* 溫暖的米色壁紙 */
+            --wood-light: #d4a373; /* 陽光照射的淺色木桌 */
+            --wood-dark: #8b5a2b; /* 木頭邊框陰影 */
+            --retro-pc: #e9e0ce; /* 復古奶油白電腦殼 */
+            --screen-bg: #2a3b32; /* 柔和的深墨綠色螢幕 (不刺眼) */
+            --screen-text: #a8e6cf; /* 柔和的薄荷綠像素字 */
+            --btn-green: #71a95a; /* 溫和的草綠色 */
+            --btn-yellow: #eeb868; /* 溫暖的夕陽黃 */
+            --pixel-red: #e07a5f; /* 柔和的磚紅色 (錯誤提示) */
+            --pixel-ui-bg: #faedcd; /* 溫馨的羊皮紙對話框 */
+        }
+
+        body {
+            background-color: var(--bg-wallpaper); /* 溫暖背景 */
+            /* 加上一點可愛的波卡圓點背景圖案增加溫馨感 */
+            background-image: radial-gradient(#e3d5b8 2px, transparent 2px);
+            background-size: 30px 30px;
+            font-family: 'Press Start 2P', '微軟正黑體', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #4a3f35;
+        }
+
+        /* 遊戲主容器 - 溫馨原木桌 */
+        #game-container {
+            width: 700px;
+            max-width: 90vw;
+            background-color: var(--wood-light);
+            border: 12px solid var(--wood-dark);
+            border-radius: 8px; /* 稍微圓角一點，看起來更柔和 */
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 15px 0 rgba(139, 90, 43, 0.4); /* 柔和的木頭陰影 */
+            position: relative;
+        }
+
+        /* 頂部資訊欄 - 變成木牌的感覺 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.3);
+            padding: 12px 20px;
+            border: 4px dashed var(--wood-dark); /* 虛線邊框更有手作感 */
+            border-radius: 8px;
+            color: var(--wood-dark);
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* 桌上的溫馨小裝飾 (利用 CSS 畫出來) */
+        
+        /* 1. 桌角的小盆栽 */
+        .desk-plant {
+            position: absolute;
+            bottom: -12px;
+            left: -35px;
+            width: 45px;
+            height: 35px;
+            background-color: #c08552; /* 陶土盆顏色 */
+            border: 4px solid var(--wood-dark);
+            border-radius: 5px 5px 15px 15px;
+            z-index: 10;
+        }
+        .desk-plant::before {
+            content: "🌿";
+            position: absolute;
+            top: -45px;
+            left: -2px;
+            font-size: 40px;
+            font-family: sans-serif; /* 避免表情符號變成像素字 */
+        }
+
+        /* 2. 桌角的熱咖啡杯 */
+        .coffee-cup {
+            position: absolute;
+            bottom: 20px;
+            right: -30px;
+            width: 35px;
+            height: 40px;
+            background-color: #fff;
+            border: 4px solid var(--wood-dark);
+            border-radius: 5px 5px 15px 15px;
+            z-index: 10;
+        }
+        .coffee-cup::after { /* 杯耳 */
+            content: "";
+            position: absolute;
+            top: 5px;
+            right: -16px;
+            width: 12px;
+            height: 18px;
+            border: 4px solid var(--wood-dark);
+            border-left: none;
+            border-radius: 0 15px 15px 0;
+        }
+        .coffee-cup::before { /* 熱氣 */
+            content: "♨️";
+            position: absolute;
+            top: -30px;
+            left: 2px;
+            font-size: 20px;
+            font-family: sans-serif;
+            color: #999;
+            animation: steam 2s infinite alternate ease-in-out;
+        }
+
+        @keyframes steam {
+            0% { transform: translateY(0) scale(1); opacity: 0.8; }
+            100% { transform: translateY(-8px) scale(1.1); opacity: 0.3; }
+        }
+
+        /* 復古奶油電腦外殼 */
+        #monitor-shell {
+            background-color: var(--retro-pc);
+            padding: 20px;
+            border-radius: 15px;
+            border: 6px solid #d4c8b2; /* 殼的立體邊緣 */
+            box-shadow: 0 8px 0 rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        }
+
+        /* 維修螢幕區域 */
+        #monitor {
+            background-color: var(--screen-bg);
+            border: 8px solid #1a251f; /* 深色螢幕內框 */
+            padding: 40px 20px;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #scrambled-text {
+            color: var(--screen-text);
+            font-size: 28px;
+            letter-spacing: 4px;
+            text-shadow: 0 0 8px rgba(168, 230, 207, 0.4); /* 柔和發光 */
+            margin-bottom: 20px;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+
+        /* 輸入與按鈕 */
+        input {
+            padding: 12px;
+            font-family: 'Press Start 2P', '微軟正黑體', cursive;
+            font-size: 16px;
+            border: 4px solid var(--wood-dark);
+            border-radius: 8px;
+            width: 70%;
+            outline: none;
+            text-transform: uppercase;
+            text-align: center;
+            box-sizing: border-box;
+            background-color: #fffaf0;
+            color: var(--wood-dark);
+        }
+        
+        input:focus {
+            border-color: var(--btn-green);
+        }
+
+        .btn-group {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-family: 'Press Start 2P', '微軟正黑體', cursive;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 4px solid var(--wood-dark);
+            border-radius: 8px;
+            box-shadow: 0 5px 0 var(--wood-dark);
+            transition: transform 0.1s, box-shadow 0.1s;
+            color: white;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+        }
+
+        button:active {
+            transform: translateY(5px);
+            box-shadow: 0 0 0 var(--wood-dark);
+        }
+
+        .submit-btn { background-color: var(--btn-green); }
+        .hint-btn { 
+            background-color: var(--btn-yellow); 
+            color: var(--wood-dark);
+            text-shadow: none;
+        }
+
+        /* 提示對話框 - 羊皮紙風格 */
+        #dialog-box {
+            background-color: var(--pixel-ui-bg);
+            border: 4px solid var(--wood-dark);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 25px;
+            min-height: 50px;
+            font-size: 12px;
+            line-height: 1.6;
+            text-align: left;
+            position: relative;
+        }
+
+        /* 對話框的小尾巴 */
+        #dialog-box::before {
+            content: "";
+            position: absolute;
+            top: -14px;
+            left: 40px;
+            border-width: 0 10px 10px 10px;
+            border-style: solid;
+            border-color: transparent transparent var(--wood-dark) transparent;
+        }
+        #dialog-box::after {
+            content: "";
+            position: absolute;
+            top: -8px;
+            left: 44px;
+            border-width: 0 6px 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent var(--pixel-ui-bg) transparent;
+        }
+
+        .feedback {
+            margin-top: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            min-height: 12px;
+        }
+
+        /* 螢幕掃描線特效 (調柔和一點) */
+        #monitor::after {
+            content: " ";
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        @media (max-width: 600px) {
+            #scrambled-text { font-size: 20px; }
+            input { width: 90%; }
+            .desk-plant, .coffee-cup { display: none; /* 手機版隱藏桌邊裝飾避免超出版面 */ }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 桌上的可愛小裝飾 -->
+    <div class="desk-plant"></div>
+    <div class="coffee-cup"></div>
+
+    <div class="header">
+        <span>🏠 溫馨維修小舖</span>
+        <span id="score-display">🌟 星星幣: 100</span>
+    </div>
+
+    <!-- 加上了一層電腦外殼 -->
+    <div id="monitor-shell">
+        <div id="monitor">
+            <div id="scrambled-text">LOADING...</div>
+            <input type="text" id="user-input" placeholder="輸入修復代碼" autocomplete="off">
+            <div class="feedback" id="feedback-text"></div>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="submit-btn" onclick="checkAnswer()">🛠️ 修復!</button>
+        <button class="hint-btn" onclick="getHint()">💡 提示 (-10)</button>
+    </div>
+
+    <div id="dialog-box">
+        <span id="hint-text">系統訊息：受損檔案已就緒。請輸入正確拼寫以恢復資料。</span>
+    </div>
+</div>
+
+<script>
+    // --- 1. 單字資料庫 ---
+    const wordBank = [
+        { original: "KEYBOARD", hint1: "用來輸入文字的硬體設備，打字滴答滴答響。", first: "K" },
+        { original: "MONITOR", hint1: "用來顯示電腦畫面和影像的螢幕。", first: "M" },
+        { original: "ROUTER", hint1: "發送 Wi-Fi 訊號，連接網路的設備。", first: "R" },
+        { original: "FIREWALL", hint1: "防止駭客或病毒入侵的網路安全系統。", first: "F" },
+        { original: "BROWSER", hint1: "你現在用來上網看網頁的軟體 (如 Chrome)。", first: "B" },
+        { original: "PROCESSOR", hint1: "電腦的大腦 (CPU)，處理所有指令。", first: "P" },
+        { original: "INTERNET", hint1: "連接全世界電腦的巨大網路。", first: "I" }
+    ];
+
+    let currentData = {};
+    let score = 100;
+    let hintLevel = 0;
+
+    const scrambledDisplay = document.getElementById('scrambled-text');
+    const userInput = document.getElementById('user-input');
+    const feedbackText = document.getElementById('feedback-text');
+    const hintText = document.getElementById('hint-text');
+    const scoreDisplay = document.getElementById('score-display');
+
+    // --- 2. 遊戲邏輯 ---
+
+    function initGame() {
+        // 隨機選字
+        currentData = wordBank[Math.floor(Math.random() * wordBank.length)];
+        
+        // 顛倒單字 (簡單的打亂方式)
+        const scrambled = currentData.original.split('').reverse().join('');
+        scrambledDisplay.innerText = scrambled;
+        
+        // 重設狀態
+        userInput.value = "";
+        userInput.focus();
+        hintLevel = 0;
+        feedbackText.innerText = "";
+        feedbackText.style.color = "var(--screen-text)";
+        hintText.innerText = "店長廣播：哎呀，偵測到錯誤編碼 [" + scrambled + "]，請幫忙修復它吧！";
+    }
+
+    function checkAnswer() {
+        const answer = userInput.value.toUpperCase().trim();
+        
+        if (answer === currentData.original) {
+            score += 20;
+            feedbackText.innerText = "✨ 修復成功！獲得 20 星星幣";
+            feedbackText.style.color = "var(--screen-text)";
+            updateScore();
+            // 停用輸入和按鈕，避免重複提交
+            userInput.disabled = true;
+            setTimeout(() => {
+                userInput.disabled = false;
+                initGame();
+            }, 1500); // 1.5秒後下一關
+        } else {
+            feedbackText.innerText = "💦 哎呀，拼寫似乎不太對！";
+            feedbackText.style.color = "var(--pixel-red)";
+            
+            // 答錯扣分機制
+            if(score >= 5) {
+                score -= 5;
+                updateScore();
+            }
+            
+            // 震動特效
+            const monitorShell = document.getElementById('monitor-shell');
+            monitorShell.style.transform = "translate(4px, 0)";
+            setTimeout(() => monitorShell.style.transform = "translate(-4px, 0)", 50);
+            setTimeout(() => monitorShell.style.transform = "translate(4px, 0)", 100);
+            setTimeout(() => monitorShell.style.transform = "translate(0, 0)", 150);
+        }
+    }
+
+    // --- 3. 多級提示系統 ---
+    function getHint() {
+        if (score < 10) {
+            hintText.innerText = "店長廣播：星星幣不足了喔，無法購買提示！";
+            return;
+        }
+
+        if (hintLevel >= 3) {
+            hintText.innerText = "店長廣播：這已經是最詳細的提示了，相信你可以的！";
+            return;
+        }
+
+        hintLevel++;
+        score -= 10;
+        updateScore();
+
+        if (hintLevel === 1) {
+            hintText.innerText = "【提示筆記 L1】" + currentData.hint1;
+        } else if (hintLevel === 2) {
+            hintText.innerText = "【提示筆記 L2】偷偷告訴你，這個單字是以 '" + currentData.first + "' 開頭的。";
+        } else if (hintLevel === 3) {
+            // 自動填充前兩個字母
+            userInput.value = currentData.original.substring(0, 2);
+            hintText.innerText = "【店長出手 L3】我幫你寫上開頭了，剩下的交給你！";
+        }
+        userInput.focus();
+    }
+
+    function updateScore() {
+        scoreDisplay.innerText = "🌟 星星幣: " + score;
+    }
+
+    // 支援按下 Enter 鍵提交
+    userInput.addEventListener("keyup", function(event) {
+        if (event.key === "Enter") checkAnswer();
+    });
+
+    // 啟動遊戲
+    initGame();
+</script>
+
+</body>
+</html>

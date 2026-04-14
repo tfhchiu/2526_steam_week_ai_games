@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電腦單字配對打字遊戲 - 進階等級版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        }
+        
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .pop-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .word-tag { transition: all 0.2s ease; }
+        .word-tag.matched {
+            background-color: #22c55e !important;
+            color: white !important;
+            transform: scale(1.1);
+            opacity: 0;
+        }
+
+        .glow-text { text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+        .glow-box { box-shadow: 0 0 15px rgba(56, 189, 248, 0.3); }
+        
+        .scanlines { position: relative; }
+        .scanlines::before {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 4px; z-index: 50; pointer-events: none;
+        }
+
+        .fever-mode {
+            animation: feverPulse 0.5s infinite alternate;
+            box-shadow: 0 0 40px rgba(234, 179, 8, 0.5);
+            border-color: #eab308 !important;
+        }
+        
+        @keyframes feverPulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); }
+        }
+
+        .floating-text {
+            position: absolute; pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 100;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.5); opacity: 0; }
+        }
+
+        /* 升級動畫 */
+        .level-up-flash {
+            animation: levelFlash 0.5s ease-out;
+        }
+        @keyframes levelFlash {
+            0% { background-color: rgba(255, 255, 255, 0); }
+            50% { background-color: rgba(255, 255, 255, 0.3); }
+            100% { background-color: rgba(255, 255, 255, 0); }
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="main-container" class="max-w-3xl w-full bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-3xl shadow-2xl overflow-hidden relative glow-box scanlines transition-all duration-300">
+        
+        <div id="start-screen" class="p-12 text-center flex flex-col items-center justify-center min-h-[500px]">
+            <div class="mb-8">
+                <svg class="w-24 h-24 mx-auto text-cyan-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <h1 class="text-4xl font-black text-white mb-2 tracking-wide glow-text">IT 達人挑戰賽 <span class="text-yellow-400">LV.UP</span></h1>
+                <p class="text-xl text-cyan-300 font-bold">挑戰等級極限，獲取最高榮耀</p>
+            </div>
+            
+            <div class="bg-slate-700/50 rounded-xl p-6 mb-8 text-left max-w-md w-full border border-slate-600">
+                <h3 class="font-bold text-lg mb-2 text-white border-b border-slate-500 pb-2">🎮 系統規則更新：</h3>
+                <ul class="space-y-2 text-slate-300 list-disc pl-5">
+                    <li>打對單字獲得 <span class="text-yellow-400 font-bold">XP (經驗值)</span>，累積滿即可升級。</li>
+                    <li><span class="text-purple-400 font-bold">等級越高</span>，難度越高，但單字得分也會翻倍！</li>
+                    <li>連擊滿 5 次進入 <span class="text-yellow-400 font-bold">FEVER 模式</span>。</li>
+                </ul>
+            </div>
+
+            <button onclick="initAudioAndStart()" class="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-full text-xl transition-transform transform hover:scale-105 shadow-lg shadow-cyan-500/30 group">
+                🚀 開始挑戰
+            </button>
+        </div>
+
+        <div id="game-screen" class="hidden flex flex-col min-h-[500px]">
+            <div class="bg-slate-900/50 p-4 flex flex-col border-b border-slate-700 relative">
+                <div class="absolute top-0 left-0 w-full h-1 bg-slate-800">
+                    <div id="xp-bar" class="h-full bg-purple-500 transition-all duration-500 w-0"></div>
+                </div>
+
+                <div class="absolute bottom-0 left-0 w-full h-1.5 bg-slate-800">
+                    <div id="fever-bar" class="h-full bg-gradient-to-r from-yellow-400 to-orange-500 w-0 transition-all duration-300"></div>
+                </div>
+                
+                <div class="flex justify-between items-center w-full mt-1">
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-purple-900/50 border border-purple-500/50 px-3 py-1 rounded-lg">
+                            <span class="text-purple-300 text-xs block font-bold">LEVEL</span>
+                            <span id="level-display" class="text-2xl font-black text-white">1</span>
+                        </div>
+                        <div class="text-lg flex flex-col">
+                            <span class="text-slate-400 text-sm">分數 SCORE</span>
+                            <span id="score" class="text-3xl font-black text-cyan-400 transition-all">0</span>
+                        </div>
+                        <div id="combo-container" class="hidden">
+                            <span id="combo-badge" class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1 rounded-full text-sm font-bold flex items-center transition-all">
+                                🔥 <span id="combo-count" class="ml-1">2</span> 連擊
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-lg flex items-center bg-slate-800 px-4 py-2 rounded-xl border border-slate-600 relative">
+                        <svg class="w-5 h-5 text-cyan-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span id="timer" class="text-3xl font-bold text-white tracking-widest transition-colors">30</span>
+                        <div id="time-feedback" class="absolute -bottom-6 right-4 text-sm font-bold opacity-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-grow p-8 flex flex-col items-center justify-center relative">
+                <div id="avatar" class="text-6xl mb-4 transition-transform duration-200 drop-shadow-lg">😎</div>
+                <div class="text-slate-400 mb-2 font-bold tracking-wider">請輸入對應的英文：</div>
+                <div id="target-word" class="text-5xl md:text-6xl font-black text-white mb-8 tracking-widest glow-text pop-in relative">
+                    電腦
+                    <div id="score-feedback" class="absolute -top-10 left-1/2 transform -translate-x-1/2 text-2xl font-bold opacity-0 w-full text-center"></div>
+                </div>
+                <div class="w-full max-w-md relative">
+                    <input type="text" id="word-input" autocomplete="off" spellcheck="false"
+                        class="w-full bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/20 text-center text-3xl text-white py-4 rounded-2xl outline-none transition-all placeholder-slate-600 font-mono shadow-inner uppercase"
+                        placeholder="TYPE HERE"
+                    >
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-6 border-t border-slate-700 min-h-[120px] flex flex-col justify-center">
+                <div id="fever-text" class="text-center text-lg font-black hidden text-yellow-400 animate-pulse tracking-widest">⚡ FEVER MODE 啟動！分數兩倍 ⚡</div>
+                <div id="normal-text" class="text-center text-sm text-slate-400 mb-3 font-bold">👀 單字提示庫</div>
+                <div id="word-bank" class="flex flex-wrap justify-center gap-3"></div>
+            </div>
+        </div>
+
+        <div id="end-screen" class="hidden p-12 text-center flex flex-col items-center justify-center min-h-[500px]">
+            <h2 class="text-5xl font-black text-white mb-6 glow-text">GAME OVER</h2>
+            <div class="bg-slate-700/50 rounded-2xl p-8 mb-8 border border-slate-600 w-full max-w-sm flex flex-col items-center shadow-xl">
+                <div class="flex flex-col items-center mb-4">
+                    <span class="text-purple-400 font-bold">最終等級</span>
+                    <span id="final-level" class="text-5xl font-black text-white">1</span>
+                </div>
+                <span class="text-slate-300 text-sm mb-1">生存總積分</span>
+                <span id="final-score" class="text-6xl font-black text-cyan-400 mb-4">0</span>
+                <div class="w-full border-t border-slate-600 my-4"></div>
+                <div class="flex justify-between w-full px-4 text-sm">
+                    <span class="text-slate-400">最高連擊：</span>
+                    <span id="max-combo" class="font-bold text-yellow-400">0</span>
+                </div>
+            </div>
+            <button onclick="resetGame()" class="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-full text-lg shadow-lg">再來一局</button>
+        </div>
+    </div>
+
+    <script>
+        const vocabulary = [
+            { zh: '電腦', en: 'computer' }, { zh: '鍵盤', en: 'keyboard' },
+            { zh: '滑鼠', en: 'mouse' }, { zh: '螢幕', en: 'monitor' },
+            { zh: '網路', en: 'internet' }, { zh: '硬體', en: 'hardware' },
+            { zh: '軟體', en: 'software' }, { zh: '密碼', en: 'password' },
+            { zh: '檔案', en: 'file' }, { zh: '資料夾', en: 'folder' },
+            { zh: '下載', en: 'download' }, { zh: '上傳', en: 'upload' },
+            { zh: '瀏覽器', en: 'browser' }, { zh: '伺服器', en: 'server' },
+            { zh: '記憶體', en: 'memory' }, { zh: '病毒', en: 'virus' },
+            { zh: '喇叭', en: 'speaker' }, { zh: '印表機', en: 'printer' },
+            { zh: '數據', en: 'data' }, { zh: '程式', en: 'program' },
+            { zh: '系統', en: 'system' }, { zh: '駭客', en: 'hacker' }
+        ];
+
+        let currentTarget = null;
+        let score = 0;
+        let timeLeft = 30;
+        let timerId = null;
+        let combo = 0;
+        let maxCombo = 0;
+        let correctCount = 0;
+        let isFever = false;
+        let feverTimer = null;
+        let audioCtx = null;
+
+        // --- 新增等級系統變數 ---
+        let level = 1;
+        let xp = 0;
+        let xpToNextLevel = 100;
+
+        const screens = {
+            start: document.getElementById('start-screen'),
+            game: document.getElementById('game-screen'),
+            end: document.getElementById('end-screen')
+        };
+        const els = {
+            mainContainer: document.getElementById('main-container'),
+            targetWord: document.getElementById('target-word'),
+            input: document.getElementById('word-input'),
+            wordBank: document.getElementById('word-bank'),
+            score: document.getElementById('score'),
+            timer: document.getElementById('timer'),
+            levelDisplay: document.getElementById('level-display'),
+            xpBar: document.getElementById('xp-bar'),
+            comboContainer: document.getElementById('combo-container'),
+            comboCount: document.getElementById('combo-count'),
+            comboBadge: document.getElementById('combo-badge'),
+            feverBar: document.getElementById('fever-bar'),
+            feverText: document.getElementById('fever-text'),
+            normalText: document.getElementById('normal-text'),
+            avatar: document.getElementById('avatar'),
+            finalScore: document.getElementById('final-score'),
+            finalLevel: document.getElementById('final-level'),
+            finalMaxCombo: document.getElementById('max-combo')
+        };
+
+        function initAudioAndStart() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            startGame();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            if (type === 'correct') {
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                gainNode.gain.setValueAtTime(0.1, now);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'levelup') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.setValueAtTime(500, now + 0.1);
+                osc.frequency.setValueAtTime(600, now + 0.2);
+                gainNode.gain.setValueAtTime(0.1, now);
+                osc.start(now); osc.stop(now + 0.4);
+            } else if (type === 'wrong') {
+                osc.frequency.setValueAtTime(150, now);
+                gainNode.gain.setValueAtTime(0.1, now);
+                osc.start(now); osc.stop(now + 0.2);
+            }
+        }
+
+        function startGame() {
+            screens.start.classList.add('hidden');
+            screens.game.classList.remove('hidden');
+            score = 0; timeLeft = 30; combo = 0; maxCombo = 0; level = 1; xp = 0; xpToNextLevel = 100;
+            updateUI();
+            nextWord();
+            timerId = setInterval(() => {
+                timeLeft--;
+                els.timer.innerText = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+        }
+
+        function nextWord() {
+            currentTarget = vocabulary[Math.floor(Math.random() * vocabulary.length)];
+            els.targetWord.innerText = currentTarget.zh;
+            els.input.value = '';
+            generateWordBank();
+        }
+
+        function generateWordBank() {
+            els.wordBank.innerHTML = '';
+            let options = [currentTarget, ...vocabulary.filter(v => v !== currentTarget).sort(() => 0.5 - Math.random()).slice(0, 4)].sort(() => 0.5 - Math.random());
+            options.forEach(item => {
+                const span = document.createElement('span');
+                span.className = `word-tag px-4 py-2 bg-slate-700 rounded-lg text-lg font-mono uppercase`;
+                span.innerText = item.en;
+                els.wordBank.appendChild(span);
+            });
+        }
+
+        els.input.addEventListener('input', (e) => {
+            if (e.target.value.trim().toLowerCase() === currentTarget.en) {
+                handleCorrect();
+            }
+        });
+
+        function handleCorrect() {
+            playSound('correct');
+            correctCount++; combo++;
+            if (combo > maxCombo) maxCombo = combo;
+
+            // 等級影響：等級越高，加時越少 (最低加 1 秒)
+            const bonus = Math.max(1, (isFever ? 3 : 2) - Math.floor(level / 5));
+            timeLeft += bonus;
+            
+            // 經驗值獲取 (連擊越多 XP 越多)
+            const gainedXP = 20 + (combo * 2);
+            gainXP(gainedXP);
+
+            // 分數計算
+            score += (10 + combo) * level; 
+            
+            if (combo % 5 === 0) activateFever();
+            updateUI();
+            nextWord();
+        }
+
+        function gainXP(amount) {
+            xp += amount;
+            if (xp >= xpToNextLevel) {
+                levelUp();
+            }
+            updateXPBar();
+        }
+
+        function levelUp() {
+            level++;
+            xp = 0;
+            xpToNextLevel = level * 100 + 50;
+            playSound('levelup');
+            
+            // 升級視覺特效
+            els.mainContainer.classList.add('level-up-flash');
+            setTimeout(() => els.mainContainer.classList.remove('level-up-flash'), 500);
+            
+            showFloatingText("LEVEL UP!", "text-yellow-400 text-4xl", els.targetWord);
+            els.levelDisplay.innerText = level;
+            
+            // 獎勵時間
+            timeLeft += 5;
+        }
+
+        function updateXPBar() {
+            const percent = (xp / xpToNextLevel) * 100;
+            els.xpBar.style.width = `${percent}%`;
+        }
+
+        function updateUI() {
+            els.score.innerText = score;
+            els.timer.innerText = timeLeft;
+            els.levelDisplay.innerText = level;
+            if (combo >= 2) {
+                els.comboContainer.classList.remove('hidden');
+                els.comboCount.innerText = combo;
+            } else {
+                els.comboContainer.classList.add('hidden');
+            }
+            updateXPBar();
+            const feverProgress = (combo % 5) / 5 * 100;
+            els.feverBar.style.width = isFever ? '100%' : `${feverProgress}%`;
+        }
+
+        function activateFever() {
+            isFever = true;
+            els.mainContainer.classList.add('fever-mode');
+            els.feverText.classList.remove('hidden');
+            els.normalText.classList.add('hidden');
+            clearTimeout(feverTimer);
+            feverTimer = setTimeout(() => {
+                isFever = false;
+                els.mainContainer.classList.remove('fever-mode');
+                els.feverText.classList.add('hidden');
+                els.normalText.classList.remove('hidden');
+                updateUI();
+            }, 8000);
+        }
+
+        function showFloatingText(text, color, container) {
+            const el = document.createElement('div');
+            el.className = `floating-text ${color}`;
+            el.innerText = text;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function endGame() {
+            clearInterval(timerId);
+            screens.game.classList.add('hidden');
+            screens.end.classList.remove('hidden');
+            els.finalScore.innerText = score;
+            els.finalLevel.innerText = level;
+            els.finalMaxCombo.innerText = maxCombo;
+        }
+
+        function resetGame() {
+            screens.end.classList.add('hidden');
+            startGame();
+        }
+    </script>
+</body>
+</html>

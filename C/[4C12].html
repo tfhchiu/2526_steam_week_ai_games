@@ -1,0 +1,946 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Wrench, Zap, Settings2, CircleDot, Wind, 
+  Coins, Play, Home, ShoppingCart, Shield, Flame
+} from 'lucide-react';
+
+// ==========================================
+// 1. 核心資料定義 (Data Definitions)
+// ==========================================
+
+const VOCAB_LIST = [
+  { en: "Keyboard", zh: "鍵盤" }, { en: "Mouse", zh: "滑鼠" }, { en: "Monitor", zh: "顯示器" },
+  { en: "Hardware", zh: "硬體" }, { en: "Software", zh: "軟體" }, { en: "Internet", zh: "網際網路" },
+  { en: "Browser", zh: "瀏覽器" }, { en: "Network", zh: "網路" }, { en: "Password", zh: "密碼" },
+  { en: "Download", zh: "下載" }, { en: "Upload", zh: "上傳" }, { en: "Server", zh: "伺服器" },
+  { en: "Database", zh: "資料庫" }, { en: "Virus", zh: "病毒" }, { en: "File", zh: "檔案" },
+  { en: "Folder", zh: "資料夾" }, { en: "Printer", zh: "印表機" }, { en: "Screen", zh: "螢幕" },
+  { en: "Memory", zh: "記憶體" }, { en: "Router", zh: "路由器" }
+];
+
+const CAR_TYPES = ['普通轎車', '運動跑車', '超級跑車', '重型卡車', '廂式貨車'];
+
+// 程式化生成 50 輛車 (價格已調降為原價的 40%)
+const CARS_DB = Array.from({ length: 50 }, (_, i) => {
+  const typeIdx = i % 5;
+  const type = CAR_TYPES[typeIdx];
+  const tier = Math.floor(i / 10) + 1;
+  
+  const basePrice = i === 0 ? 0 : Math.floor((1000 * Math.pow(1.15, i)) * 0.4);
+  
+  let speed = 20 + (i * 1.2);
+  let handling = 30 + (i * 0.8);
+  let durability = 10 + (i * 0.5);
+  
+  if (type === '重型卡車' || type === '廂式貨車') {
+    speed *= 0.8;
+    handling *= 0.7;
+    durability += 30;
+  } else if (type === '超級跑車') {
+    speed *= 1.3;
+    handling *= 1.2;
+    durability *= 0.8;
+  } else if (type === '運動跑車') {
+    speed *= 1.1;
+    handling *= 1.1;
+  }
+
+  return {
+    id: i,
+    name: `${type} T${tier}-V${(i % 10) + 1}`,
+    type: type,
+    basePrice: basePrice,
+    defaultColor: `hsl(${(i * 47) % 360}, 80%, 50%)`,
+    baseStats: {
+      speed: Math.min(Math.floor(speed), 85),
+      handling: Math.min(Math.floor(handling), 85),
+      durability: Math.min(Math.floor(durability), 85)
+    }
+  };
+});
+
+// 加入氮氣系統升級
+const UPGRADES = {
+  engine: { id: 'engine', name: 'V8 引擎', icon: Zap, baseCost: 320, costMult: 1.5, maxLvl: 5, boost: { speed: 5 } },
+  tires: { id: 'tires', name: '熱熔胎', icon: CircleDot, baseCost: 200, costMult: 1.4, maxLvl: 5, boost: { handling: 6 } },
+  suspension: { id: 'suspension', name: '運動懸吊', icon: Settings2, baseCost: 280, costMult: 1.5, maxLvl: 4, boost: { handling: 4, speed: 2 } },
+  armor: { id: 'armor', name: '防撞裝甲', icon: Shield, baseCost: 400, costMult: 1.6, maxLvl: 5, boost: { durability: 8 } },
+  turbo: { id: 'turbo', name: '雙渦輪增壓', icon: Wind, baseCost: 800, costMult: 1.8, maxLvl: 3, boost: { speed: 10 } },
+  nitrous: { id: 'nitrous', name: '大容量氮氣', icon: Flame, baseCost: 500, costMult: 1.6, maxLvl: 4, boost: { nitrousCap: 25 } }
+};
+
+const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#1f2937', '#f8fafc'];
+
+const getCarStats = (carId, invData) => {
+  const base = CARS_DB[carId].baseStats;
+  const myCar = invData[carId];
+  if (!myCar) return { ...base, nitrousCap: 100 };
+
+  let finalStats = { ...base, nitrousCap: 0 };
+  Object.keys(UPGRADES).forEach(part => {
+    const level = myCar.upgrades[part] || 0;
+    const boost = UPGRADES[part].boost;
+    if (boost.speed) finalStats.speed += level * boost.speed;
+    if (boost.handling) finalStats.handling += level * boost.handling;
+    if (boost.durability) finalStats.durability += level * boost.durability;
+    if (boost.nitrousCap) finalStats.nitrousCap += level * boost.nitrousCap;
+  });
+
+  return {
+    speed: Math.min(finalStats.speed, 100),
+    handling: Math.min(finalStats.handling, 100),
+    durability: Math.min(finalStats.durability, 100),
+    nitrousCap: 100 + finalStats.nitrousCap
+  };
+};
+
+// ==========================================
+// 2. 視圖元件 (View Components)
+// ==========================================
+
+// 車庫中的車輛預覽圖 (SVG)
+const CarPreviewSVG = ({ type, color, hasTurbo }) => {
+  return (
+    <svg viewBox="0 0 100 200" className="w-full h-full drop-shadow-2xl">
+      {/* 陰影 */}
+      <rect x="15" y="15" width="70" height="170" fill="rgba(0,0,0,0.4)" rx="10"/>
+
+      {/* 輪胎 */}
+      <rect x="5" y="30" width="15" height="35" fill="#111827" rx="3"/>
+      <rect x="80" y="30" width="15" height="35" fill="#111827" rx="3"/>
+      <rect x="5" y="135" width="15" height="35" fill="#111827" rx="3"/>
+      <rect x="80" y="135" width="15" height="35" fill="#111827" rx="3"/>
+
+      {/* 根據車型繪製截然不同的車身外觀 */}
+      {type === '重型卡車' && (
+        <>
+          <rect x="15" y="50" width="70" height="140" fill={color} />
+          <rect x="20" y="10" width="60" height="40" fill="#94a3b8" rx="5" />
+          <line x1="25" y1="50" x2="75" y2="50" stroke="#1e293b" strokeWidth="3" />
+        </>
+      )}
+      {type === '廂式貨車' && (
+        <>
+          <rect x="15" y="10" width="70" height="180" fill={color} rx="5" />
+          <rect x="20" y="20" width="60" height="25" fill="#1e293b" rx="2" />
+        </>
+      )}
+      {type === '超級跑車' && (
+        <>
+          <polygon points="50,10 85,40 85,190 15,190 15,40" fill={color} />
+          <polygon points="50,25 75,60 25,60" fill="#1e293b" />
+        </>
+      )}
+      {type === '運動跑車' && (
+        <>
+          <rect x="15" y="10" width="70" height="180" fill={color} rx="20" />
+          <rect x="5" y="170" width="90" height="10" fill="#111827" /> {/* 運動尾翼 */}
+          <rect x="25" y="45" width="50" height="35" fill="#1e293b" rx="5" />
+        </>
+      )}
+      {type === '普通轎車' && (
+        <>
+          <rect x="15" y="10" width="70" height="180" fill={color} rx="15" />
+          <rect x="25" y="45" width="50" height="40" fill="#1e293b" rx="5" />
+        </>
+      )}
+
+      {/* 車頭燈 */}
+      {type === '超級跑車' ? (
+        <>
+          <rect x="35" y="20" width="8" height="4" fill="#fde047" rx="1" transform="rotate(-15 35 20)"/>
+          <rect x="57" y="20" width="8" height="4" fill="#fde047" rx="1" transform="rotate(15 57 20)"/>
+        </>
+      ) : (
+        <>
+          <rect x="20" y="12" width="15" height="8" fill="#fde047" rx="2"/>
+          <rect x="65" y="12" width="15" height="8" fill="#fde047" rx="2"/>
+        </>
+      )}
+
+      {/* 渦輪排氣管 */}
+      {hasTurbo && (
+        <>
+          <rect x="25" y="190" width="8" height="10" fill="#334155" />
+          <rect x="67" y="190" width="8" height="10" fill="#334155" />
+        </>
+      )}
+    </svg>
+  );
+};
+
+const MainMenu = ({ setGameState, money }) => (
+  <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-6 relative overflow-hidden">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/40 via-slate-900 to-slate-900"></div>
+    
+    <div className="z-10 text-center mb-12">
+      <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-blue-600 mb-4 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+        VOCAB RACING
+      </h1>
+      <p className="text-xl text-cyan-200 tracking-widest font-bold">電腦詞彙極速傳說</p>
+      
+      <div className="mt-8 bg-slate-800/80 p-5 rounded-2xl border border-slate-600 max-w-lg mx-auto backdrop-blur-md shadow-2xl text-left">
+        <h3 className="text-yellow-400 font-bold mb-3 flex items-center justify-center gap-2 text-lg">
+          <Play size={20} /> 新手指南
+        </h3>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base space-y-2">
+          <span className="block">🏎️ <strong>控制賽車：</strong>使用 <kbd className="bg-slate-700 px-1.5 py-0.5 rounded text-white border border-slate-500">A</kbd> / <kbd className="bg-slate-700 px-1.5 py-0.5 rounded text-white border border-slate-500">D</kbd> 鍵，或點擊螢幕左右車道切換路線。</span>
+          <span className="block">🔥 <strong>氮氣加速：</strong>長按 <kbd className="bg-slate-700 px-1.5 py-0.5 rounded text-white border border-slate-500">Space</kbd> 或點擊畫面右下角按鈕，消耗氮氣極速衝刺！</span>
+          <span className="block">🎯 <strong>得分方式：</strong>觀察上方指示的「中文詞彙」，撞擊對應「英文翻譯」的方塊。</span>
+          <span className="block">⏱️ <strong>賽事規則：</strong>每局限時 3 分鐘，時間到或生命耗盡即結算獎金！</span>
+        </p>
+      </div>
+    </div>
+
+    <div className="z-10 flex gap-6 w-full max-w-md">
+      <button 
+        onClick={() => setGameState('playing')}
+        className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white py-4 rounded-2xl font-bold text-xl flex flex-col items-center gap-2 transition-transform hover:scale-105 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+      >
+        <Play size={32} /> 開始比賽
+      </button>
+      <button 
+        onClick={() => setGameState('garage')}
+        className="flex-1 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 border border-slate-600 text-white py-4 rounded-2xl font-bold text-xl flex flex-col items-center gap-2 transition-transform hover:scale-105 shadow-xl"
+      >
+        <Wrench size={32} /> 終極車庫
+      </button>
+    </div>
+
+    <div className="z-10 absolute top-6 right-6 bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700 flex items-center gap-2 backdrop-blur-sm">
+      <Coins className="text-yellow-400" size={20} />
+      <span className="font-bold font-mono text-yellow-400 text-xl">{money.toLocaleString()}</span>
+    </div>
+  </div>
+);
+
+const StatBar = ({ label, value, color }) => (
+  <div className="mb-3">
+    <div className="flex justify-between text-xs mb-1 font-bold text-slate-300">
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+      <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${Math.min(value, 100)}%` }} />
+    </div>
+  </div>
+);
+
+const Garage = ({ setGameState, money, setMoney, inventory, setInventory, activeCarId, setActiveCarId }) => {
+  const [viewCarId, setViewCarId] = useState(activeCarId);
+  
+  const carData = CARS_DB[viewCarId];
+  const myCar = inventory[viewCarId];
+  const isOwned = !!myCar;
+  const isActive = activeCarId === viewCarId;
+  const displayStats = getCarStats(viewCarId, inventory);
+
+  const handleBuyCar = () => {
+    if (money >= carData.basePrice) {
+      setMoney(m => m - carData.basePrice);
+      setInventory(prev => ({
+        ...prev,
+        [viewCarId]: {
+          color: carData.defaultColor,
+          upgrades: { engine: 0, tires: 0, suspension: 0, armor: 0, turbo: 0, nitrous: 0 }
+        }
+      }));
+    }
+  };
+
+  const handleUpgrade = (partId) => {
+    const part = UPGRADES[partId];
+    const currentLevel = myCar.upgrades[partId] || 0;
+    const cost = Math.floor(part.baseCost * Math.pow(part.costMult, currentLevel));
+    
+    if (money >= cost && currentLevel < part.maxLvl) {
+      setMoney(m => m - cost);
+      setInventory(prev => ({
+        ...prev,
+        [viewCarId]: {
+          ...prev[viewCarId],
+          upgrades: { ...prev[viewCarId].upgrades, [partId]: currentLevel + 1 }
+        }
+      }));
+    }
+  };
+
+  const changeColor = (color) => {
+    if (isOwned) {
+      setInventory(prev => ({
+        ...prev,
+        [viewCarId]: { ...prev[viewCarId], color: color }
+      }));
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white flex flex-col p-4 md:p-8">
+      <div className="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-lg">
+        <button onClick={() => setGameState('menu')} className="flex items-center gap-2 text-slate-300 hover:text-white bg-slate-700 px-4 py-2 rounded-lg transition-colors">
+          <Home size={20} /> <span className="hidden md:inline">返回主選單</span>
+        </button>
+        <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+          <Coins className="text-yellow-400" size={24} />
+          <span className="text-xl font-bold font-mono text-yellow-400">{money.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-slate-800 rounded-2xl border border-slate-700 flex flex-col overflow-hidden max-h-[70vh] lg:max-h-none">
+          <div className="p-4 bg-slate-900/50 border-b border-slate-700 font-bold text-lg flex justify-between items-center">
+            車輛展廳
+            <span className="text-sm font-normal text-slate-400">已擁有 {Object.keys(inventory).length}/50</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {CARS_DB.map(car => {
+              const owned = !!inventory[car.id];
+              return (
+                <button
+                  key={car.id}
+                  onClick={() => setViewCarId(car.id)}
+                  className={`w-full text-left p-3 rounded-xl border transition-all flex justify-between items-center ${
+                    viewCarId === car.id 
+                      ? 'bg-cyan-900/40 border-cyan-500' 
+                      : 'bg-slate-700/50 border-transparent hover:bg-slate-700'
+                  }`}
+                >
+                  <div>
+                    <div className={`font-bold ${owned ? 'text-white' : 'text-slate-400'}`}>{car.name}</div>
+                    <div className="text-xs text-slate-500">{car.type}</div>
+                  </div>
+                  {owned 
+                    ? <Shield size={16} className="text-emerald-400" /> 
+                    : <span className="text-xs font-bold text-yellow-500 flex items-center gap-1"><Coins size={12}/>{car.basePrice}</span>
+                  }
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 space-y-6 flex flex-col">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 relative overflow-hidden flex flex-col md:flex-row gap-6 items-center">
+            <div className="flex-1 w-full relative h-64 flex items-center justify-center">
+              <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent rounded-full blur-2xl" />
+              <div className="w-40 h-64 relative z-10 p-4">
+                <CarPreviewSVG 
+                  type={carData.type} 
+                  color={myCar ? myCar.color : carData.defaultColor} 
+                  hasTurbo={myCar && myCar.upgrades.turbo > 0} 
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 w-full space-y-4">
+              <div>
+                <h2 className="text-3xl font-black italic">{carData.name}</h2>
+                <p className="text-cyan-400 font-bold">{carData.type}</p>
+              </div>
+              
+              <div className="bg-slate-900/50 p-4 rounded-xl">
+                <StatBar label="極速 (Speed)" value={displayStats.speed} color="bg-blue-500" />
+                <StatBar label="操控 (Handling)" value={displayStats.handling} color="bg-emerald-500" />
+                <StatBar label="裝甲 (Durability)" value={displayStats.durability} color="bg-amber-500" />
+                <StatBar label="氮氣容量 (Nitrous)" value={displayStats.nitrousCap} color="bg-cyan-400" />
+              </div>
+
+              {!isOwned ? (
+                <button 
+                  onClick={handleBuyCar}
+                  disabled={money < carData.basePrice}
+                  className={`w-full py-3 rounded-xl font-bold text-lg flex justify-center items-center gap-2 transition-transform ${money >= carData.basePrice ? 'bg-yellow-600 hover:bg-yellow-500 text-white hover:scale-105 shadow-lg shadow-yellow-600/20' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                >
+                  <ShoppingCart size={20} />
+                  購買車輛 ({carData.basePrice})
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setActiveCarId(viewCarId)}
+                  disabled={isActive}
+                  className={`w-full py-3 rounded-xl font-bold text-lg transition-transform ${!isActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105 shadow-lg shadow-emerald-600/20' : 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'}`}
+                >
+                  {isActive ? '✅ 目前駕駛中' : '選擇此車出戰'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {isOwned && (
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 flex-1 overflow-y-auto">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
+                <Wrench className="text-cyan-400" /> 性能與外觀改裝
+              </h3>
+              
+              <div className="flex gap-3 mb-6 flex-wrap">
+                {COLORS.map(c => (
+                  <button 
+                    key={c} onClick={() => changeColor(c)}
+                    className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${myCar.color === c ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'border-slate-600'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.values(UPGRADES).map(part => {
+                  const level = myCar.upgrades[part.id] || 0;
+                  const isMax = level >= part.maxLvl;
+                  const cost = Math.floor(part.baseCost * Math.pow(part.costMult, level));
+                  const canAfford = money >= cost;
+                  const Icon = part.icon;
+
+                  return (
+                    <div key={part.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 flex flex-col justify-between">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className={`p-2 rounded-lg ${isMax ? 'bg-cyan-900/50 text-cyan-400' : 'bg-slate-800 text-slate-300'}`}>
+                          <Icon size={20} />
+                        </div>
+                        <div>
+                          <div className="font-bold flex items-center gap-2 text-sm">
+                            {part.name}
+                            <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Lv.{level}/{part.maxLvl}</span>
+                          </div>
+                          <div className="text-[11px] text-emerald-400 mt-1">
+                            {Object.entries(part.boost).map(([k,v]) => `+${v} ${k === 'speed'?'極速':k==='handling'?'操控':k==='durability'?'裝甲':k==='nitrousCap'?'容量':k}`).join(', ')}
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleUpgrade(part.id)}
+                        disabled={isMax || !canAfford}
+                        className={`w-full py-2 rounded-lg font-bold text-sm flex justify-center items-center gap-1 transition-colors ${
+                          isMax ? 'bg-slate-800 text-slate-600' :
+                          canAfford ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        {isMax ? 'MAX LEVEL' : <><Coins size={14}/> {cost}</>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const GameCanvas = ({ setGameState, setMoney, setLastGameResult, activeStats, myColor, activeCar }) => {
+  const canvasRef = useRef(null);
+  const [hud, setHud] = useState({ score: 0, lives: 3, targetWord: '', earned: 0, flash: '', level: 1, timeLeft: 180 });
+  
+  const engineRef = useRef({
+    isRunning: true,
+    score: 0,
+    lives: 3,
+    earned: 0,
+    level: 1,
+    timeLeft: 180,
+    lastReportedTime: 180,
+    speed: 4 + (activeStats.speed / 20),
+    roadOffset: 0,
+    car: { lane: 1, x: 0, targetX: 0, width: 60, height: 100, y: 0 },
+    blocks: null,
+    targetVocab: null,
+    laneWidth: 0,
+    width: 0,
+    height: 0,
+    lastTime: performance.now(),
+    handlingLerp: 0.1 + (activeStats.handling / 100) * 0.2,
+    keys: { space: false },
+    nitrous: { amount: activeStats.nitrousCap, max: activeStats.nitrousCap, active: false }
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const eng = engineRef.current;
+      if (e.key === 'ArrowLeft' || e.key === 'a') eng.car.lane = Math.max(0, eng.car.lane - 1);
+      if (e.key === 'ArrowRight' || e.key === 'd') eng.car.lane = Math.min(2, eng.car.lane + 1);
+      if (e.key === ' ') eng.keys.space = true;
+      eng.car.targetX = (eng.car.lane * eng.laneWidth) + (eng.laneWidth / 2) - (eng.car.width / 2);
+    };
+
+    const handleKeyUp = (e) => {
+      const eng = engineRef.current;
+      if (e.key === ' ') eng.keys.space = false;
+    };
+
+    const handleTouch = (e) => {
+      const eng = engineRef.current;
+      const touchX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = touchX - rect.left;
+      
+      if (x < eng.laneWidth) eng.car.lane = 0;
+      else if (x < eng.laneWidth * 2) eng.car.lane = 1;
+      else eng.car.lane = 2;
+      
+      eng.car.targetX = (eng.car.lane * eng.laneWidth) + (eng.laneWidth / 2) - (eng.car.width / 2);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    const cvs = canvasRef.current;
+    if(cvs) {
+      cvs.addEventListener('mousedown', handleTouch);
+      cvs.addEventListener('touchstart', handleTouch, { passive: false });
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      if(cvs) {
+        cvs.removeEventListener('mousedown', handleTouch);
+        cvs.removeEventListener('touchstart', handleTouch);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const eng = engineRef.current;
+
+    const resize = () => {
+      eng.width = Math.min(window.innerWidth, 600);
+      eng.height = window.innerHeight;
+      canvas.width = eng.width;
+      canvas.height = eng.height;
+      eng.laneWidth = eng.width / 3;
+      eng.car.y = eng.height - eng.car.height - 60;
+      eng.car.targetX = (eng.car.lane * eng.laneWidth) + (eng.laneWidth / 2) - (eng.car.width / 2);
+      if(eng.car.x === 0) eng.car.x = eng.car.targetX;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const generateQuestion = () => {
+      const targetIdx = Math.floor(Math.random() * VOCAB_LIST.length);
+      const target = VOCAB_LIST[targetIdx];
+      eng.targetVocab = target;
+      
+      let wrongs = [];
+      while(wrongs.length < 2) {
+        const r = VOCAB_LIST[Math.floor(Math.random() * VOCAB_LIST.length)];
+        if(r.en !== target.en && !wrongs.includes(r)) wrongs.push(r);
+      }
+
+      let arr = [
+        { vocab: target, correct: true },
+        { vocab: wrongs[0], correct: false },
+        { vocab: wrongs[1], correct: false }
+      ].sort(() => Math.random() - 0.5);
+
+      eng.blocks = { y: -100, h: 80, items: arr, passed: false };
+      updateHudUI();
+    };
+
+    const updateHudUI = (flashColor = '') => {
+      setHud({
+        score: eng.score,
+        lives: eng.lives,
+        targetWord: eng.targetVocab ? eng.targetVocab.zh : '',
+        earned: eng.earned,
+        flash: flashColor,
+        level: eng.level,
+        timeLeft: Math.ceil(eng.timeLeft)
+      });
+      if(flashColor) setTimeout(() => setHud(prev => ({...prev, flash: ''})), 300);
+    };
+
+    generateQuestion();
+
+    let animationFrameId;
+
+    const drawCar = () => {
+      eng.car.x += (eng.car.targetX - eng.car.x) * eng.handlingLerp;
+      const cx = eng.car.x;
+      const cy = eng.car.y;
+      const cw = eng.car.width;
+      const ch = eng.car.height;
+      const type = activeCar.type;
+
+      ctx.save();
+      // 陰影
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(cx+5, cy+5, cw, ch);
+      
+      // 輪胎
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(cx - 4, cy + 15, 8, 20);
+      ctx.fillRect(cx + cw - 4, cy + 15, 8, 20);
+      ctx.fillRect(cx - 4, cy + ch - 35, 8, 20);
+      ctx.fillRect(cx + cw - 4, cy + ch - 35, 8, 20);
+
+      // 根據車型繪製截然不同的車身
+      ctx.fillStyle = myColor;
+      
+      if (type === '重型卡車') {
+         ctx.fillRect(cx, cy + 25, cw, ch - 25); // 車斗
+         ctx.fillStyle = '#94a3b8'; // 獨立車頭
+         ctx.fillRect(cx + 4, cy - 5, cw - 8, 25);
+         ctx.fillStyle = '#1e293b'; // 連結處
+         ctx.fillRect(cx + cw/2 - 4, cy + 20, 8, 5);
+      } else if (type === '廂式貨車') {
+         ctx.beginPath();
+         ctx.roundRect(cx, cy, cw, ch, 4); // 方正
+         ctx.fill();
+         ctx.fillStyle = '#1e293b';
+         ctx.fillRect(cx + 4, cy + 5, cw - 8, 15); // 擋風玻璃
+      } else if (type === '超級跑車') {
+         ctx.beginPath(); // 尖銳多邊形
+         ctx.moveTo(cx + cw/2, cy); 
+         ctx.lineTo(cx + cw, cy + 20);
+         ctx.lineTo(cx + cw, cy + ch);
+         ctx.lineTo(cx, cy + ch);
+         ctx.lineTo(cx, cy + 20);
+         ctx.closePath();
+         ctx.fill();
+         ctx.fillStyle = '#1e293b'; // 獨特擋風玻璃
+         ctx.beginPath();
+         ctx.moveTo(cx + cw/2, cy + 15);
+         ctx.lineTo(cx + cw - 10, cy + 40);
+         ctx.lineTo(cx + 10, cy + 40);
+         ctx.closePath();
+         ctx.fill();
+      } else if (type === '運動跑車') {
+         ctx.beginPath();
+         ctx.roundRect(cx, cy, cw, ch, 10);
+         ctx.fill();
+         ctx.fillStyle = '#111827'; // 黑色尾翼
+         ctx.fillRect(cx - 5, cy + ch - 10, cw + 10, 5); 
+         ctx.fillStyle = '#1e293b';
+         ctx.beginPath();
+         ctx.roundRect(cx + 8, cy + 25, cw - 16, ch * 0.25, 4);
+         ctx.fill();
+      } else {
+         // 普通轎車
+         ctx.beginPath();
+         ctx.roundRect(cx, cy, cw, ch, 8);
+         ctx.fill();
+         ctx.fillStyle = '#1e293b';
+         ctx.beginPath();
+         ctx.roundRect(cx + 6, cy + 20, cw - 12, ch * 0.25, 4);
+         ctx.fill();
+      }
+
+      // 車頭燈
+      ctx.fillStyle = '#fde047';
+      if (type === '超級跑車') {
+         ctx.fillRect(cx + 10, cy + 15, 8, 4);
+         ctx.fillRect(cx + cw - 18, cy + 15, 8, 4);
+      } else if (type === '重型卡車') {
+         ctx.fillRect(cx + 6, cy - 2, 10, 6);
+         ctx.fillRect(cx + cw - 16, cy - 2, 10, 6);
+      } else {
+         ctx.fillRect(cx + 5, cy + 2, 10, 6);
+         ctx.fillRect(cx + cw - 15, cy + 2, 10, 6);
+      }
+
+      // 氮氣尾焰視覺特效
+      if (eng.nitrous.active) {
+         ctx.fillStyle = '#38bdf8'; 
+         ctx.beginPath();
+         ctx.moveTo(cx + cw/2 - 15, cy + ch);
+         ctx.lineTo(cx + cw/2 + 15, cy + ch);
+         ctx.lineTo(cx + cw/2, cy + ch + 30 + Math.random()*30);
+         ctx.closePath();
+         ctx.fill();
+         
+         ctx.fillStyle = '#fde047'; 
+         ctx.beginPath();
+         ctx.moveTo(cx + cw/2 - 8, cy + ch);
+         ctx.lineTo(cx + cw/2 + 8, cy + ch);
+         ctx.lineTo(cx + cw/2, cy + ch + 15 + Math.random()*15);
+         ctx.closePath();
+         ctx.fill();
+      }
+
+      ctx.restore();
+    };
+
+    const drawNitrousBar = () => {
+      const nX = eng.width - 25;
+      const nY = eng.height / 2 - 100;
+      const nW = 12;
+      const nH = 200;
+      const nRatio = Math.max(0, eng.nitrous.amount / eng.nitrous.max);
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.fillRect(nX, nY, nW, nH);
+
+      const gradient = ctx.createLinearGradient(0, nY + nH, 0, nY);
+      gradient.addColorStop(0, '#0284c7');
+      gradient.addColorStop(1, '#38bdf8');
+      
+      ctx.fillStyle = eng.nitrous.active ? '#fde047' : gradient;
+      ctx.fillRect(nX, nY + nH * (1 - nRatio), nW, nH * nRatio);
+
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(nX, nY, nW, nH);
+    };
+
+    const loop = (timestamp) => {
+      if (!eng.isRunning) return;
+      const dt = timestamp - eng.lastTime;
+      eng.lastTime = timestamp;
+      const dtSec = dt / 1000;
+
+      // 更新時間
+      eng.timeLeft -= dtSec;
+      if (Math.ceil(eng.timeLeft) !== eng.lastReportedTime && eng.timeLeft > 0) {
+        eng.lastReportedTime = Math.ceil(eng.timeLeft);
+        updateHudUI();
+      }
+
+      // 氮氣邏輯更新
+      if (eng.keys.space && eng.nitrous.amount > 0) {
+        eng.nitrous.active = true;
+        eng.nitrous.amount -= dtSec * 45; // 消耗率
+      } else {
+        eng.nitrous.active = false;
+        eng.nitrous.amount = Math.min(eng.nitrous.max, eng.nitrous.amount + dtSec * 8); // 回充率
+      }
+
+      // 實際速度套用氮氣加成 (2倍速)
+      const actualSpeed = eng.speed * (eng.nitrous.active ? 2.0 : 1.0);
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, eng.width, eng.height);
+
+      eng.roadOffset = (eng.roadOffset + actualSpeed) % 40;
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([20, 20]);
+      for(let i=1; i<=2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * eng.laneWidth, -40 + eng.roadOffset);
+        ctx.lineTo(i * eng.laneWidth, eng.height);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      if (eng.blocks) {
+        eng.blocks.y += actualSpeed;
+
+        if (!eng.blocks.passed && eng.blocks.y + eng.blocks.h > eng.car.y && eng.blocks.y < eng.car.y + eng.car.height) {
+          const hitItem = eng.blocks.items[eng.car.lane];
+          if (hitItem.correct) {
+            // 開啟氮氣時得分也加倍
+            const multi = eng.nitrous.active ? 2 : 1;
+            eng.score += Math.floor(10 + (activeStats.speed * 0.2)) * multi;
+            eng.earned += Math.floor(5 + (activeStats.speed * 0.1)) * multi;
+            eng.level += 1;
+            eng.speed = Math.min(25, eng.speed + 0.5);
+            // 答對瞬間恢復大量氮氣
+            eng.nitrous.amount = Math.min(eng.nitrous.max, eng.nitrous.amount + 25);
+            updateHudUI('rgba(16, 185, 129, 0.3)'); 
+          } else {
+            const saveChance = (activeStats.durability / 100) * 0.5;
+            if (Math.random() < saveChance) {
+              updateHudUI('rgba(56, 189, 248, 0.4)'); 
+            } else {
+              eng.lives -= 1;
+              eng.level = Math.max(1, eng.level - 1);
+              eng.speed = Math.max(4 + (activeStats.speed / 20), eng.speed - 0.5);
+              updateHudUI('rgba(239, 68, 68, 0.4)'); 
+            }
+          }
+          eng.blocks.passed = true;
+        }
+
+        for(let i=0; i<3; i++) {
+          const bx = i * eng.laneWidth;
+          const by = eng.blocks.y;
+          const item = eng.blocks.items[i];
+          
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.roundRect(bx + 10, by, eng.laneWidth - 20, eng.blocks.h, 10);
+          ctx.fill();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `bold ${eng.laneWidth < 120 ? 14 : 18}px sans-serif`;
+          ctx.fillText(item.vocab.en, bx + eng.laneWidth/2, by + eng.blocks.h/2);
+        }
+
+        if (eng.blocks.y > eng.height) {
+          if(!eng.blocks.passed) {
+             eng.lives -= 1;
+             updateHudUI('rgba(239, 68, 68, 0.4)');
+          }
+          if (eng.lives > 0) generateQuestion();
+        }
+      }
+
+      drawCar();
+      drawNitrousBar();
+
+      if (eng.lives <= 0 || eng.timeLeft <= 0) {
+        eng.isRunning = false;
+        setMoney(m => m + eng.earned);
+        setLastGameResult({ score: eng.score, earned: eng.earned, timeout: eng.timeLeft <= 0 });
+        setGameState('gameover');
+        return;
+      }
+
+      animationFrameId = requestAnimationFrame(loop);
+    };
+
+    animationFrameId = requestAnimationFrame(loop);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationFrameId);
+      eng.isRunning = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="relative w-full h-screen bg-slate-900 overflow-hidden flex justify-center">
+      <canvas ref={canvasRef} className="block shadow-[0_0_30px_rgba(0,0,0,0.8)]" />
+      <div className="absolute inset-0 pointer-events-none transition-colors duration-100" style={{ backgroundColor: hud.flash || 'transparent' }}></div>
+
+      <div className="absolute top-0 w-full max-w-[600px] p-4 flex justify-between items-start pointer-events-none z-10">
+        <div className="flex flex-col gap-2">
+          <div className="bg-slate-800/90 border border-slate-600 px-4 py-2 rounded-xl backdrop-blur-sm">
+            <div className="text-xs text-slate-400 font-bold mb-1">分數 SCORE</div>
+            <div className="text-2xl font-black text-white">{hud.score}</div>
+          </div>
+          <div className="flex gap-2">
+            <div className="bg-yellow-900/80 border border-yellow-600 px-3 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1">
+              <Coins size={14} className="text-yellow-400" />
+              <div className="text-sm font-bold text-yellow-400">+{hud.earned}</div>
+            </div>
+            <div className="bg-purple-900/80 border border-purple-600 px-3 py-1 rounded-lg backdrop-blur-sm flex items-center gap-1">
+              <Zap size={14} className="text-purple-400" />
+              <div className="text-sm font-bold text-purple-400">Lv.{hud.level}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-blue-900/90 border-2 border-blue-400 px-6 py-3 rounded-2xl text-center transform scale-105 shadow-lg backdrop-blur-sm">
+          <div className="text-xs text-blue-300 font-bold mb-1 tracking-wider">尋找目標</div>
+          <div className="text-2xl font-black text-white">{hud.targetWord}</div>
+        </div>
+
+        <div className="flex flex-col gap-2 items-end">
+          <div className="bg-slate-800/90 border border-slate-600 px-4 py-2 rounded-xl backdrop-blur-sm text-right">
+            <div className="text-xs text-slate-400 font-bold mb-1">生命 LIVES</div>
+            <div className="text-xl font-black text-red-500 tracking-widest">
+              {Array.from({ length: hud.lives }).map((_, i) => <span key={i}>❤️</span>)}
+              {hud.lives === 0 && '💀'}
+            </div>
+          </div>
+          <div className="bg-slate-800/90 border border-slate-600 px-4 py-2 rounded-xl backdrop-blur-sm text-right min-w-[100px]">
+             <div className="text-xs text-slate-400 font-bold mb-1">時間 TIME</div>
+             <div className={`text-xl font-black ${hud.timeLeft <= 30 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+               {Math.floor(Math.max(0, hud.timeLeft) / 60)}:{(Math.max(0, hud.timeLeft) % 60).toString().padStart(2, '0')}
+             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 手機版專用氮氣按鈕 */}
+      <div className="absolute bottom-10 right-10 z-20 md:hidden pointer-events-auto">
+        <button
+          onTouchStart={(e) => { e.preventDefault(); engineRef.current.keys.space = true; }}
+          onTouchEnd={(e) => { e.preventDefault(); engineRef.current.keys.space = false; }}
+          onMouseDown={(e) => { engineRef.current.keys.space = true; }}
+          onMouseUp={(e) => { engineRef.current.keys.space = false; }}
+          onMouseLeave={(e) => { engineRef.current.keys.space = false; }}
+          className="bg-cyan-500/80 active:bg-yellow-400 p-4 rounded-full border-2 border-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)] backdrop-blur-md transition-colors"
+        >
+          <Flame size={32} className="text-white" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// 補齊的結算畫面元件
+const GameOver = ({ setGameState, lastGameResult }) => (
+  <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900/95 text-white p-6 absolute inset-0 z-50 backdrop-blur-md">
+    <h2 className="text-6xl font-black text-red-500 mb-2 drop-shadow-[0_0_20px_rgba(239,68,68,0.8)]">
+      {lastGameResult.timeout ? 'TIME IS UP' : 'GAME OVER'}
+    </h2>
+    <p className="text-xl text-slate-400 mb-8">{lastGameResult.timeout ? '時間到！結算賽事成績' : '車輛受損，比賽結束'}</p>
+    
+    <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl w-full max-w-sm mb-8 text-center">
+      <div className="text-slate-400 font-bold mb-2">最終得分</div>
+      <div className="text-5xl font-black text-white mb-6">{lastGameResult.score}</div>
+
+      <div className="text-slate-400 font-bold mb-2">獲得獎金</div>
+      <div className="text-4xl font-black text-yellow-400 flex items-center justify-center gap-2">
+        <Coins size={32} /> +{lastGameResult.earned}
+      </div>
+    </div>
+
+    <div className="flex gap-4">
+      <button 
+        onClick={() => setGameState('playing')}
+        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-xl transition-transform hover:scale-105 shadow-lg"
+      >
+        再來一局
+      </button>
+      <button 
+        onClick={() => setGameState('menu')}
+        className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-4 rounded-xl font-bold text-xl transition-transform hover:scale-105 shadow-lg"
+      >
+        回主選單
+      </button>
+    </div>
+  </div>
+);
+
+// 主程式進入點
+export default function App() {
+  const [gameState, setGameState] = useState('menu'); // menu, playing, garage, gameover
+  const [money, setMoney] = useState(50000); 
+  const [inventory, setInventory] = useState({
+    0: { color: CARS_DB[0].defaultColor, upgrades: { engine: 0, tires: 0, suspension: 0, armor: 0, turbo: 0, nitrous: 0 } }
+  });
+  const [activeCarId, setActiveCarId] = useState(0);
+  const [lastGameResult, setLastGameResult] = useState({ score: 0, earned: 0, timeout: false });
+
+  const activeStats = getCarStats(activeCarId, inventory);
+  const myColor = inventory[activeCarId]?.color || CARS_DB[activeCarId].defaultColor;
+  const activeCar = CARS_DB[activeCarId];
+
+  return (
+    <div className="w-full min-h-screen bg-black select-none">
+      {gameState === 'menu' && <MainMenu setGameState={setGameState} money={money} />}
+      {gameState === 'garage' && (
+        <Garage 
+          setGameState={setGameState} 
+          money={money} setMoney={setMoney}
+          inventory={inventory} setInventory={setInventory}
+          activeCarId={activeCarId} setActiveCarId={setActiveCarId}
+        />
+      )}
+      {gameState === 'playing' && (
+        <GameCanvas 
+          setGameState={setGameState} 
+          setMoney={setMoney} 
+          setLastGameResult={setLastGameResult}
+          activeStats={activeStats}
+          myColor={myColor}
+          activeCar={activeCar}
+        />
+      )}
+      {gameState === 'gameover' && (
+        <GameOver setGameState={setGameState} lastGameResult={lastGameResult} />
+      )}
+    </div>
+  );
+}

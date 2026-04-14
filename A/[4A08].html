@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寶可夢 vs 殭屍 - 進化冒險</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Arial', sans-serif;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d);
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        
+        /* 狀態欄樣式 */
+        .hp-bar-container {
+            width: 200px;
+            height: 12px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        .hp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff416c, #ff4b2b);
+            transition: width 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        .energy-bar-container {
+            width: 160px;
+            height: 8px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        .energy-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3a7bd5, #00d2ff);
+            transition: width 0.3s ease-out;
+        }
+
+        /* 載入畫面樣式 */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+        .loader-ball {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ff0000 50%, #ffffff 50%);
+            border: 4px solid #000;
+            border-radius: 50%;
+            position: relative;
+            animation: spin 1s linear infinite;
+        }
+        .loader-ball::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 15px; height: 15px;
+            background: #fff;
+            border: 3px solid #000;
+            border-radius: 50%;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .overlay {
+            background: radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,1) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            position: absolute;
+            inset: 0;
+            padding: 20px;
+        }
+        .pokemon-card, .diff-card {
+            background: rgba(255,255,255,0.05);
+            border: 2px solid #444;
+            border-radius: 20px;
+            padding: 24px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            pointer-events: auto;
+            text-align: center;
+        }
+        .pokemon-card:hover, .diff-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.1);
+            border-color: #ffd700;
+        }
+        .selected {
+            border-color: #ffd700 !important;
+            background: rgba(255, 215, 0, 0.15) !important;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+        .key-cap {
+            background: linear-gradient(180deg, #444, #222);
+            border: 1px solid #666;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #fff;
+            box-shadow: 0 3px 0 #111;
+        }
+        .floating {
+            animation: floating 4s ease-in-out infinite;
+        }
+        @keyframes floating {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 全局載入畫面 -->
+<div id="loading-screen">
+    <div class="loader-ball mb-6"></div>
+    <h2 id="loading-text" class="text-white font-bold tracking-widest text-xl animate-pulse">正在連接寶可夢世界...</h2>
+    <div class="w-64 h-1 bg-zinc-800 rounded-full mt-4 overflow-hidden">
+        <div id="loading-bar" class="h-full bg-yellow-400 w-0 transition-all duration-300"></div>
+    </div>
+</div>
+
+<div id="ui-layer">
+    <!-- 遊戲標題 -->
+    <div class="flex justify-end p-6 w-full">
+        <div class="text-right">
+            <h1 class="text-white text-4xl font-black italic drop-shadow-2xl opacity-80">POKEMON <span class="text-green-500">Z</span></h1>
+        </div>
+    </div>
+
+    <!-- 左上角狀態欄 -->
+    <div id="game-stats" class="absolute top-6 left-6 flex flex-col items-start opacity-0 transition-all duration-500 -translate-x-10">
+        <div class="bg-black/40 p-4 rounded-2xl backdrop-blur-md border border-white/10 shadow-xl flex items-center gap-4">
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                    <span class="text-red-500 font-black text-[10px] uppercase">HP</span>
+                    <div class="hp-bar-container">
+                        <div id="hp-fill" class="hp-bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-blue-400 font-black text-[10px] uppercase">MP</span>
+                    <div class="energy-bar-container">
+                        <div id="energy-fill" class="energy-bar-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="border-l border-white/20 pl-4 flex flex-col justify-center">
+                <span id="hp-text" class="text-white font-black text-sm italic leading-none">1000 / 1000</span>
+                <span id="energy-text" class="text-blue-300 font-bold text-[10px] mt-1 uppercase">0% READY</span>
+            </div>
+        </div>
+        
+        <div class="mt-2 flex items-center gap-3">
+            <div class="px-3 py-1 bg-black/60 rounded-lg border border-white/10 shadow-md">
+                <span id="level-display" class="text-yellow-400 font-bold text-[10px] tracking-widest uppercase">LEVEL 1</span>
+            </div>
+            <div class="px-3 py-1 bg-black/60 rounded-lg border border-white/10 shadow-md">
+                <span id="kill-display" class="text-white text-[10px] font-medium">KILLS: 0 / 25</span>
+            </div>
+            <div class="pointer-events-auto ml-2">
+                <button id="exit-btn" class="bg-red-600/80 hover:bg-red-600 text-white font-bold py-1 px-4 rounded text-[10px] transition-all hidden">退出</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 主選單 -->
+<div id="start-screen" class="overlay">
+    <div class="mb-16 text-center">
+        <div class="flex justify-center gap-4 items-end mb-4">
+            <div class="text-8xl floating" style="animation-delay: 0s">⚡</div>
+            <div class="text-9xl font-black text-white italic drop-shadow-2xl">VS</div>
+            <div class="text-8xl floating" style="animation-delay: 0.5s">🧟</div>
+        </div>
+        <h1 class="text-yellow-400 text-6xl font-black tracking-widest italic">寶可夢：屍域進化</h1>
+    </div>
+    <div class="flex flex-col gap-6 pointer-events-auto">
+        <button id="btn-to-tutorial" class="bg-yellow-400 hover:bg-yellow-500 text-black font-black text-3xl py-6 px-24 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95">開始冒險</button>
+        <button id="btn-to-difficulty" class="bg-transparent border-2 border-white/30 hover:border-white hover:bg-white/5 text-white font-bold text-xl py-4 px-24 rounded-full transition-all">難度設定</button>
+    </div>
+</div>
+
+<!-- 難度設定頁面 -->
+<div id="difficulty-screen" class="overlay hidden">
+    <h2 class="text-white text-4xl font-black mb-12 italic tracking-widest">選擇冒險難度</h2>
+    <div class="grid grid-cols-3 gap-6 mb-12 w-full max-w-4xl px-4">
+        <div id="diff-easy" class="diff-card" onclick="setDifficulty('easy')">
+            <div class="text-5xl mb-4">🌱</div>
+            <div class="text-green-400 text-2xl font-black mb-2">輕鬆</div>
+            <div class="text-zinc-400 text-sm italic">適合初學者，HP 加倍</div>
+        </div>
+        <div id="diff-normal" class="diff-card selected" onclick="setDifficulty('normal')">
+            <div class="text-5xl mb-4">⚔️</div>
+            <div class="text-yellow-400 text-2xl font-black mb-2">普通</div>
+            <div class="text-zinc-400 text-sm italic">標準遊戲體驗</div>
+        </div>
+        <div id="diff-hard" class="diff-card" onclick="setDifficulty('hard')">
+            <div class="text-5xl mb-4">💀</div>
+            <div class="text-red-500 text-2xl font-black mb-2">困難</div>
+            <div class="text-zinc-400 text-sm italic">殭屍速度與傷害大幅提升</div>
+        </div>
+    </div>
+    <div class="pointer-events-auto">
+        <button onclick="closeDifficulty()" class="bg-white text-black font-black py-4 px-16 rounded-full hover:bg-zinc-200 transition-all">確認</button>
+    </div>
+</div>
+
+<!-- 教學頁面 -->
+<div id="tutorial-screen" class="overlay hidden">
+    <div class="bg-zinc-900/95 border-2 border-yellow-500/50 p-10 rounded-[2rem] max-w-3xl text-white shadow-[0_0_50px_rgba(234,179,8,0.2)] backdrop-blur-md">
+        <h2 class="text-4xl font-black text-yellow-400 mb-8 text-center italic tracking-widest">冒險指令系統</h2>
+        <div class="grid grid-cols-2 gap-12 mb-10">
+            <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-blue-400 border-b-2 border-blue-400/30 pb-2">操作控制</h3>
+                <div class="flex items-center gap-4"><span class="key-cap">WASD</span> <span class="text-lg">全向位移</span></div>
+                <div class="flex items-center gap-4"><span class="key-cap">J</span> <span class="text-lg">基礎招式</span></div>
+                <div class="flex items-center gap-4"><span class="key-cap">K</span> <span class="text-lg text-yellow-400 font-bold">奧義 (100% MP)</span></div>
+            </div>
+            <div class="space-y-6">
+                <h3 class="text-2xl font-bold text-red-500 border-b-2 border-red-500/30 pb-2">任務規則</h3>
+                <ul class="space-y-4 text-zinc-300">
+                    <li class="flex gap-3"><span class="text-green-500">▶</span> 擊退殭屍潮，迎接最終 Boss。</li>
+                    <li class="flex gap-3"><span class="text-green-500">▶</span> 注意 HP，體力歸零即失敗。</li>
+                </ul>
+            </div>
+        </div>
+        <div class="flex justify-center pointer-events-auto">
+            <button id="btn-tutorial-to-selection" class="bg-yellow-400 hover:bg-yellow-500 text-black font-black text-2xl py-5 px-16 rounded-full transition-all">進入選角</button>
+        </div>
+    </div>
+</div>
+
+<!-- 選角頁面 -->
+<div id="menu-overlay" class="overlay hidden">
+    <h2 class="text-white text-4xl font-black mb-12 italic">選擇出戰寶可夢</h2>
+    <div class="flex gap-8 mb-16 px-4">
+        <div id="select-pikachu" class="pokemon-card selected w-64" onclick="selectPokemon('pikachu')">
+            <div class="text-8xl mb-4">⚡</div>
+            <div class="text-yellow-400 text-2xl font-black">皮卡丘</div>
+            <div class="mt-4 text-xs text-zinc-400">奧義：全屏連鎖閃電</div>
+        </div>
+        <div id="select-charmander" class="pokemon-card w-64" onclick="selectPokemon('charmander')">
+            <div class="text-8xl mb-4">🔥</div>
+            <div class="text-red-500 text-2xl font-black">小火龍</div>
+            <div class="mt-4 text-xs text-zinc-400">奧義：巨型烈焰彈</div>
+        </div>
+        <div id="select-squirtle" class="pokemon-card w-64" onclick="selectPokemon('squirtle')">
+            <div class="text-8xl mb-4">💧</div>
+            <div class="text-blue-400 text-2xl font-black">傑尼龜</div>
+            <div class="mt-4 text-xs text-zinc-400">奧義：治癒水環</div>
+        </div>
+    </div>
+    <div class="flex gap-6 pointer-events-auto">
+        <button onclick="backToHomeWithLoading()" class="bg-zinc-800 text-white font-bold py-5 px-12 rounded-full hover:bg-zinc-700 transition-all border border-white/10">返回</button>
+        <button id="start-btn" class="bg-yellow-400 hover:bg-yellow-500 text-black font-black text-2xl py-5 px-20 rounded-full shadow-2xl transition-all hover:scale-105">開始戰鬥！</button>
+    </div>
+</div>
+
+<!-- 退出詢問彈窗 -->
+<div id="confirm-exit-modal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[300] hidden pointer-events-auto">
+    <div class="bg-zinc-900 border-2 border-red-500 p-12 rounded-[2rem] text-center max-w-md shadow-[0_0_100px_rgba(239,68,68,0.3)]">
+        <h2 class="text-3xl font-black text-white mb-6">確定要撤退嗎？</h2>
+        <div class="flex gap-4 justify-center">
+            <button id="btn-exit-cancel" class="bg-zinc-700 text-white px-10 py-3 rounded-full font-bold hover:bg-zinc-600 transition-all">取消</button>
+            <button id="btn-exit-confirm" class="bg-red-600 text-white px-10 py-3 rounded-full font-bold hover:bg-red-700 transition-all">確認撤退</button>
+        </div>
+    </div>
+</div>
+
+<div id="countdown-overlay" class="fixed inset-0 flex items-center justify-center pointer-events-none text-white text-9xl font-black hidden z-[400]">3</div>
+
+<!-- 結算彈窗 -->
+<div id="game-modal" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[500] hidden pointer-events-auto backdrop-blur-md">
+    <div class="bg-zinc-900 border-4 border-white/20 p-16 rounded-[3rem] text-center max-w-lg shadow-[0_0_100px_rgba(255,255,255,0.1)]">
+        <h2 id="modal-title" class="text-7xl font-black mb-6 italic tracking-tighter text-white">結果</h2>
+        <p id="modal-msg" class="text-zinc-400 mb-12 text-xl leading-relaxed"></p>
+        <div class="flex flex-col gap-4">
+            <button onclick="backToHomeWithLoading()" class="bg-white text-black px-16 py-5 rounded-full font-black text-2xl hover:bg-zinc-200 transition-all active:scale-95">回歸主選單</button>
+        </div>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/** @type {HTMLCanvasElement} */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- 遊戲狀態 ---
+let gameState = 'LOADING';
+let isPaused = false;
+let isCountingDown = false;
+let currentLevel = 1;
+let killsInLevel = 0;
+let targetKills = 25;
+let isBossStage = false;
+let lastEnemySpawnTime = 0;
+let frameCount = 0;
+
+// --- 難度與角色數據 ---
+let currentDifficultyId = 'normal';
+const diffSettings = {
+    easy: { enemyHpMult: 0.5, enemySpeedMult: 0.7, playerHpMult: 2.0, enemyDamageMult: 0.4 },
+    normal: { enemyHpMult: 1.0, enemySpeedMult: 1.0, playerHpMult: 1.0, enemyDamageMult: 1.0 },
+    hard: { enemyHpMult: 1.6, enemySpeedMult: 1.3, playerHpMult: 0.8, enemyDamageMult: 2.0 }
+};
+
+const pokemonBaseStats = {
+    pikachu: { mainColor: '#FFD700', subColor: '#8B0000', speed: 7, maxHp: 1000, cooldown: 180, emoji: '⚡', dmg: 35 },
+    charmander: { mainColor: '#FF6F00', subColor: '#FFF176', speed: 6, maxHp: 1000, cooldown: 140, emoji: '🔥', dmg: 30 },
+    squirtle: { mainColor: '#4FC3F7', subColor: '#FFFFFF', speed: 5, maxHp: 1500, cooldown: 250, emoji: '💧', dmg: 45 }
+};
+
+let currentPokemonId = 'pikachu';
+
+const player = {
+    x: 100, y: 0, width: 80, height: 80,
+    speed: 6, hp: 1000, maxHp: 1000, energy: 0,
+    color: '#FFD700', subColor: '#8B0000',
+    bullets: [], lastAttack: 0, attackCooldown: 250,
+    facing: 1, baseDamage: 30
+};
+
+let enemies = [];
+let particles = [];
+const keys = {};
+
+// --- UI 引用 ---
+const screens = {
+    loading: document.getElementById('loading-screen'),
+    loadingBar: document.getElementById('loading-bar'),
+    loadingText: document.getElementById('loading-text'),
+    home: document.getElementById('start-screen'),
+    tutorial: document.getElementById('tutorial-screen'),
+    menu: document.getElementById('menu-overlay'),
+    difficulty: document.getElementById('difficulty-screen'),
+    stats: document.getElementById('game-stats'),
+    exit: document.getElementById('exit-btn'),
+    confirmExit: document.getElementById('confirm-exit-modal'),
+    countdown: document.getElementById('countdown-overlay'),
+    modal: document.getElementById('game-modal')
+};
+
+// --- 加載與轉場系統 ---
+function performLoading(text, callback) {
+    screens.loadingText.innerText = text;
+    screens.loadingBar.style.width = '0%';
+    screens.loading.style.display = 'flex';
+    screens.loading.style.opacity = '1';
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            setTimeout(() => {
+                screens.loading.style.opacity = '0';
+                setTimeout(() => {
+                    screens.loading.style.display = 'none';
+                    if (callback) callback();
+                }, 500);
+            }, 300);
+        }
+        screens.loadingBar.style.width = progress + '%';
+    }, 80);
+}
+
+window.onload = () => {
+    resize();
+    performLoading("正在連接寶可夢世界...", () => {
+        gameState = 'HOME';
+    });
+};
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if (gameState === 'HOME' || gameState === 'SELECTION') {
+        player.y = canvas.height / 2;
+        player.x = 100;
+    }
+}
+window.addEventListener('resize', resize);
+
+// --- 介面操作 ---
+document.getElementById('btn-to-tutorial').onclick = () => {
+    screens.home.classList.add('hidden');
+    screens.tutorial.classList.remove('hidden');
+};
+document.getElementById('btn-to-difficulty').onclick = () => {
+    screens.home.classList.add('hidden');
+    screens.difficulty.classList.remove('hidden');
+};
+function setDifficulty(id) {
+    currentDifficultyId = id;
+    document.querySelectorAll('.diff-card').forEach(card => card.classList.remove('selected'));
+    document.getElementById('diff-' + id).classList.add('selected');
+}
+function closeDifficulty() {
+    screens.difficulty.classList.add('hidden');
+    screens.home.classList.remove('hidden');
+}
+document.getElementById('btn-tutorial-to-selection').onclick = () => {
+    screens.tutorial.classList.add('hidden');
+    screens.menu.classList.remove('hidden');
+    gameState = 'SELECTION';
+};
+function backToHomeWithLoading() {
+    screens.modal.classList.add('hidden');
+    screens.menu.classList.add('hidden');
+    screens.confirmExit.classList.add('hidden');
+    screens.stats.classList.add('opacity-0');
+    screens.exit.classList.add('hidden');
+
+    performLoading("正在保存數據並返回主選單...", () => {
+        screens.home.classList.remove('hidden');
+        gameState = 'HOME';
+        isPaused = false;
+        isCountingDown = false;
+        enemies = [];
+        player.bullets = [];
+        particles = [];
+    });
+}
+function selectPokemon(id) {
+    currentPokemonId = id;
+    document.querySelectorAll('.pokemon-card').forEach(card => card.classList.remove('selected'));
+    document.getElementById('select-' + id).classList.add('selected');
+}
+document.getElementById('start-btn').onclick = () => {
+    screens.menu.classList.add('hidden');
+    performLoading("正在加載戰場資源...", () => {
+        startAdventure();
+    });
+};
+
+function startAdventure() {
+    const stats = pokemonBaseStats[currentPokemonId];
+    const settings = diffSettings[currentDifficultyId];
+    
+    player.color = stats.mainColor;
+    player.subColor = stats.subColor;
+    player.speed = stats.speed;
+    player.maxHp = stats.maxHp * settings.playerHpMult;
+    player.hp = player.maxHp;
+    player.attackCooldown = stats.cooldown;
+    player.baseDamage = stats.dmg;
+    player.energy = 0;
+    player.facing = 1;
+    player.x = 100;
+    player.y = canvas.height / 2;
+    player.bullets = [];
+    
+    enemies = [];
+    particles = [];
+    killsInLevel = 0;
+    currentLevel = 1;
+    targetKills = 15; // 降低初期目標，讓節奏更快
+    isBossStage = false;
+    
+    screens.exit.classList.remove('hidden');
+    screens.stats.classList.remove('opacity-0');
+    screens.stats.classList.remove('-translate-x-10');
+    gameState = 'PLAYING';
+    isPaused = false;
+}
+
+// 退出處理
+document.getElementById('exit-btn').onclick = () => {
+    if (gameState !== 'PLAYING' || isPaused || isCountingDown) return;
+    isPaused = true;
+    screens.confirmExit.classList.remove('hidden');
+};
+document.getElementById('btn-exit-confirm').onclick = () => backToHomeWithLoading();
+document.getElementById('btn-exit-cancel').onclick = () => {
+    screens.confirmExit.classList.add('hidden');
+    startResumeCountdown();
+};
+
+function startResumeCountdown() {
+    isCountingDown = true;
+    let count = 3;
+    screens.countdown.innerText = count;
+    screens.countdown.classList.remove('hidden');
+    const timer = setInterval(() => {
+        count--;
+        if (count > 0) screens.countdown.innerText = count;
+        else {
+            clearInterval(timer);
+            screens.countdown.classList.add('hidden');
+            isPaused = false;
+            isCountingDown = false;
+        }
+    }, 1000);
+}
+
+// --- 繪製函數 ---
+function drawPokemon(p) {
+    const { x, y, width, height, facing, color } = p;
+    const bodyW = width * 0.7;
+    const bodyH = height * 0.75;
+    const centerX = x + width/2;
+    const centerY = y + height/2 + 5;
+    const walkCycle = Math.sin(frameCount * 0.2) * 5;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.scale(facing, 1);
+    ctx.fillStyle = color;
+    
+    ctx.beginPath(); 
+    ctx.ellipse(-15, bodyH/2 - 5 + walkCycle, 8, 12, 0, 0, Math.PI*2);
+    ctx.ellipse(15, bodyH/2 - 5 - walkCycle, 8, 12, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    if (currentPokemonId === 'pikachu') {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(-25, 10); ctx.lineTo(-45, -5); ctx.lineTo(-35, -5); ctx.lineTo(-55, -20); ctx.lineTo(-40, -20); ctx.lineTo(-65, -40);
+        ctx.lineTo(-55, -45); ctx.lineTo(-30, -25); ctx.lineTo(-45, -25); ctx.lineTo(-25, -10); ctx.lineTo(-35, -10);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-15, -35, 7, 18, -0.3, 0, Math.PI*2); ctx.ellipse(15, -35, 7, 18, 0.3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(-bodyW/2, -bodyH/2, bodyW, bodyH, 15); ctx.fill();
+        ctx.fillStyle = '#E53935'; ctx.beginPath(); ctx.arc(bodyW/2 - 8, 5, 8, 0, Math.PI*2); ctx.fill();
+    } else if (currentPokemonId === 'charmander') {
+        const flameSize = 10 + Math.sin(frameCount * 0.3) * 5;
+        ctx.save(); ctx.translate(-25, 5);
+        ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(-10, 0, 20, 8, -0.5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#FFD54F'; ctx.beginPath(); ctx.arc(-25, -10, flameSize, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#FF3D00'; ctx.beginPath(); ctx.arc(-25, -10, flameSize * 0.6, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-bodyW/2, -bodyH/2, bodyW, bodyH, 18); ctx.fill();
+    } else if (currentPokemonId === 'squirtle') {
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-25, 10, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#8D6E63'; ctx.beginPath(); ctx.ellipse(-5, 0, bodyW/1.8, bodyH/1.8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#FFF59D'; ctx.beginPath(); ctx.roundRect(-bodyW/2.5, -bodyH/2.5, bodyW/1.2, bodyH/1.2, 10); ctx.fill();
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(15, -bodyH/2.5, 22, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(18, -15, 4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+}
+
+function drawZombie(z) {
+    const { x, y, width, height, isBoss, hitTimer } = z;
+    const centerX = x + width/2;
+    const centerY = y + height/2;
+    
+    // 受傷閃爍效果
+    if (hitTimer > 0) {
+        ctx.filter = `brightness(${1 + hitTimer/10}) contrast(1.2) saturate(1.5)`;
+    }
+
+    if (isBoss) {
+        // --- 優化版大 Boss: 殭屍領主 ---
+        const breath = Math.sin(frameCount * 0.05) * 5;
+        const pulse = Math.sin(frameCount * 0.1) * 2;
+        
+        ctx.save();
+        
+        // 1. 陰影底盤
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height + 5, width * 0.4, 15, 0, 0, Math.PI*2);
+        ctx.fill();
+
+        // 2. 軀幹與肩膀 (更大更厚實)
+        const gradBody = ctx.createLinearGradient(x, y, x + width, y + height);
+        gradBody.addColorStop(0, '#2d3436');
+        gradBody.addColorStop(1, '#636e72');
+        ctx.fillStyle = gradBody;
+        
+        // 肩膀
+        ctx.beginPath();
+        ctx.roundRect(x, y + 60 + breath, width, 60, 20); 
+        ctx.fill();
+        
+        // 主軀幹
+        ctx.beginPath();
+        ctx.roundRect(x + 30, y + 100 + breath, width - 60, height - 120, 15);
+        ctx.fill();
+
+        // 3. 外露的紫色核心/肋骨 (發光感)
+        ctx.strokeStyle = 'rgba(162, 155, 254, 0.8)';
+        ctx.lineWidth = 4;
+        for(let i=0; i<3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x + 60, y + 140 + i*25 + breath);
+            ctx.quadraticCurveTo(centerX, y + 150 + i*25 + breath + pulse, x + width - 60, y + 140 + i*25 + breath);
+            ctx.stroke();
+        }
+
+        // 4. 頭部 (猙獰感)
+        ctx.fillStyle = '#74b9ff'; // 蒼白帶藍的死人色
+        ctx.beginPath();
+        ctx.roundRect(centerX - 45, y + breath - 10, 90, 85, 25);
+        ctx.fill();
+        
+        // 額外細節：殭屍領主的頭盔/皇冠殘骸
+        ctx.fillStyle = '#2d3436';
+        ctx.beginPath();
+        ctx.moveTo(centerX - 45, y + breath);
+        ctx.lineTo(centerX - 55, y + breath - 30);
+        ctx.lineTo(centerX - 20, y + breath - 15);
+        ctx.lineTo(centerX, y + breath - 40);
+        ctx.lineTo(centerX + 20, y + breath - 15);
+        ctx.lineTo(centerX + 55, y + breath - 30);
+        ctx.lineTo(centerX + 45, y + breath);
+        ctx.fill();
+
+        // 5. 發光的紅色魔眼
+        const eyeY = y + 35 + breath;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = 'red';
+        ctx.fillStyle = 'red';
+        
+        // 左眼
+        ctx.beginPath();
+        ctx.arc(centerX - 22, eyeY, 8 + pulse, 0, Math.PI*2);
+        ctx.fill();
+        // 右眼
+        ctx.beginPath();
+        ctx.arc(centerX + 22, eyeY, 8 + pulse, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0; // 重置陰影
+
+        // 6. 巨型手臂
+        ctx.fillStyle = '#636e72';
+        // 左手 (向後擺動)
+        ctx.beginPath();
+        ctx.roundRect(x - 10, y + 80 + breath, 30, 100, 15);
+        ctx.fill();
+        // 右手 (向前準備攻擊感)
+        ctx.beginPath();
+        ctx.roundRect(x + width - 20, y + 80 - breath, 30, 100, 15);
+        ctx.fill();
+
+        // 7. 血量條 (UI 增強)
+        const hpBarW = width * 1.2;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(centerX - hpBarW/2, y - 50, hpBarW, 12);
+        const hpFillGrad = ctx.createLinearGradient(centerX - hpBarW/2, 0, centerX + hpBarW/2, 0);
+        hpFillGrad.addColorStop(0, '#d63031');
+        hpFillGrad.addColorStop(1, '#ff7675');
+        ctx.fillStyle = hpFillGrad;
+        ctx.fillRect(centerX - hpBarW/2, y - 50, hpBarW * (z.hp/z.maxHp), 12);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(centerX - hpBarW/2, y - 50, hpBarW, 12);
+        
+        ctx.restore();
+
+    } else {
+        // --- 普通殭屍 ---
+        const bob = Math.sin(frameCount * 0.15) * 5;
+        ctx.fillStyle = '#5D4037'; ctx.fillRect(x + 10, y + 20 + bob, width - 20, height - 20);
+        ctx.fillStyle = '#7DA27E'; ctx.beginPath(); ctx.roundRect(x + 5, y + bob, width - 10, 30, 10); ctx.fill();
+        ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(x + width - 15, y + 10 + bob, 3, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.filter = 'none';
+}
+
+function createParticle(x, y, color, count = 10, size = 4) {
+    for(let i=0; i<count; i++) {
+        particles.push({
+            x, y, vx: (Math.random()-0.5)*12, vy: (Math.random()-0.5)*12,
+            life: 1.0, color, size: Math.random() * size + 2
+        });
+    }
+}
+
+function spawnEnemy(isBoss = false) {
+    const settings = diffSettings[currentDifficultyId];
+    const x = canvas.width + 100;
+    const y = 100 + Math.random() * (canvas.height - 250);
+    enemies.push({
+        x, y, isBoss, width: isBoss ? 220 : 50, height: isBoss ? 250 : 70,
+        hp: (isBoss ? 2500 : 80) * settings.enemyHpMult,
+        maxHp: (isBoss ? 2500 : 80) * settings.enemyHpMult,
+        speed: (isBoss ? 1.1 : (1.5 + Math.random() * 1.8)) * settings.enemySpeedMult,
+        damage: (isBoss ? 60 : 15) * settings.enemyDamageMult,
+        lastAttack: 0,
+        hitTimer: 0
+    });
+}
+
+function playerAttack(isSpecial) {
+    if (isPaused || isCountingDown || gameState !== 'PLAYING') return;
+    const now = Date.now();
+    if (!isSpecial && now - player.lastAttack < player.attackCooldown) return;
+    
+    if (isSpecial) {
+        if (player.energy < 100) return;
+        player.energy = 0;
+        if (currentPokemonId === 'pikachu') {
+            createParticle(canvas.width/2, canvas.height/2, '#FFFF00', 100, 10);
+            enemies.forEach(e => { 
+                e.hp -= 400; 
+                e.hitTimer = 15;
+                createParticle(e.x + e.width/2, e.y + e.height/2, '#FFF', 15); 
+                if(e.hp <= 0) handleDeath(e); 
+            });
+        } else if (currentPokemonId === 'charmander') {
+            player.bullets.push({ 
+                x: player.x + (player.facing === 1 ? 80 : 0), 
+                y: player.y + 40, 
+                vx: 20 * player.facing, 
+                vy: 0, 
+                damage: 600, 
+                size: 80, 
+                color: '#FF4500', 
+                isSpecial: true 
+            });
+        } else if (currentPokemonId === 'squirtle') {
+            player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.6);
+            createParticle(player.x + 40, player.y + 40, '#00FFFF', 40, 8);
+        }
+    } else {
+        player.lastAttack = now;
+        player.bullets.push({ 
+            x: player.x + (player.facing === 1 ? 80 : 0), 
+            y: player.y + 40, 
+            vx: 15 * player.facing, 
+            vy: 0, 
+            damage: player.baseDamage, 
+            size: 15, 
+            color: player.color 
+        });
+    }
+}
+
+function handleDeath(enemy) {
+    const idx = enemies.indexOf(enemy);
+    if (idx === -1) return;
+    createParticle(enemy.x + enemy.width/2, enemy.y + enemy.height/2, enemy.isBoss ? '#A29BFE' : '#7DA27E', 40);
+    enemies.splice(idx, 1);
+    
+    if (enemy.isBoss) {
+        gameOver(true);
+    } else {
+        killsInLevel++;
+        player.energy = Math.min(100, player.energy + 5);
+        if (killsInLevel >= targetKills && !isBossStage) {
+            if (currentLevel % 3 === 0) { 
+                isBossStage = true; 
+                setTimeout(() => spawnEnemy(true), 1000); 
+            } else { 
+                currentLevel++; 
+                killsInLevel = 0; 
+                targetKills += 12; 
+            }
+        }
+    }
+}
+
+// --- 邏輯更新 ---
+window.addEventListener('keydown', e => {
+    if (gameState === 'PLAYING' && !isPaused && !isCountingDown) {
+        keys[e.code] = true;
+        if (e.code === 'KeyD') player.facing = 1;
+        if (e.code === 'KeyA') player.facing = -1;
+    }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+function update() {
+    if (gameState !== 'PLAYING' || isPaused || isCountingDown) return;
+    frameCount++;
+
+    // 玩家位移
+    if (keys['KeyW']) player.y -= player.speed;
+    if (keys['KeyS']) player.y += player.speed;
+    if (keys['KeyA']) player.x -= player.speed;
+    if (keys['KeyD']) player.x += player.speed;
+    
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    player.y = Math.max(80, Math.min(canvas.height - player.height, player.y));
+
+    if (keys['KeyJ']) playerAttack(false);
+    if (keys['KeyK']) playerAttack(true);
+
+    // 子彈與碰撞
+    for (let i = player.bullets.length - 1; i >= 0; i--) {
+        const b = player.bullets[i];
+        b.x += b.vx;
+        
+        if (b.x < -100 || b.x > canvas.width + 100) {
+            player.bullets.splice(i, 1);
+            continue;
+        }
+
+        let hitSomething = false;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (b.x + b.size > e.x && b.x - b.size < e.x + e.width && 
+                b.y + b.size > e.y && b.y - b.size < e.y + e.height) {
+                
+                e.hp -= b.damage;
+                e.hitTimer = 10;
+                if (!e.isBoss) e.x += 10;
+                
+                createParticle(b.x, b.y, b.color, 5, 3);
+                
+                if (!b.isSpecial) {
+                    player.bullets.splice(i, 1);
+                    player.energy = Math.min(100, player.energy + 4);
+                    hitSomething = true;
+                    if (e.hp <= 0) handleDeath(e);
+                    break; 
+                }
+                
+                if (e.hp <= 0) handleDeath(e);
+            }
+        }
+        if (hitSomething) continue;
+    }
+
+    // 殭屍行為
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (e.hitTimer > 0) e.hitTimer--;
+        
+        const dx = player.x - e.x;
+        const dy = player.y - e.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        e.x += (dx/dist) * e.speed;
+        e.y += (dy/dist) * e.speed;
+
+        const range = e.isBoss ? 100 : 60;
+        if (dist < range && Date.now() - e.lastAttack > 800) {
+            player.hp -= e.damage;
+            e.lastAttack = Date.now();
+            createParticle(player.x + 40, player.y + 40, '#FF0000', 15);
+            if (player.hp <= 0) gameOver(false);
+        }
+    }
+
+    // 粒子
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.life -= 0.025;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // 生成
+    const spawnRate = Math.max(800, 2000 - currentLevel * 150);
+    if (Date.now() - lastEnemySpawnTime > spawnRate && !isBossStage) {
+        spawnEnemy(false);
+        lastEnemySpawnTime = Date.now();
+    }
+
+    updateUI();
+}
+
+function updateUI() {
+    const hpPercent = (player.hp / player.maxHp) * 100;
+    document.getElementById('hp-fill').style.width = Math.max(0, hpPercent) + '%';
+    document.getElementById('hp-text').innerText = `${Math.max(0, Math.floor(player.hp))} / ${Math.floor(player.maxHp)}`;
+    
+    const energyPercent = player.energy;
+    document.getElementById('energy-fill').style.width = energyPercent + '%';
+    document.getElementById('energy-text').innerText = `${Math.floor(energyPercent)}% ${energyPercent >= 100 ? 'READY' : 'CHARGING'}`;
+    
+    document.getElementById('level-display').innerText = isBossStage ? "FINAL BOSS" : `LEVEL ${currentLevel}`;
+    document.getElementById('kill-display').innerText = isBossStage ? "殭屍領主降臨" : `KILLS: ${killsInLevel} / ${targetKills}`;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (gameState === 'PLAYING') {
+        player.bullets.forEach(b => {
+            ctx.fillStyle = b.color;
+            ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = b.isSpecial ? 20 : 8; ctx.shadowColor = b.color;
+        });
+        ctx.shadowBlur = 0;
+        enemies.sort((a,b) => a.y - b.y).forEach(e => drawZombie(e)); // Y-sorting 增加層次感
+        drawPokemon(player);
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+        ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(draw);
+}
+
+function gameOver(victory) {
+    if (gameState === 'GAMEOVER') return;
+    gameState = 'GAMEOVER';
+    setTimeout(() => {
+        screens.modal.classList.remove('hidden');
+        const title = document.getElementById('modal-title');
+        const msg = document.getElementById('modal-msg');
+        if (victory) {
+            title.innerText = "VICTORY";
+            title.style.color = "#fbbf24";
+            msg.innerText = "你擊敗了殭屍領主，守護了寶可夢森林！";
+        } else {
+            title.innerText = "DEFEATED";
+            title.style.color = "#ef4444";
+            msg.innerText = "寶可夢體力耗盡... 領主實在太強大了。";
+        }
+    }, 500);
+}
+
+setInterval(update, 1000/60);
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>佩奇的電腦生字配對遊戲</title>
+    <style>
+        :root {
+            --peppa-pink: #ff85a2;
+            --peppa-dark-pink: #d84b6b;
+            --george-blue: #4facfe;
+            --george-dark-blue: #00f2fe;
+            --success-color: #34d399;
+            --success-dark: #059669;
+            --error-color: #fb7185;
+            --error-dark: #e11d48;
+            --btn-bg: #ffffff;
+            --btn-border: #cbd5e1;
+            --btn-shadow: #94a3b8;
+            --text-main: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Segoe UI', '微軟正黑體', sans-serif;
+            /* 藍色漸變背景 */
+            background-image: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+        }
+
+        /* 各個畫面的容器切換 */
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1.5rem 2rem;
+            border-radius: 24px;
+            box-shadow: 0 8px 0 rgba(0,0,0,0.1);
+            border: 4px solid white;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: var(--peppa-dark-pink);
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 0px white;
+        }
+
+        p.subtitle {
+            color: #475569;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* 3D 按鈕共用樣式 */
+        .btn-3d {
+            background-color: var(--peppa-pink);
+            color: white;
+            border: 4px solid var(--peppa-dark-pink);
+            border-radius: 20px;
+            padding: 1rem 3rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 8px 0 var(--peppa-dark-pink), 0 15px 10px rgba(0,0,0,0.2);
+            transition: all 0.1s ease;
+            text-shadow: 1px 1px 0px rgba(0,0,0,0.2);
+        }
+
+        .btn-3d:active {
+            transform: translateY(8px);
+            box-shadow: 0 0px 0 var(--peppa-dark-pink), 0 5px 5px rgba(0,0,0,0.2);
+        }
+
+        /* 倒數計時畫面 */
+        #countdown-screen {
+            justify-content: center;
+            min-height: 60vh;
+        }
+
+        #countdown-number {
+            font-size: 8rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 4px 4px 0 var(--peppa-dark-pink);
+            animation: popIn 1s infinite;
+        }
+
+        .countdown-text {
+            font-size: 2rem;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+            margin-top: 1rem;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
+        /* 遊戲統計版 */
+        .stats-board {
+            display: flex;
+            gap: 2rem;
+            background: white;
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+            border: 3px solid #e2e8f0;
+            margin-bottom: 2rem;
+            font-size: 1.3rem;
+            font-weight: 900;
+        }
+
+        .score-text { color: var(--peppa-dark-pink); }
+        .time-text { color: #0284c7; }
+
+        /* 遊戲主體 */
+        .game-board {
+            display: flex;
+            gap: 2rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        /* 遊戲內的 3D 生字按鈕 */
+        .word-btn {
+            background-color: var(--btn-bg);
+            border: 3px solid var(--btn-border);
+            border-radius: 16px;
+            padding: 1.2rem 1rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-main);
+            cursor: pointer;
+            box-shadow: 0 6px 0 var(--btn-shadow), 0 10px 10px rgba(0,0,0,0.1);
+            transition: all 0.1s cubic-bezier(.4,0,.2,1);
+            user-select: none;
+            font-family: inherit;
+        }
+
+        .word-btn:hover:not(.matched):not(.selected) {
+            transform: translateY(2px);
+            box-shadow: 0 4px 0 var(--btn-shadow), 0 8px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 選中狀態 - 粉色 */
+        .word-btn.selected {
+            background-color: var(--peppa-pink);
+            border-color: var(--peppa-dark-pink);
+            color: white;
+            box-shadow: 0 2px 0 var(--peppa-dark-pink);
+            transform: translateY(4px);
+        }
+
+        /* 配對成功狀態 - 綠色 */
+        .word-btn.matched {
+            background-color: var(--success-color);
+            border-color: var(--success-dark);
+            color: white;
+            box-shadow: 0 2px 0 var(--success-dark);
+            transform: translateY(4px);
+            opacity: 0.8;
+            cursor: default;
+        }
+
+        /* 錯誤狀態 - 紅色震動 */
+        .word-btn.wrong {
+            background-color: var(--error-color);
+            border-color: var(--error-dark);
+            color: white;
+            box-shadow: 0 2px 0 var(--error-dark);
+            transform: translateY(4px);
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 4px, 0); }
+            20%, 80% { transform: translate3d(2px, 4px, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 4px, 0); }
+            40%, 60% { transform: translate3d(4px, 4px, 0); }
+        }
+
+        /* 遊戲結束對話框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 3rem;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+            border: 6px solid var(--peppa-pink);
+            max-width: 450px;
+            width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            font-size: 2.2rem;
+            color: var(--peppa-dark-pink);
+            margin-bottom: 1rem;
+            text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
+        }
+
+        .modal-stats {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            color: #475569;
+            line-height: 1.8;
+            font-weight: bold;
+            background: #f1f5f9;
+            padding: 1rem;
+            border-radius: 16px;
+        }
+
+        /* 新增：目標中文單字顯示框 */
+        .target-box {
+            background: white;
+            border: 4px dashed var(--peppa-pink);
+            border-radius: 20px;
+            padding: 1.5rem 2rem;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--peppa-dark-pink);
+            margin: 0 auto 2rem auto;
+            text-align: center;
+            box-shadow: 0 8px 0 rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        /* 新增：4個選項的網格排版 */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* 新增：關卡標籤 */
+        #level-display {
+            font-size: 1.5rem;
+            color: white;
+            background-color: var(--peppa-pink);
+            padding: 0.5rem 1.5rem;
+            border-radius: 999px;
+            border: 3px solid white;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+            display: inline-block;
+            margin-bottom: 1rem;
+            font-weight: bold;
+        }
+
+        /* 新增：背景卡通人物裝飾 */
+        .bg-character {
+            position: fixed;
+            bottom: -5px;
+            z-index: -1; /* 確保在背景層 */
+            opacity: 0.85;
+            animation: floatBg 4s ease-in-out infinite;
+            pointer-events: none; /* 避免擋住點擊 */
+        }
+
+        .bg-character.peppa {
+            left: 3%;
+            width: 180px;
+            transform-origin: bottom center;
+        }
+
+        .bg-character.george {
+            right: 3%;
+            width: 140px;
+            animation-delay: 2s;
+            transform-origin: bottom center;
+        }
+
+        @keyframes floatBg {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+        }
+
+        @media (max-width: 768px) {
+            .bg-character.peppa { width: 120px; left: -10px; }
+            .bg-character.george { width: 100px; right: -10px; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 600px) {
+            .game-board { gap: 1rem; }
+            .word-btn { padding: 1rem 0.5rem; font-size: 1rem; }
+            h1 { font-size: 1.8rem; }
+            .stats-board { flex-direction: column; gap: 0.5rem; border-radius: 16px; text-align: center; }
+            .btn-3d { padding: 1rem 2rem; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 新增：背景卡通人物 -->
+    <img src="" alt="小豬佩奇" class="bg-character peppa" onerror="this.onerror=null; this.src='https://api.iconify.design/twemoji:pig-face.svg';">
+    <img src="" alt="喬治與恐龍" class="bg-character george" onerror="this.onerror=null; this.src='https://api.iconify.design/twemoji:t-rex.svg';">
+
+    <!-- 1. 開始畫面 -->
+    <div id="start-screen" class="screen active">
+        <header>
+            <h1>🐷 佩奇的電腦教室 💻</h1>
+            <p class="subtitle">喬治也想學電腦！<br>快來幫他們把英文和中文配對起來吧！<br>答對有恐龍先生的獎勵哦 (加10分) 🦖</p>
+        </header>
+        <button class="btn-3d" onclick="startGame()">開始遊戲</button>
+    </div>
+
+    <!-- 2. 倒數計時畫面 -->
+    <div id="countdown-screen" class="screen">
+        <div id="countdown-number">3</div>
+        <div class="countdown-text">準備好囉！佩奇為你加油！🐷</div>
+    </div>
+
+    <!-- 3. 遊戲主畫面 -->
+    <div id="game-screen" class="screen">
+        <header style="padding: 1rem 2rem; margin-bottom: 1rem;">
+            <div id="level-display">第 1 關</div>
+            <h1 style="font-size: 1.8rem;">🐷 佩奇配對挑戰 💻</h1>
+        </header>
+
+        <div class="stats-board">
+            <div class="score-text">🦖 恐龍積分: <span id="score">0</span></div>
+            <div class="time-text">⏱️ 剩餘時間: <span id="time">10</span> 秒</div>
+        </div>
+
+        <!-- 目標中文單字 -->
+        <div id="target-word" class="target-box">
+            準備中...
+        </div>
+
+        <div class="game-board">
+            <div class="options-grid" id="options-container">
+                <!-- 英文選項按鈕將透過 JS 動態生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束對話框 -->
+    <div class="modal-overlay" id="result-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">🎉 哼哼！全部通關啦！🐷</h2>
+            <div class="modal-stats">
+                <p>佩奇和喬治為你鼓掌！👏</p>
+                <p>你的總積分：<strong id="final-score" style="color: var(--peppa-dark-pink); font-size: 1.8rem;">0</strong> 分</p>
+            </div>
+            <button class="btn-3d" style="width: 100%;" onclick="resetToStart()">再來玩一次</button>
+        </div>
+    </div>
+
+    <!-- 失敗/時間到對話框 -->
+    <div class="modal-overlay" id="fail-modal">
+        <div class="modal-content">
+            <h2 class="modal-title" style="color: var(--error-dark);">⏰ 時間到啦！🐷</h2>
+            <div class="modal-stats">
+                <p>哎呀，這關沒有在10秒內完成！</p>
+                <p>不要灰心，再試一次吧！💪</p>
+            </div>
+            <button class="btn-3d" style="width: 100%; background-color: var(--george-blue); border-color: var(--george-dark-blue); box-shadow: 0 8px 0 var(--george-dark-blue);" onclick="retryChallenge()">重新挑戰本關</button>
+        </div>
+    </div>
+
+    <script>
+        // 電腦相關詞彙庫 (分為 16 個挑戰)
+        const challenges = [
+            // 挑戰 1：基礎硬體
+            [
+                { en: "Monitor", zh: "螢幕" },
+                { en: "Keyboard", zh: "鍵盤" },
+                { en: "Mouse", zh: "滑鼠" },
+                { en: "Speaker", zh: "喇叭" }
+            ],
+            // 挑戰 2：基礎軟體
+            [
+                { en: "Software", zh: "軟件" },
+                { en: "Browser", zh: "瀏覽器" },
+                { en: "Password", zh: "密碼" },
+                { en: "Download", zh: "下載" }
+            ],
+            // 挑戰 3：核心設備
+            [
+                { en: "Hardware", zh: "硬件" },
+                { en: "CPU", zh: "中央處理器" },
+                { en: "Memory", zh: "記憶體" },
+                { en: "Hard Drive", zh: "硬碟" }
+            ],
+            // 挑戰 4：網絡基礎
+            [
+                { en: "Network", zh: "網絡" },
+                { en: "Router", zh: "路由器" },
+                { en: "Website", zh: "網站" },
+                { en: "Database", zh: "資料庫" }
+            ],
+            // 挑戰 5：輸入與輸出設備
+            [
+                { en: "Printer", zh: "打印機" },
+                { en: "Scanner", zh: "掃描器" },
+                { en: "Microphone", zh: "麥克風" },
+                { en: "Webcam", zh: "網絡攝影機" }
+            ],
+            // 挑戰 6：檔案與儲存
+            [
+                { en: "USB Drive", zh: "USB手指" },
+                { en: "Cloud", zh: "雲端" },
+                { en: "Folder", zh: "資料夾" },
+                { en: "File", zh: "檔案" }
+            ],
+            // 挑戰 7：互聯網應用
+            [
+                { en: "Internet", zh: "互聯網" },
+                { en: "Link", zh: "連結" },
+                { en: "Search Engine", zh: "搜尋引擎" },
+                { en: "Email", zh: "電郵" }
+            ],
+            // 挑戰 8：常用操作 (一)
+            [
+                { en: "Upload", zh: "上傳" },
+                { en: "Install", zh: "安裝" },
+                { en: "Delete", zh: "刪除" },
+                { en: "Copy", zh: "複製" }
+            ],
+            // 挑戰 9：常用操作 (二)
+            [
+                { en: "Paste", zh: "貼上" },
+                { en: "Save", zh: "儲存" },
+                { en: "Update", zh: "更新" },
+                { en: "Restart", zh: "重新啟動" }
+            ],
+            // 挑戰 10：資訊安全
+            [
+                { en: "Virus", zh: "病毒" },
+                { en: "Antivirus", zh: "防毒軟件" },
+                { en: "Hacker", zh: "黑客" },
+                { en: "Firewall", zh: "防火牆" }
+            ],
+            // 挑戰 11：流動與運算裝置
+            [
+                { en: "Laptop", zh: "手提電腦" },
+                { en: "Tablet", zh: "平板電腦" },
+                { en: "Smartphone", zh: "智能手機" },
+                { en: "Server", zh: "伺服器" }
+            ],
+            // 挑戰 12：社交與通訊
+            [
+                { en: "Chat", zh: "聊天" },
+                { en: "Post", zh: "貼文" },
+                { en: "Share", zh: "分享" },
+                { en: "Comment", zh: "留言" }
+            ],
+            // 挑戰 13：程式與開發
+            [
+                { en: "Code", zh: "程式碼" },
+                { en: "Program", zh: "程式" },
+                { en: "Bug", zh: "程式漏洞" },
+                { en: "Developer", zh: "開發人員" }
+            ],
+            // 挑戰 14：用戶介面
+            [
+                { en: "Button", zh: "按鈕" },
+                { en: "Icon", zh: "圖示" },
+                { en: "Menu", zh: "選單" },
+                { en: "Window", zh: "視窗" }
+            ],
+            // 挑戰 15：進階連線
+            [
+                { en: "Wi-Fi", zh: "無線網絡" },
+                { en: "Bluetooth", zh: "藍牙" },
+                { en: "Connection", zh: "連線" },
+                { en: "Signal", zh: "訊號" }
+            ],
+            // 挑戰 16：系統設定
+            [
+                { en: "Pixel", zh: "像素" },
+                { en: "Resolution", zh: "解像度" },
+                { en: "Account", zh: "帳號" },
+                { en: "Settings", zh: "設定" }
+            ]
+        ];
+
+        let currentChallengeIndex = 0;
+        let currentWordIndex = 0;
+        let currentChallengeWords = [];
+        
+        let score = 0;
+        let timeRemaining = 10;
+        let timer = null;
+        let isChecking = false;
+
+        const screens = {
+            start: document.getElementById('start-screen'),
+            countdown: document.getElementById('countdown-screen'),
+            game: document.getElementById('game-screen')
+        };
+        
+        const targetWordDisplay = document.getElementById('target-word');
+        const optionsContainer = document.getElementById('options-container');
+        const scoreDisplay = document.getElementById('score');
+        const timeDisplay = document.getElementById('time');
+        const levelDisplay = document.getElementById('level-display');
+        
+        const resultModal = document.getElementById('result-modal');
+        const failModal = document.getElementById('fail-modal');
+
+        // 洗牌演算法
+        function shuffleArray(array) {
+            let newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        let currentTarget = null; // 當前關卡的目標單字
+
+        // 開始整個遊戲
+        function startGame() {
+            currentChallengeIndex = 0;
+            score = 0;
+            updateScore(0);
+            startCountdown("準備好囉！佩奇為你加油！🐷");
+        }
+
+        // 倒數計時邏輯 (用於開場和關卡切換)
+        function startCountdown(messageText) {
+            screens.start.classList.remove('active');
+            screens.game.classList.remove('active');
+            screens.countdown.classList.add('active');
+            
+            let count = 3;
+            const countElement = document.getElementById('countdown-number');
+            const textElement = document.querySelector('.countdown-text');
+            
+            countElement.textContent = count;
+            textElement.textContent = messageText || `準備進入第 ${currentChallengeIndex + 1} 關！`;
+            
+            countElement.style.animation = 'none';
+            countElement.offsetHeight; 
+            countElement.style.animation = 'popIn 1s infinite';
+
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countElement.textContent = count;
+                } else if (count === 0) {
+                    countElement.textContent = "開始！";
+                } else {
+                    clearInterval(countdownInterval);
+                    screens.countdown.classList.remove('active');
+                    screens.game.classList.add('active');
+                    startChallenge();
+                }
+            }, 1000);
+        }
+
+        // 啟動 10 秒倒數計時器
+        function startTimer() {
+            if (timer) clearInterval(timer);
+            timeRemaining = 10;
+            timeDisplay.textContent = timeRemaining;
+            
+            timer = setInterval(() => {
+                timeRemaining--;
+                timeDisplay.textContent = timeRemaining;
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(timer);
+                    handleTimeUp();
+                }
+            }, 1000);
+        }
+
+        function updateScore(points) {
+            score += points;
+            if (score < 0) score = 0; 
+            scoreDisplay.textContent = score;
+        }
+
+        // 初始化並開始目前關卡
+        function startChallenge() {
+            isChecking = false;
+            
+            // 更新關卡標題
+            levelDisplay.textContent = `第 ${currentChallengeIndex + 1} 關`;
+            
+            const currentGroup = challenges[currentChallengeIndex];
+            
+            // 從這關的 4 個單字中，隨機挑選 1 個作為本次的目標題目
+            currentTarget = currentGroup[Math.floor(Math.random() * currentGroup.length)];
+            
+            // 產生 4 個英文選項按鈕 (打亂位置)
+            const options = shuffleArray(currentGroup);
+            optionsContainer.innerHTML = '';
+            
+            options.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = 'word-btn';
+                btn.textContent = item.en;
+                btn.dataset.en = item.en;
+                btn.onclick = () => handleOptionClick(btn);
+                optionsContainer.appendChild(btn);
+            });
+
+            // 顯示目標中文單字
+            targetWordDisplay.textContent = currentTarget.zh;
+            targetWordDisplay.style.animation = 'none';
+            targetWordDisplay.offsetHeight;
+            targetWordDisplay.style.animation = 'popIn 0.5s ease';
+
+            startTimer();
+        }
+
+        // 處理選項點擊
+        function handleOptionClick(btn) {
+            if (isChecking || btn.classList.contains('matched')) return;
+            
+            isChecking = true;
+            const selectedEn = btn.dataset.en;
+
+            if (selectedEn === currentTarget.en) {
+                // 答對了：按鈕變綠，停止計時
+                btn.classList.add('matched');
+                updateScore(10);
+                clearInterval(timer);
+                
+                setTimeout(() => {
+                    isChecking = false;
+                    handleLevelComplete(); // 答對1題直接過關
+                }, 500);
+            } else {
+                // 答錯了：按鈕震動並變紅
+                btn.classList.add('wrong');
+                updateScore(-5);
+
+                setTimeout(() => {
+                    btn.classList.remove('wrong');
+                    isChecking = false;
+                }, 400);
+            }
+        }
+
+        // 處理時間到
+        function handleTimeUp() {
+            failModal.classList.add('show');
+        }
+
+        // 重新挑戰本關
+        function retryChallenge() {
+            failModal.classList.remove('show');
+            startCountdown(`再試一次第 ${currentChallengeIndex + 1} 關！💪`);
+        }
+
+        // 處理關卡通過
+        function handleLevelComplete() {
+            targetWordDisplay.textContent = "✅ 過關！";
+            
+            setTimeout(() => {
+                currentChallengeIndex++;
+                if (currentChallengeIndex >= challenges.length) {
+                    // 遊戲全部通關
+                    endGame();
+                } else {
+                    // 進入下一關
+                    startCountdown(`準備進入第 ${currentChallengeIndex + 1} 關！🐷`);
+                }
+            }, 1000);
+        }
+
+        // 遊戲結束結算
+        function endGame() {
+            document.getElementById('final-score').textContent = score;
+            resultModal.classList.add('show');
+        }
+
+        // 回到首頁重新開始
+        function resetToStart() {
+            resultModal.classList.remove('show');
+            failModal.classList.remove('show');
+            screens.game.classList.remove('active');
+            screens.start.classList.add('active');
+        }
+    </script>
+</body>
+</html>

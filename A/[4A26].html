@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048: 能量覺醒 (無盡挑戰)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            overflow: hidden;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+        .btn-skill {
+            background: linear-gradient(145deg, #334155, #1e293b);
+            border: 1px solid #475569;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-skill:hover:not(:disabled) {
+            border-color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+        }
+        .btn-skill:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .btn-skill:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+        .btn-skill.active-skill {
+            border-color: #f43f5e;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
+            animation: pulse-border 1.5s infinite;
+        }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        }
+        canvas {
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .energy-bar-container {
+            width: 100%;
+            height: 10px;
+            background: #1e293b;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        .energy-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            width: 0%;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+        }
+        #combo-text {
+            text-shadow: 0 0 10px rgba(250, 204, 21, 0.8);
+            animation: pop-up 0.5s ease-out forwards;
+        }
+        @keyframes pop-up {
+            0% { transform: scale(0.5) translateY(20px); opacity: 0; }
+            50% { transform: scale(1.2) translateY(-10px); opacity: 1; }
+            100% { transform: scale(1) translateY(0); opacity: 0; }
+        }
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 10;
+            position: absolute;
+            pointer-events: none;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(16, 185, 129, 0.1) 50%, rgba(0,0,0,0) 100%);
+            opacity: 0.1;
+            animation: scanline 6s linear infinite;
+        }
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(500px); }
+        }
+    </style>
+</head>
+<body class="h-[100dvh] w-screen flex justify-center bg-slate-900 text-slate-200 overflow-hidden font-sans select-none">
+
+    <div class="w-full max-w-[500px] h-full flex flex-col p-2 gap-2 relative mx-auto">
+        
+        <div class="flex justify-between items-end glass-panel p-3 flex-shrink-0">
+            <div>
+                <h1 class="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-500 tracking-wider">2048</h1>
+                <div class="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5">AWAKENING</div>
+            </div>
+            <div class="flex gap-2">
+                <div class="bg-slate-800 rounded p-1.5 text-center min-w-[60px] border border-slate-700 shadow-inner">
+                    <div class="text-slate-400 text-[9px] font-bold">SCORE</div>
+                    <div id="score" class="text-sky-300 font-bold text-base leading-tight">0</div>
+                </div>
+                <div class="bg-slate-800 rounded p-1.5 text-center min-w-[60px] border border-slate-700 shadow-inner">
+                    <div class="text-slate-400 text-[9px] font-bold">BEST</div>
+                    <div id="best-score" class="text-indigo-300 font-bold text-base leading-tight">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel p-2 flex flex-col gap-1.5 relative overflow-hidden bg-slate-900/90 border-emerald-900/50 border flex-shrink-0">
+            <div class="scanline"></div>
+            <div class="flex justify-between items-center z-10">
+                <div class="flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <div class="text-[9px] text-emerald-400 font-bold tracking-widest">>> NEURAL_LINK</div>
+                </div>
+                <button id="btn-ai-assist" onclick="game.requestAIAssistance()" class="bg-emerald-900/40 hover:bg-emerald-800/80 border border-emerald-500/50 text-emerald-300 rounded px-2 py-1 text-[10px] font-bold transition-colors flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                    ✨ 戰術分析
+                </button>
+            </div>
+            <div id="ai-output" class="text-[10px] text-emerald-200/80 font-mono min-h-[28px] leading-relaxed z-10">
+                系統待命。合成 2048 核心以達成覺醒。
+            </div>
+        </div>
+
+        <div class="glass-panel p-2.5 flex-shrink-0">
+            <div class="flex justify-between text-[10px] font-bold mb-1">
+                <span class="text-indigo-300">能量核心 (Energy)</span>
+                <span id="energy-text" class="text-sky-300">0 / 100</span>
+            </div>
+            <div class="energy-bar-container mb-2">
+                <div id="energy-bar" class="energy-bar-fill"></div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2">
+                <button id="btn-skill-bomb" class="btn-skill rounded py-1.5 flex flex-col items-center justify-center" onclick="game.activateSkill('bomb')">
+                    <span class="text-base">💥</span>
+                    <span class="text-[9px] text-slate-300 font-bold mt-0.5">破壞 (-40)</span>
+                </button>
+                <button id="btn-skill-shuffle" class="btn-skill rounded py-1.5 flex flex-col items-center justify-center" onclick="game.activateSkill('shuffle')">
+                    <span class="text-base">🔀</span>
+                    <span class="text-[9px] text-slate-300 font-bold mt-0.5">重組 (-70)</span>
+                </button>
+                <button id="btn-skill-star" class="btn-skill rounded py-1.5 flex flex-col items-center justify-center" onclick="game.activateSkill('star')">
+                    <span class="text-base">🌟</span>
+                    <span class="text-[9px] text-slate-300 font-bold mt-0.5">萬能 (-100)</span>
+                </button>
+            </div>
+            <div id="skill-hint" class="text-center text-[10px] text-rose-400 font-bold mt-1 h-3 transition-opacity duration-300 opacity-0">
+                請點擊目標方塊...
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center px-1 flex-shrink-0">
+            <select id="grid-size" class="bg-slate-800 border border-slate-600 rounded px-2 py-1 font-bold cursor-pointer outline-none text-[11px] text-sky-100 shadow-md">
+                <option value="4">4 x 4 矩陣</option>
+                <option value="5">5 x 5 矩陣</option>
+                <option value="6">6 x 6 矩陣</option>
+            </select>
+            <div class="flex gap-2">
+                <button id="btn-undo" class="bg-slate-700 hover:bg-slate-600 rounded px-3 py-1 font-bold text-[11px] transition-colors shadow-md">撤銷</button>
+                <button id="btn-end" class="bg-rose-800 hover:bg-rose-700 rounded px-3 py-1 font-bold text-[11px] transition-colors shadow-md border border-rose-600">結束</button>
+                <button id="btn-restart" class="bg-indigo-600 hover:bg-indigo-500 rounded px-3 py-1 font-bold text-[11px] transition-colors shadow-[0_0_10px_rgba(79,70,229,0.5)]">重啟</button>
+            </div>
+        </div>
+
+        <div id="canvas-container" class="flex-1 min-h-0 relative w-full flex items-center justify-center">
+            <canvas id="game-canvas" class="block cursor-pointer bg-slate-900 rounded-lg"></canvas>
+            
+            <div id="combo-display" class="pointer-events-none absolute inset-0 flex items-center justify-center hidden z-20">
+                <span id="combo-text" class="text-5xl md:text-6xl font-black text-yellow-400 italic drop-shadow-lg">Combo x2!</span>
+            </div>
+            
+            <div id="game-message" class="hidden absolute inset-0 z-30 flex flex-col items-center justify-center rounded-lg bg-slate-900/90 backdrop-blur-sm m-auto" style="width: var(--canvas-size); height: var(--canvas-size);">
+                <button id="btn-close-msg" onclick="game.continueGame()" class="absolute top-3 right-4 text-3xl font-bold text-slate-400 hover:text-white transition-colors hidden cursor-pointer">✕</button>
+                
+                <h2 id="message-text" class="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r mb-2 drop-shadow-lg text-center leading-tight"></h2>
+                <p id="final-score" class="text-slate-300 mb-6 font-mono text-base">Score: 0</p>
+                
+                <div class="flex gap-4">
+                    <button id="btn-msg-restart" onclick="game.restart()" class="bg-gradient-to-r from-sky-500 to-indigo-600 rounded-full px-6 py-2 font-bold text-sm shadow-[0_0_15px_rgba(99,102,241,0.6)] hover:scale-105 transition-transform">重新初始化</button>
+                    <button id="btn-msg-continue" onclick="game.continueGame()" class="hidden bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full px-6 py-2 font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.6)] hover:scale-105 transition-transform">繼續挑戰</button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+<script>
+const NEON_COLORS = {
+    empty: 'rgba(30, 41, 59, 0.8)',
+    grid: 'rgba(15, 23, 42, 1)',
+    '-1': '#fde047',
+    2: '#38bdf8',
+    4: '#818cf8',
+    8: '#c084fc',
+    16: '#f472b6',
+    32: '#fb7185',
+    64: '#ef4444',
+    128: '#f97316',
+    256: '#f59e0b',
+    512: '#eab308',
+    1024: '#84cc16',
+    2048: '#10b981',
+    4096: '#059669',
+    8192: '#047857',
+    super: '#fff'
+};
+
+const SKILL_COST = {
+    bomb: 40,
+    shuffle: 70,
+    star: 100
+};
+
+const apiKey = ""; 
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 15;
+        this.vy = (Math.random() - 0.5) * 15;
+        this.life = 1.0;
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.color = color;
+        this.size = Math.random() * 6 + 2;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+        this.size *= 0.95;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class Tile {
+    constructor(r, c, val, isNew = true) {
+        this.r = r;
+        this.c = c;
+        this.val = val;
+        this.targetR = r;
+        this.targetC = c;
+        this.animR = r;
+        this.animC = c;
+        this.velR = 0;
+        this.velC = 0;
+        this.scale = isNew ? 0 : 1;
+        this.targetScale = 1;
+        this.velScale = 0;
+        this.toBeDeleted = false;
+        this.mergedThisTurn = false;
+    }
+    updatePhysics(stiffness, damping) {
+        let aR = (this.targetR - this.animR) * stiffness;
+        this.velR = (this.velR + aR) * damping;
+        this.animR += this.velR;
+
+        let aC = (this.targetC - this.animC) * stiffness;
+        this.velC = (this.velC + aC) * damping;
+        this.animC += this.velC;
+
+        let aScale = (this.targetScale - this.scale) * stiffness;
+        this.velScale = (this.velScale + aScale) * damping;
+        this.scale += this.velScale;
+    }
+    isAtTarget() {
+        return Math.abs(this.targetR - this.animR) < 0.01 && 
+               Math.abs(this.targetC - this.animC) < 0.01;
+    }
+}
+
+class Game2048Awakening {
+    constructor() {
+        this.canvas = document.getElementById('game-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.container = document.getElementById('canvas-container');
+        
+        this.gridSize = 4;
+        this.grid = [];
+        this.ghostTiles = []; 
+        this.particles = [];
+        
+        this.score = 0;
+        this.bestScores = { "4": 0, "5": 0, "6": 0 };
+        this.energy = 0;
+        this.maxEnergy = 100;
+        
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.hasReached2048 = false;
+        
+        this.previousState = null;
+        this.activeSkill = null; 
+        
+        this.stiffness = 0.4;
+        this.damping = 0.6;
+        this.shakeAmount = 0;
+
+        this.isAITyping = false;
+        this.aiOutputEl = document.getElementById('ai-output');
+
+        this.initDOM();
+        this.loadData();
+        
+        document.getElementById('grid-size').value = this.gridSize;
+
+        if (this.grid.length === 0 || this.grid.length !== this.gridSize) {
+            this.setup();
+        } else {
+            this.updateUI();
+        }
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupInput();
+        
+        this.lastTime = performance.now();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    initDOM() {
+        this.scoreEl = document.getElementById('score');
+        this.bestScoreEl = document.getElementById('best-score');
+        this.energyTextEl = document.getElementById('energy-text');
+        this.energyBarEl = document.getElementById('energy-bar');
+        this.msgEl = document.getElementById('game-message');
+        this.msgTextEl = document.getElementById('message-text');
+        this.finalScoreEl = document.getElementById('final-score');
+        this.undoBtn = document.getElementById('btn-undo');
+        this.skillHint = document.getElementById('skill-hint');
+        this.comboDisplay = document.getElementById('combo-display');
+        this.comboText = document.getElementById('combo-text');
+        
+        document.getElementById('btn-restart').addEventListener('click', () => this.restart());
+        document.getElementById('btn-end').addEventListener('click', () => this.endGameManual());
+        document.getElementById('grid-size').addEventListener('change', (e) => {
+            this.gridSize = parseInt(e.target.value);
+            this.restart();
+        });
+        this.undoBtn.addEventListener('click', () => this.undo());
+    }
+
+    resize() {
+        const containerWidth = this.container.clientWidth;
+        const containerHeight = this.container.clientHeight;
+        const size = Math.floor(Math.min(containerWidth, containerHeight));
+
+        this.canvas.style.width = size + 'px';
+        this.canvas.style.height = size + 'px';
+        document.documentElement.style.setProperty('--canvas-size', size + 'px');
+
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = size * dpr;
+        this.canvas.height = size * dpr;
+        
+        this.ctx.resetTransform();
+        this.ctx.scale(dpr, dpr);
+        
+        this.width = size;
+        this.height = size;
+        
+        this.padding = this.width * 0.02; 
+        this.gap = this.width * 0.02;
+        this.cellSize = (this.width - this.padding * 2 - this.gap * (this.gridSize - 1)) / this.gridSize;
+
+        this.draw();
+    }
+
+    setup() {
+        this.grid = Array(this.gridSize).fill(null).map(() => Array(this.gridSize).fill(null));
+        this.score = 0;
+        this.energy = 0;
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.hasReached2048 = false;
+        this.previousState = null;
+        this.ghostTiles = [];
+        this.particles = [];
+        this.activeSkill = null;
+        this.cancelSkillUI();
+        this.msgEl.classList.add('hidden');
+        
+        this.resize();
+        this.addRandomTile();
+        this.addRandomTile();
+        
+        this.updateUI();
+        this.saveData();
+    }
+
+    restart() { 
+        this.setup(); 
+        this.typeAIText("系統已重置。等待新的神經網路指令...");
+    }
+
+    endGameManual() {
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+        this.cancelSkillUI();
+        
+        this.msgTextEl.innerText = "完成實驗";
+        this.msgTextEl.className = "text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-300 to-gray-500 mb-2 drop-shadow-lg text-center leading-tight";
+        this.finalScoreEl.innerText = `最終結算分數: ${this.score}`;
+        
+        document.getElementById('btn-close-msg').classList.add('hidden');
+        document.getElementById('btn-msg-continue').classList.add('hidden');
+        document.getElementById('btn-msg-restart').classList.remove('hidden');
+
+        this.msgEl.classList.remove('hidden');
+        this.typeAIText("玩家已主動終止神經連結。紀錄已存檔，感謝您的參與。");
+        
+        this.grid = [];
+        this.saveData();
+    }
+
+    addRandomTile(isStar = false) {
+        let emptyCells = [];
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (!this.grid[r][c]) emptyCells.push({r, c});
+            }
+        }
+        if (emptyCells.length > 0) {
+            let cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            let val = isStar ? -1 : (Math.random() < 0.9 ? 2 : 4);
+            this.grid[cell.r][cell.c] = new Tile(cell.r, cell.c, val, true);
+        }
+    }
+
+    move(dir) {
+        if (this.isGameOver || this.isPaused || this.activeSkill) return;
+
+        let moved = false;
+        let mergeCount = 0;
+        
+        let vectors = [ {r: -1, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 0, c: -1} ];
+        let vec = vectors[dir];
+
+        let rStart = dir === 2 ? this.gridSize - 1 : 0;
+        let rEnd = dir === 2 ? -1 : this.gridSize;
+        let rStep = dir === 2 ? -1 : 1;
+        let cStart = dir === 1 ? this.gridSize - 1 : 0;
+        let cEnd = dir === 1 ? -1 : this.gridSize;
+        let cStep = dir === 1 ? -1 : 1;
+
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (this.grid[r][c]) this.grid[r][c].mergedThisTurn = false;
+            }
+        }
+
+        let currentStateStr = this.serializeGrid();
+
+        for (let r = rStart; r !== rEnd; r += rStep) {
+            for (let c = cStart; c !== cEnd; c += cStep) {
+                let tile = this.grid[r][c];
+                if (!tile) continue;
+
+                let currR = r, currC = c;
+                let nextR = currR + vec.r, nextC = currC + vec.c;
+
+                while (nextR >= 0 && nextR < this.gridSize && nextC >= 0 && nextC < this.gridSize && !this.grid[nextR][nextC]) {
+                    currR = nextR; currC = nextC;
+                    nextR += vec.r; nextC += vec.c;
+                }
+
+                let merged = false;
+                if (nextR >= 0 && nextR < this.gridSize && nextC >= 0 && nextC < this.gridSize && this.grid[nextR][nextC]) {
+                    let targetTile = this.grid[nextR][nextC];
+                    
+                    let canMerge = !targetTile.mergedThisTurn && 
+                                   (targetTile.val === tile.val || targetTile.val === -1 || tile.val === -1);
+
+                    if (canMerge) {
+                        let newVal;
+                        if (tile.val === -1 && targetTile.val === -1) newVal = 4;
+                        else if (tile.val === -1) newVal = targetTile.val * 2;
+                        else if (targetTile.val === -1) newVal = tile.val * 2;
+                        else newVal = targetTile.val * 2;
+
+                        targetTile.val = newVal;
+                        targetTile.mergedThisTurn = true;
+                        
+                        this.score += targetTile.val;
+                        if (this.score > this.bestScores[this.gridSize]) {
+                            this.bestScores[this.gridSize] = this.score;
+                        }
+                        
+                        mergeCount++;
+                        this.gainEnergy(Math.max(1, Math.floor(Math.log2(targetTile.val))));
+
+                        targetTile.scale = 1.4; 
+                        this.spawnParticles(nextR, nextC, targetTile.val);
+                        if (targetTile.val >= 512) this.triggerShake(targetTile.val);
+
+                        tile.targetR = nextR;
+                        tile.targetC = nextC;
+                        tile.toBeDeleted = true;
+                        this.ghostTiles.push(tile);
+                        this.grid[r][c] = null;
+                        
+                        moved = true; merged = true;
+                    }
+                }
+
+                if (!merged && (currR !== r || currC !== c)) {
+                    this.grid[currR][currC] = tile;
+                    this.grid[r][c] = null;
+                    tile.targetR = currR;
+                    tile.targetC = currC;
+                    moved = true;
+                }
+            }
+        }
+
+        if (moved) {
+            this.saveStateForUndo(currentStateStr);
+            if (mergeCount > 1) this.showCombo(mergeCount);
+            
+            this.addRandomTile();
+            
+            if (!this.checkWinCondition()) {
+                this.checkGameOver();
+            }
+            
+            this.saveData();
+            this.updateUI();
+        }
+    }
+
+    activateSkill(skillName) {
+        if (this.isGameOver || this.isPaused) return;
+        
+        if (this.activeSkill === skillName) {
+            this.cancelSkillUI();
+            return;
+        }
+
+        let cost = SKILL_COST[skillName];
+        if (this.energy < cost) {
+            this.shakeElement(document.getElementById('energy-bar'));
+            this.typeAIText(`[警告] 能量不足。無法啟動目標協定。請繼續合成獲取能量。`);
+            return;
+        }
+
+        this.cancelSkillUI();
+
+        if (skillName === 'star') {
+            this.saveStateForUndo(this.serializeGrid());
+            this.energy -= cost;
+            this.addRandomTile(true); 
+            this.checkWinCondition(); 
+            this.saveData();
+            this.updateUI();
+            
+            document.getElementById('btn-skill-star').classList.add('bg-sky-700');
+            setTimeout(()=> document.getElementById('btn-skill-star').classList.remove('bg-sky-700'), 200);
+            
+            this.typeAIText("「萬能星」協定已注入。矩陣發生異變，請善用不穩定的萬能粒子。");
+        } else if (skillName === 'shuffle') {
+            this.saveStateForUndo(this.serializeGrid());
+            this.energy -= cost;
+            
+            let tiles = [];
+            for(let r=0; r<this.gridSize; r++) {
+                for(let c=0; c<this.gridSize; c++) {
+                    if (this.grid[r][c]) {
+                        tiles.push(this.grid[r][c]);
+                        this.grid[r][c] = null;
+                    }
+                }
+            }
+            
+            for(let i = tiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+            }
+            
+            let idx = 0;
+            for(let r=0; r<this.gridSize; r++) {
+                for(let c=0; c<this.gridSize; c++) {
+                    if (idx < tiles.length) {
+                        let t = tiles[idx++];
+                        this.grid[r][c] = t;
+                        t.targetR = r; 
+                        t.targetC = c;
+                    }
+                }
+            }
+            
+            this.saveData();
+            this.updateUI();
+            
+            document.getElementById('btn-skill-shuffle').classList.add('bg-indigo-700');
+            setTimeout(()=> document.getElementById('btn-skill-shuffle').classList.remove('bg-indigo-700'), 200);
+            
+            this.typeAIText("「重組」協定已啟動。矩陣空間已強制重新排列。");
+            
+        } else {
+            this.activeSkill = skillName;
+            document.getElementById('btn-skill-bomb').classList.add('active-skill');
+            this.skillHint.style.opacity = '1';
+            this.canvas.style.cursor = 'crosshair';
+            this.typeAIText(`已鎖定「高能破壞」協定。請於矩陣中點擊目標方塊以清除障礙。`);
+        }
+    }
+
+    executeTargetSkill(r, c) {
+        if (!this.grid[r][c] || this.grid[r][c].val === -1) return;
+        
+        let cost = SKILL_COST[this.activeSkill];
+        this.saveStateForUndo(this.serializeGrid());
+
+        if (this.activeSkill === 'bomb') {
+            this.spawnParticles(r, c, this.grid[r][c].val, 30);
+            this.grid[r][c] = null;
+            this.typeAIText("目標方塊已成功清除。矩陣空間已釋放。");
+        }
+
+        this.energy -= cost;
+        this.cancelSkillUI();
+        this.checkGameOver();
+        this.saveData();
+        this.updateUI();
+    }
+
+    cancelSkillUI() {
+        this.activeSkill = null;
+        document.getElementById('btn-skill-bomb').classList.remove('active-skill');
+        this.skillHint.style.opacity = '0';
+        this.canvas.style.cursor = 'pointer';
+    }
+
+    handleCanvasClick(e) {
+        if (!this.activeSkill || this.isPaused) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                let cellX = this.padding + c * (this.cellSize + this.gap);
+                let cellY = this.padding + r * (this.cellSize + this.gap);
+                if (x >= cellX && x <= cellX + this.cellSize &&
+                    y >= cellY && y <= cellY + this.cellSize) {
+                    this.executeTargetSkill(r, c);
+                    return;
+                }
+            }
+        }
+    }
+
+    gainEnergy(amount) {
+        this.energy = Math.min(this.maxEnergy, this.energy + amount);
+    }
+
+    showCombo(count) {
+        this.comboDisplay.classList.remove('hidden');
+        this.comboText.innerText = `Combo x${count}!`;
+        this.comboText.style.animation = 'none';
+        this.comboText.offsetHeight; 
+        this.comboText.style.animation = 'pop-up 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+        this.gainEnergy(count);
+    }
+
+    spawnParticles(r, c, val, count = 15) {
+        let px = this.padding + c * (this.cellSize + this.gap) + this.cellSize / 2;
+        let py = this.padding + r * (this.cellSize + this.gap) + this.cellSize / 2;
+        let color = val === -1 ? NEON_COLORS['-1'] : (NEON_COLORS[val] || NEON_COLORS.super);
+        
+        for (let i = 0; i < count; i++) {
+            this.particles.push(new Particle(px, py, color));
+        }
+    }
+
+    triggerShake(val) {
+        let intensity = Math.min(20, Math.floor(Math.log2(val)) * 1.5);
+        this.shakeAmount = intensity;
+    }
+
+    shakeElement(el) {
+        el.style.transform = 'translateX(5px)';
+        setTimeout(() => el.style.transform = 'translateX(-5px)', 50);
+        setTimeout(() => el.style.transform = 'translateX(5px)', 100);
+        setTimeout(() => el.style.transform = 'translateX(0)', 150);
+    }
+
+    saveStateForUndo(gridStr) {
+        this.previousState = {
+            grid: gridStr,
+            score: this.score,
+            energy: this.energy,
+            bestScores: JSON.parse(JSON.stringify(this.bestScores))
+        };
+    }
+
+    undo() {
+        if (!this.previousState || this.activeSkill || this.isPaused || this.isGameOver) return;
+        this.deserializeGrid(this.previousState.grid);
+        this.score = this.previousState.score;
+        this.energy = this.previousState.energy;
+        if (this.previousState.bestScores) {
+            this.bestScores = this.previousState.bestScores;
+        }
+        
+        this.previousState = null;
+        this.ghostTiles = [];
+        this.particles = [];
+        
+        this.saveData();
+        this.updateUI();
+        this.typeAIText("時間回溯協定已啟動。矩陣狀態已還原至上一個節點。");
+    }
+
+    checkWinCondition() {
+        if (this.isGameOver || this.hasReached2048) return false;
+        
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (this.grid[r][c] && this.grid[r][c].val >= 2048) {
+                    this.hasReached2048 = true;
+                    this.isPaused = true; 
+                    this.cancelSkillUI();
+                    
+                    setTimeout(() => {
+                        this.msgTextEl.innerText = "神級操作！2048 覺醒";
+                        this.msgTextEl.className = "text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-cyan-500 mb-2 drop-shadow-lg text-center leading-tight";
+                        this.finalScoreEl.innerText = `目前分數: ${this.score}`;
+                        
+                        document.getElementById('btn-close-msg').classList.remove('hidden');
+                        document.getElementById('btn-msg-continue').classList.remove('hidden');
+                        document.getElementById('btn-msg-restart').classList.add('hidden');
+                        
+                        this.msgEl.classList.remove('hidden');
+                        this.typeAIText("【系統公告】太神啦！最高級核心 (2048) 已合成。你可以點擊 X 或繼續挑戰，進入無盡模式！");
+                        
+                        this.saveData(); 
+                    }, 1000);
+                    
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    continueGame() {
+        this.isPaused = false;
+        this.msgEl.classList.add('hidden');
+        this.typeAIText("已解鎖無盡模式權限。請盡情探索這座無窮無盡的數字矩陣。");
+    }
+
+    checkGameOver() {
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (!this.grid[r][c]) return;
+            }
+        }
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                let val = this.grid[r][c].val;
+                if (r < this.gridSize - 1 && (this.grid[r+1][c].val === val || this.grid[r+1][c].val === -1 || val === -1)) return;
+                if (c < this.gridSize - 1 && (this.grid[r][c+1].val === val || this.grid[r][c+1].val === -1 || val === -1)) return;
+            }
+        }
+        
+        if (this.energy >= SKILL_COST.bomb || this.energy >= SKILL_COST.shuffle) {
+            this.skillHint.innerText = "系統擁堵！請使用技能清除空間！";
+            this.skillHint.style.opacity = '1';
+            this.skillHint.classList.replace('text-rose-400', 'text-yellow-400');
+            this.typeAIText("[警告] 矩陣即將崩潰！偵測到備用能量，建議立即啟動「破壞」或「重組」技能爭取生存空間！");
+            return;
+        }
+
+        this.isGameOver = true;
+        this.cancelSkillUI();
+        this.msgTextEl.innerText = "系統崩潰";
+        this.msgTextEl.className = "text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-orange-500 mb-2 drop-shadow-lg text-center leading-tight";
+        this.finalScoreEl.innerText = `最終分數: ${this.score}`;
+        
+        document.getElementById('btn-close-msg').classList.add('hidden');
+        document.getElementById('btn-msg-continue').classList.add('hidden');
+        document.getElementById('btn-msg-restart').classList.remove('hidden');
+
+        this.msgEl.classList.remove('hidden');
+        
+        this.grid = [];
+        this.saveData();
+    }
+
+    serializeGrid() {
+        if (!this.grid || this.grid.length === 0) return "[]";
+        let saveGrid = [];
+        for(let r=0; r<this.gridSize; r++){
+            for(let c=0; c<this.gridSize; c++){
+                if(this.grid[r][c]) saveGrid.push({r, c, val: this.grid[r][c].val});
+            }
+        }
+        return JSON.stringify(saveGrid);
+    }
+
+    deserializeGrid(jsonStr) {
+        let cells = JSON.parse(jsonStr);
+        this.grid = Array(this.gridSize).fill(null).map(() => Array(this.gridSize).fill(null));
+        cells.forEach(cell => {
+            if (cell.r < this.gridSize && cell.c < this.gridSize) {
+                this.grid[cell.r][cell.c] = new Tile(cell.r, cell.c, cell.val, false);
+            }
+        });
+    }
+
+    getGridStringForAI() {
+        let lines = [];
+        for(let r=0; r<this.gridSize; r++) {
+            let row = [];
+            for(let c=0; c<this.gridSize; c++) {
+                if(!this.grid[r][c]) row.push("0");
+                else if (this.grid[r][c].val === -1) row.push("★");
+                else row.push(this.grid[r][c].val.toString());
+            }
+            lines.push(row.join("\t"));
+        }
+        return lines.join("\n");
+    }
+
+    async requestAIAssistance() {
+        if (this.isAITyping) return;
+        
+        const btn = document.getElementById('btn-ai-assist');
+        const originalBtnText = btn.innerHTML;
+        btn.innerHTML = `<span class="animate-spin inline-block">⏳</span> 分析中...`;
+        btn.disabled = true;
+
+        this.typeAIText("正在上傳矩陣資料至神經網路核心...");
+
+        const gridState = this.getGridStringForAI();
+        const prompt = `你是一個存在於賽博龐克世界中，帶有輕微諷刺幽默感但實際上很專業的 AI 遊戲助手。
+玩家正在玩一款 2048 變體遊戲 (包含破壞、重組、萬能星(★)技能與能量系統)。
+目前玩家狀態：
+- 矩陣大小: ${this.gridSize}x${this.gridSize}
+- 分數: ${this.score}
+- 能量核心: ${this.energy}/100 (破壞需40，重組需70，萬能需100)
+- 盤面狀態 (0代表空地):
+${gridState}
+
+請用繁體中文給出一兩句簡短、精闢、帶有賽博龐克駭客風格的戰術建議或吐槽（總字數限制在 50 字以內）。不要使用 markdown 格式，直接輸出純文字。`;
+
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: "你是一個賽博龐克 AI 遊戲助手。回答必須簡潔、帶有駭客/科技用語，且總是在50字以內。" }] }
+            };
+
+            const responseText = await this.fetchWithRetry(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            this.typeAIText(responseText);
+
+        } catch (error) {
+            console.error("AI 呼叫失敗:", error);
+            this.typeAIText("[錯誤] 無法連接至神經網路。請嘗試手動操作矩陣。");
+        } finally {
+            btn.innerHTML = originalBtnText;
+            btn.disabled = false;
+        }
+    }
+
+    async fetchWithRetry(url, options, maxRetries = 5) {
+        let delays = [1000, 2000, 4000, 8000, 16000];
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 回應無法解析。";
+            } catch (error) {
+                if (i === maxRetries - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, delays[i]));
+            }
+        }
+    }
+
+    typeAIText(text) {
+        this.isAITyping = true;
+        this.aiOutputEl.innerHTML = "";
+        let i = 0;
+        const speed = 30; 
+        
+        const typeWriter = () => {
+            if (i < text.length) {
+                this.aiOutputEl.innerHTML += text.charAt(i);
+                i++;
+                setTimeout(typeWriter, speed);
+            } else {
+                this.isAITyping = false;
+                this.aiOutputEl.innerHTML += '<span class="animate-pulse">_</span>';
+            }
+        };
+        typeWriter();
+    }
+
+    saveData() {
+        const state = {
+            gridSize: this.gridSize,
+            grid: this.serializeGrid(),
+            score: this.score,
+            bestScores: this.bestScores,
+            energy: this.energy,
+            hasReached2048: this.hasReached2048,
+            previousState: this.previousState
+        };
+        localStorage.setItem('2048_neon_save_v4', JSON.stringify(state));
+    }
+
+    loadData() {
+        const saved = localStorage.getItem('2048_neon_save_v4');
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                this.gridSize = state.gridSize || 4;
+                
+                let parsedGrid = JSON.parse(state.grid || "[]");
+                if (parsedGrid.length > 0) {
+                    this.deserializeGrid(state.grid);
+                }
+                
+                this.score = state.score || 0;
+                
+                if (state.bestScores) {
+                    this.bestScores = state.bestScores;
+                }
+                
+                this.energy = state.energy || 0;
+                this.hasReached2048 = state.hasReached2048 || false;
+                this.previousState = state.previousState || null;
+            } catch (e) {
+                console.error("Save load failed", e);
+            }
+        }
+    }
+
+    updateUI() {
+        this.scoreEl.innerText = this.score;
+        this.bestScoreEl.innerText = this.bestScores[this.gridSize] || 0;
+        this.undoBtn.disabled = !this.previousState || this.activeSkill;
+        
+        this.energyTextEl.innerText = `${this.energy} / ${this.maxEnergy}`;
+        this.energyBarEl.style.width = `${(this.energy / this.maxEnergy) * 100}%`;
+        
+        document.getElementById('btn-skill-bomb').disabled = this.energy < SKILL_COST.bomb;
+        document.getElementById('btn-skill-shuffle').disabled = this.energy < SKILL_COST.shuffle;
+        document.getElementById('btn-skill-star').disabled = this.energy < SKILL_COST.star;
+    }
+
+    setupInput() {
+        window.addEventListener('keydown', (e) => {
+            if (this.isPaused) return; 
+            if (['ArrowUp', 'w', 'W'].includes(e.key)) this.move(0);
+            else if (['ArrowRight', 'd', 'D'].includes(e.key)) this.move(1);
+            else if (['ArrowDown', 's', 'S'].includes(e.key)) this.move(2);
+            else if (['ArrowLeft', 'a', 'A'].includes(e.key)) this.move(3);
+            
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+        }, {passive: false});
+
+        let touchStartX = 0, touchStartY = 0;
+        const threshold = 30;
+
+        this.canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, {passive: true});
+
+        this.canvas.addEventListener('touchend', (e) => {
+            if (this.activeSkill || this.isPaused) return; 
+            
+            let dx = e.changedTouches[0].screenX - touchStartX;
+            let dy = e.changedTouches[0].screenY - touchStartY;
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (Math.abs(dx) > threshold) dx > 0 ? this.move(1) : this.move(3);
+            } else {
+                if (Math.abs(dy) > threshold) dy > 0 ? this.move(2) : this.move(0);
+            }
+        }, {passive: true});
+
+        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+    }
+
+    loop(timestamp) {
+        this.updatePhysics();
+        this.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    updatePhysics() {
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (this.grid[r][c]) this.grid[r][c].updatePhysics(this.stiffness, this.damping);
+            }
+        }
+        
+        for (let i = this.ghostTiles.length - 1; i >= 0; i--) {
+            let ghost = this.ghostTiles[i];
+            ghost.updatePhysics(this.stiffness, this.damping);
+            if (ghost.isAtTarget()) this.ghostTiles.splice(i, 1);
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update();
+            if (this.particles[i].life <= 0) this.particles.splice(i, 1);
+        }
+
+        if (this.shakeAmount > 0) {
+            this.shakeAmount *= 0.8; 
+            if (this.shakeAmount < 0.5) this.shakeAmount = 0;
+        }
+    }
+
+    draw() {
+        const ctx = this.ctx;
+        
+        ctx.save();
+        if (this.shakeAmount > 0) {
+            let dx = (Math.random() - 0.5) * this.shakeAmount;
+            let dy = (Math.random() - 0.5) * this.shakeAmount;
+            ctx.translate(dx, dy);
+        }
+
+        ctx.clearRect(0, 0, this.width, this.height);
+
+        ctx.fillStyle = NEON_COLORS.grid;
+        if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(0, 0, this.width, this.height, 8);
+            ctx.fill();
+        } else {
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                this.drawRoundedRect(
+                    this.padding + c * (this.cellSize + this.gap),
+                    this.padding + r * (this.cellSize + this.gap),
+                    this.cellSize, this.cellSize, 6, NEON_COLORS.empty
+                );
+            }
+        }
+
+        this.ghostTiles.forEach(tile => this.drawTile(tile));
+        
+        for (let r = 0; r < this.gridSize; r++) {
+            for (let c = 0; c < this.gridSize; c++) {
+                if (this.grid[r][c]) this.drawTile(this.grid[r][c]);
+            }
+        }
+
+        this.particles.forEach(p => p.draw(ctx));
+
+        if (this.activeSkill === 'bomb') {
+            ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+
+        ctx.restore();
+    }
+
+    drawTile(tile) {
+        const ctx = this.ctx;
+        let x = this.padding + tile.animC * (this.cellSize + this.gap);
+        let y = this.padding + tile.animR * (this.cellSize + this.gap);
+        let centerX = x + this.cellSize / 2;
+        let centerY = y + this.cellSize / 2;
+        
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(tile.scale, tile.scale);
+        ctx.translate(-centerX, -centerY);
+
+        let bgColor = tile.val === -1 ? NEON_COLORS['-1'] : (NEON_COLORS[tile.val] || NEON_COLORS.super);
+        
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = bgColor;
+        
+        if (tile.val === -1) {
+            ctx.shadowBlur = 25;
+            let grad = ctx.createLinearGradient(x, y, x+this.cellSize, y+this.cellSize);
+            grad.addColorStop(0, '#fde047'); 
+            grad.addColorStop(1, '#f97316'); 
+            this.drawRoundedRect(x, y, this.cellSize, this.cellSize, 8, grad);
+        } else {
+            this.drawRoundedRect(x, y, this.cellSize, this.cellSize, 6, bgColor);
+        }
+        
+        ctx.shadowBlur = 0; 
+
+        ctx.fillStyle = '#fff';
+        if (tile.val === 2 || tile.val === 4) ctx.fillStyle = '#f8fafc';
+        
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        if (tile.val === -1) {
+            ctx.font = `bold ${this.cellSize * 0.6}px sans-serif`;
+            ctx.fillText("★", centerX, centerY + this.cellSize * 0.05);
+        } else {
+            let valStr = tile.val.toString();
+            let fontSize = this.cellSize * 0.45;
+            if (valStr.length > 2) fontSize = this.cellSize * 0.35;
+            if (valStr.length > 3) fontSize = this.cellSize * 0.25;
+            if (valStr.length > 4) fontSize = this.cellSize * 0.20;
+            
+            ctx.font = `900 ${fontSize}px "Segoe UI", Tahoma, sans-serif`;
+            ctx.fillText(valStr, centerX, centerY + fontSize * 0.05);
+        }
+        
+        ctx.restore();
+    }
+
+    drawRoundedRect(x, y, w, h, r, color) {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(x, y, w, h, r);
+        } else {
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+        }
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+window.onload = () => {
+    window.game = new Game2048Awakening();
+};
+</script>
+
+</body>
+</html>

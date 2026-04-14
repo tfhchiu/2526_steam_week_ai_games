@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Tech Dash: 電腦單字冒險</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Noto Sans TC', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .pixel-font { font-family: 'Press Start 2P', cursive; }
+
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 4px solid #333;
+        }
+
+        #game-canvas {
+            background-color: #f7f7f7;
+            image-rendering: pixelated;
+        }
+
+        /* 配對挑戰遮罩 */
+        #match-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .match-card {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 3px solid #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            background: #1e293b;
+            color: #f8fafc;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            min-height: 60px;
+        }
+
+        .match-card.selected {
+            border-color: #fbbf24;
+            background: #334155;
+            transform: scale(1.05);
+        }
+
+        .match-card.correct {
+            border-color: #22c55e;
+            background: #064e3b;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .match-card.wrong {
+            border-color: #ef4444;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        #start-screen {
+            position: absolute;
+            inset: 0;
+            background: #0f172a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <!-- 開始畫面 -->
+        <div id="start-screen" class="text-center p-6">
+            <div class="text-6xl mb-6 animate-bounce">🦖</div>
+            <h1 class="pixel-font text-2xl mb-4 text-blue-400">DINO TECH DASH</h1>
+            <p class="text-gray-400 mb-8 font-bold">跳過仙人掌，收集數據門修復系統！</p>
+            <div class="space-y-4">
+                <p class="text-xs text-gray-500 pixel-font">[SPACE] 跳躍 / [點擊] 進行配對</p>
+                <button onclick="startGame()" class="pixel-font bg-blue-500 hover:bg-blue-400 text-white px-8 py-4 rounded-xl shadow-[0_6px_0_#2563eb] active:translate-y-1 active:shadow-none transition-all">
+                    START GAME
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲畫布 -->
+        <canvas id="game-canvas" width="800" height="450"></canvas>
+
+        <!-- UI 資訊 -->
+        <div class="absolute top-4 left-6 flex items-center gap-6">
+            <div class="pixel-font text-[10px] text-gray-600">SCORE: <span id="score-display">00000</span></div>
+            <div class="pixel-font text-[10px] text-blue-500">GATE: <span id="gate-count">0</span>/3</div>
+        </div>
+
+        <!-- 配對挑戰區域 (Match Quiz) -->
+        <div id="match-overlay">
+            <div class="text-center mb-6">
+                <h2 class="pixel-font text-yellow-400 text-sm mb-2">SYSTEM RECOVERY</h2>
+                <p class="text-blue-300 text-sm font-bold">配對所有電腦單字以修復系統！</p>
+            </div>
+            
+            <div id="match-grid" class="grid grid-cols-3 gap-3 w-full max-w-2xl">
+                <!-- 由 JavaScript 生成 -->
+            </div>
+
+            <div class="mt-8 flex items-center gap-4">
+                <div class="w-48 h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div id="match-progress" class="h-full bg-green-500 transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <span id="match-status" class="text-xs font-mono text-gray-400 italic">等待配對...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const gateDisplay = document.getElementById('gate-count');
+        const matchOverlay = document.getElementById('match-overlay');
+        const startScreen = document.getElementById('start-screen');
+
+        const vocabulary = [
+            { en: 'Motherboard', zh: '主機板' },
+            { en: 'CPU', zh: '處理器' },
+            { en: 'Monitor', zh: '顯示器' },
+            { en: 'Hard Drive', zh: '硬碟' },
+            { en: 'Firewall', zh: '防火牆' },
+            { en: 'Database', zh: '資料庫' },
+            { en: 'Algorithm', zh: '演算法' },
+            { en: 'Network', zh: '網絡' },
+            { en: 'Router', zh: '路由器' },
+            { en: 'Software', zh: '軟體' }
+        ];
+
+        let gameState = 'START'; 
+        let score = 0;
+        let gatesCleared = 0;
+        let gameSpeed = 6;
+        let frame = 0;
+        
+        let dino = { x: 80, y: 340, width: 44, height: 48, dy: 0, jumpPower: -15, gravity: 0.8, grounded: true };
+        let obstacles = [];
+        let dataGates = [];
+
+        function init() {
+            obstacles = [];
+            dataGates = [];
+            score = 0;
+            gatesCleared = 0;
+            gameSpeed = 6;
+            dino.y = 340;
+            dino.dy = 0;
+            updateUI();
+        }
+
+        function startGame() {
+            init();
+            startScreen.style.display = 'none';
+            gameState = 'PLAYING';
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.code === 'Space' || e.code === 'ArrowUp') && dino.grounded && gameState === 'PLAYING') {
+                dino.dy = dino.jumpPower;
+                dino.grounded = false;
+            }
+        });
+
+        // 繪製像素恐龍
+        function drawDino(x, y, width, height) {
+            ctx.fillStyle = '#535353';
+            // 身體
+            ctx.fillRect(x + 10, y + 10, width - 15, height - 20);
+            // 頭部
+            ctx.fillRect(x + 25, y, 20, 15);
+            // 嘴部
+            ctx.fillRect(x + 35, y + 5, 12, 5);
+            // 尾巴
+            ctx.fillRect(x, y + 20, 10, 15);
+            // 腿部 (簡單跑步動畫)
+            let legOffset = Math.sin(frame * 0.2) * 3;
+            if (!dino.grounded) legOffset = 0;
+            ctx.fillRect(x + 15, y + height - 10, 6, 10 + (legOffset > 0 ? legOffset : 0));
+            ctx.fillRect(x + 28, y + height - 10, 6, 10 + (legOffset < 0 ? -legOffset : 0));
+            // 眼睛
+            ctx.fillStyle = '#f7f7f7';
+            ctx.fillRect(x + 30, y + 3, 4, 4);
+        }
+
+        // 繪製像素仙人掌
+        function drawCactus(x, y, width, height) {
+            ctx.fillStyle = '#22c55e';
+            // 主幹
+            ctx.fillRect(x + width/3, y, width/3, height);
+            // 左臂
+            ctx.fillRect(x, y + height/3, width/3, 5);
+            ctx.fillRect(x, y + height/6, 5, height/6 + 5);
+            // 右臂
+            ctx.fillRect(x + width*2/3, y + height/4, width/3, 5);
+            ctx.fillRect(x + width - 5, y + height/10, 5, height/4 + 5);
+            // 刺 (細節)
+            ctx.fillStyle = '#166534';
+            ctx.fillRect(x + width/2, y + 5, 2, 2);
+            ctx.fillRect(x + width/2, y + 20, 2, 2);
+        }
+
+        function gameLoop() {
+            if (gameState !== 'PLAYING') return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            frame++;
+            score++;
+            updateUI();
+
+            drawEnvironment();
+
+            // 恐龍物理
+            dino.dy += dino.gravity;
+            dino.y += dino.dy;
+            if (dino.y > 340) {
+                dino.y = 340;
+                dino.dy = 0;
+                dino.grounded = true;
+            }
+
+            drawDino(dino.x, dino.y, dino.width, dino.height);
+
+            // 生成仙人掌
+            if (frame % 120 === 0) {
+                let h = 30 + Math.random() * 30;
+                obstacles.push({ x: canvas.width, y: 390 - h, width: 25, height: h });
+            }
+
+            // 生成數據門
+            if (frame % 500 === 0) {
+                dataGates.push({ x: canvas.width, y: 280, width: 45, height: 110 });
+            }
+
+            // 處理仙人掌
+            obstacles.forEach((obs, idx) => {
+                obs.x -= gameSpeed;
+                drawCactus(obs.x, obs.y, obs.width, obs.height);
+
+                if (checkCollision(dino, obs)) gameOver();
+                if (obs.x + obs.width < 0) obstacles.splice(idx, 1);
+            });
+
+            // 處理數據門
+            dataGates.forEach((gate, idx) => {
+                gate.x -= gameSpeed;
+                
+                let gradient = ctx.createLinearGradient(gate.x, gate.y, gate.x + gate.width, gate.y);
+                gradient.addColorStop(0, '#3b82f6');
+                gradient.addColorStop(1, '#60a5fa');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(gate.x, gate.y, gate.width, gate.height);
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px Arial';
+                ctx.fillText('DATA', gate.x + 8, gate.y + 20);
+
+                if (checkCollision(dino, gate)) {
+                    dataGates.splice(idx, 1);
+                    startMatchQuiz();
+                }
+                if (gate.x + gate.width < 0) dataGates.splice(idx, 1);
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawEnvironment() {
+            ctx.strokeStyle = '#535353';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 390);
+            ctx.lineTo(canvas.width, 390);
+            ctx.stroke();
+
+            ctx.fillStyle = '#535353';
+            for(let i=0; i<canvas.width; i+=120) {
+                let ox = (i - (frame * gameSpeed) % 120);
+                ctx.fillRect(ox, 395, 15, 1);
+                ctx.fillRect(ox + 40, 405, 10, 1);
+            }
+        }
+
+        function checkCollision(a, b) {
+            // 縮小碰撞箱以增加容錯率 (Pixel Perfect-ish)
+            const padding = 5;
+            return a.x + padding < b.x + b.width - padding && 
+                   a.x + a.width - padding > b.x + padding &&
+                   a.y + padding < b.y + b.height - padding && 
+                   a.y + a.height - padding > b.y + padding;
+        }
+
+        let selectedCards = [];
+        let matchesFound = 0;
+        const totalMatchesRequired = 3;
+
+        function startMatchQuiz() {
+            gameState = 'QUIZ';
+            matchOverlay.style.display = 'flex';
+            matchesFound = 0;
+            selectedCards = [];
+            updateMatchProgress();
+            
+            const shuffledVocab = [...vocabulary].sort(() => 0.5 - Math.random()).slice(0, totalMatchesRequired);
+            const pool = [];
+            shuffledVocab.forEach(v => {
+                pool.push({ text: v.en, match: v.zh, type: 'en' });
+                pool.push({ text: v.zh, match: v.en, type: 'zh' });
+            });
+            pool.sort(() => 0.5 - Math.random());
+
+            const grid = document.getElementById('match-grid');
+            grid.innerHTML = '';
+            pool.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'match-card';
+                card.innerText = item.text;
+                card.onclick = () => handleCardClick(card, item);
+                grid.appendChild(card);
+            });
+        }
+
+        function handleCardClick(element, item) {
+            if (element.classList.contains('correct') || element.classList.contains('selected')) return;
+
+            element.classList.add('selected');
+            selectedCards.push({ element, item });
+
+            if (selectedCards.length === 2) {
+                const [c1, c2] = selectedCards;
+                if (c1.item.text === c2.item.match) {
+                    c1.element.className = 'match-card correct';
+                    c2.element.className = 'match-card correct';
+                    matchesFound++;
+                    updateMatchProgress();
+                    document.getElementById('match-status').innerText = "系統修復中...";
+                    
+                    if (matchesFound === totalMatchesRequired) {
+                        setTimeout(finishQuiz, 800);
+                    }
+                } else {
+                    c1.element.classList.add('wrong');
+                    c2.element.classList.add('wrong');
+                    document.getElementById('match-status').innerText = "錯誤！重新嘗試...";
+                    setTimeout(() => {
+                        c1.element.classList.remove('selected', 'wrong');
+                        c2.element.classList.remove('selected', 'wrong');
+                    }, 500);
+                }
+                selectedCards = [];
+            }
+        }
+
+        function updateMatchProgress() {
+            const percent = (matchesFound / totalMatchesRequired) * 100;
+            document.getElementById('match-progress').style.width = percent + '%';
+        }
+
+        function finishQuiz() {
+            matchOverlay.style.display = 'none';
+            gameState = 'PLAYING';
+            gatesCleared++;
+            gameSpeed += 0.4;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateUI() {
+            scoreDisplay.innerText = score.toString().padStart(5, '0');
+            gateDisplay.innerText = gatesCleared;
+        }
+
+        function gameOver() {
+            gameState = 'OVER';
+            startScreen.style.display = 'flex';
+            startScreen.querySelector('h1').innerHTML = `SYSTEM CRASHED<br><span class="text-sm">SCORE: ${score}</span>`;
+            startScreen.querySelector('button').innerText = 'REBOOT SYSTEM';
+        }
+
+        window.onload = () => {
+            init();
+            drawDino(dino.x, dino.y, dino.width, dino.height);
+        };
+    </script>
+</body>
+</html>

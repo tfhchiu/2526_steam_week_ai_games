@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電腦單字配對挑戰賽</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // 單字資料庫 (分為四個難度級別，每級 10 個單字)
+    const VOCABULARY_DATA = {
+      1: [
+        { id: '1-1', en: 'Computer', zh: '電腦' },
+        { id: '1-2', en: 'Mouse', zh: '滑鼠' },
+        { id: '1-3', en: 'Keyboard', zh: '鍵盤' },
+        { id: '1-4', en: 'Screen', zh: '螢幕' },
+        { id: '1-5', en: 'Internet', zh: '網際網路' },
+        { id: '1-6', en: 'Website', zh: '網站' },
+        { id: '1-7', en: 'Email', zh: '電子郵件' },
+        { id: '1-8', en: 'File', zh: '檔案' },
+        { id: '1-9', en: 'Folder', zh: '資料夾' },
+        { id: '1-10', en: 'Save', zh: '儲存' },
+      ],
+      2: [
+        { id: '2-1', en: 'Browser', zh: '瀏覽器' },
+        { id: '2-2', en: 'Software', zh: '軟體' },
+        { id: '2-3', en: 'Hardware', zh: '硬體' },
+        { id: '2-4', en: 'Download', zh: '下載' },
+        { id: '2-5', en: 'Upload', zh: '上傳' },
+        { id: '2-6', en: 'Password', zh: '密碼' },
+        { id: '2-7', en: 'Printer', zh: '印表機' },
+        { id: '2-8', en: 'Server', zh: '伺服器' },
+        { id: '2-9', en: 'Virus', zh: '病毒' },
+        { id: '2-10', en: 'Program', zh: '程式' },
+      ],
+      3: [
+        { id: '3-1', en: 'Motherboard', zh: '主機板' },
+        { id: '3-2', en: 'Database', zh: '資料庫' },
+        { id: '3-3', en: 'Algorithm', zh: '演算法' },
+        { id: '3-4', en: 'Network', zh: '網路' },
+        { id: '3-5', en: 'Memory', zh: '記憶體' },
+        { id: '3-6', en: 'Processor', zh: '處理器' },
+        { id: '3-7', en: 'Backup', zh: '備份' },
+        { id: '3-8', en: 'Cloud', zh: '雲端' },
+        { id: '3-9', en: 'Bug', zh: '程式錯誤' },
+        { id: '3-10', en: 'Debug', zh: '除錯' },
+      ],
+      4: [<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電腦單字配對挑戰賽</title>
+  
+  <!-- 引入 Tailwind CSS 用於快速排版與美化 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc; /* slate-50 */
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+    /* 確保按鈕被點擊時有縮放效果 */
+    .btn-active:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    // --- 遊戲資料 ---
+    const VOCABULARY_DATA = {
+      1: [
+        { id: '1-1', en: 'Computer', zh: '電腦' },
+        { id: '1-2', en: 'Mouse', zh: '滑鼠' },
+        { id: '1-3', en: 'Keyboard', zh: '鍵盤' },
+        { id: '1-4', en: 'Screen', zh: '螢幕' },
+        { id: '1-5', en: 'Internet', zh: '網際網路' },
+        { id: '1-6', en: 'Website', zh: '網站' },
+        { id: '1-7', en: 'Email', zh: '電子郵件' },
+        { id: '1-8', en: 'File', zh: '檔案' },
+        { id: '1-9', en: 'Folder', zh: '資料夾' },
+        { id: '1-10', en: 'Save', zh: '儲存' },
+      ],
+      2: [
+        { id: '2-1', en: 'Browser', zh: '瀏覽器' },
+        { id: '2-2', en: 'Software', zh: '軟體' },
+        { id: '2-3', en: 'Hardware', zh: '硬體' },
+        { id: '2-4', en: 'Download', zh: '下載' },
+        { id: '2-5', en: 'Upload', zh: '上傳' },
+        { id: '2-6', en: 'Password', zh: '密碼' },
+        { id: '2-7', en: 'Printer', zh: '印表機' },
+        { id: '2-8', en: 'Server', zh: '伺服器' },
+        { id: '2-9', en: 'Virus', zh: '病毒' },
+        { id: '2-10', en: 'Program', zh: '程式' },
+      ],
+      3: [
+        { id: '3-1', en: 'Motherboard', zh: '主機板' },
+        { id: '3-2', en: 'Database', zh: '資料庫' },
+        { id: '3-3', en: 'Algorithm', zh: '演算法' },
+        { id: '3-4', en: 'Network', zh: '網路' },
+        { id: '3-5', en: 'Memory', zh: '記憶體' },
+        { id: '3-6', en: 'Processor', zh: '處理器' },
+        { id: '3-7', en: 'Backup', zh: '備份' },
+        { id: '3-8', en: 'Cloud', zh: '雲端' },
+        { id: '3-9', en: 'Bug', zh: '程式錯誤' },
+        { id: '3-10', en: 'Debug', zh: '除錯' },
+      ],
+      4: [
+        { id: '4-1', en: 'Encryption', zh: '加密' },
+        { id: '4-2', en: 'Firewall', zh: '防火牆' },
+        { id: '4-3', en: 'Bandwidth', zh: '頻寬' },
+        { id: '4-4', en: 'Protocol', zh: '協定' },
+        { id: '4-5', en: 'Cache', zh: '快取' },
+        { id: '4-6', en: 'Terminal', zh: '終端機' },
+        { id: '4-7', en: 'Virtual', zh: '虛擬的' },
+        { id: '4-8', en: 'Interface', zh: '介面' },
+        { id: '4-9', en: 'Compile', zh: '編譯' },
+        { id: '4-10', en: 'Resolution', zh: '解析度' },
+      ]
+    };
+
+    const MAX_LEVEL = 4;
+    const WORDS_PER_ROUND = 5;
+
+    // --- 狀態管理 ---
+    let gameState = 'intro'; // intro, playing, break, finished
+    let level = 1;
+    let score = 0;
+    let levelProgress = 0;
+    let roundIdx = 0; // 0 是前半部, 1 是後半部
+    
+    let enList = [];
+    let zhList = [];
+    
+    let selectedEn = null;
+    let selectedZh = null;
+    let matchedIds = [];
+    let isError = false;
+
+    // --- 核心邏輯 ---
+    const shuffleArray = (array) => {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    };
+
+    const loadRound = (lvl, round) => {
+      const fullLevelData = VOCABULARY_DATA[lvl];
+      const startIndex = round * WORDS_PER_ROUND;
+      const roundData = fullLevelData.slice(startIndex, startIndex + WORDS_PER_ROUND);
+      
+      enList = shuffleArray(roundData.map(item => ({ id: item.id, text: item.en })));
+      zhList = shuffleArray(roundData.map(item => ({ id: item.id, text: item.zh })));
+      matchedIds = [];
+      selectedEn = null;
+      selectedZh = null;
+      isError = false;
+    };
+
+    const startGame = () => {
+      level = 1;
+      score = 0;
+      levelProgress = 0;
+      roundIdx = 0;
+      loadRound(1, 0);
+      gameState = 'playing';
+      render();
+    };
+
+    const nextLevel = () => {
+      if (level < MAX_LEVEL) {
+        level++;
+        levelProgress = 0;
+        roundIdx = 0;
+        loadRound(level, 0);
+        gameState = 'playing';
+      } else {
+        gameState = 'finished';
+      }
+      render();
+    };
+
+    const checkRoundCompletion = () => {
+      if (matchedIds.length === WORDS_PER_ROUND) {
+        if (roundIdx === 0) {
+          setTimeout(() => {
+            roundIdx = 1;
+            loadRound(level, 1);
+            render();
+          }, 1000);
+        } else if (roundIdx === 1) {
+          setTimeout(() => {
+            if (level === MAX_LEVEL) {
+              gameState = 'finished';
+            } else {
+              gameState = 'break';
+            }
+            render();
+          }, 1000);
+        }
+      }
+    };
+
+    const checkMatch = () => {
+      if (selectedEn && selectedZh) {
+        if (selectedEn === selectedZh) {
+          // 答對
+          matchedIds.push(selectedEn);
+          score++;
+          levelProgress++;
+          selectedEn = null;
+          selectedZh = null;
+          render();
+          checkRoundCompletion();
+        } else {
+          // 答錯
+          isError = true;
+          render(); // 觸發震動動畫
+          setTimeout(() => {
+            selectedEn = null;
+            selectedZh = null;
+            isError = false;
+            render(); // 恢復原狀
+          }, 800);
+        }
+      }
+    };
+
+    const handleSelectEn = (id) => {
+      if (matchedIds.includes(id) || (selectedEn && selectedZh)) return;
+      selectedEn = (selectedEn === id) ? null : id;
+      render();
+      checkMatch();
+    };
+
+    const handleSelectZh = (id) => {
+      if (matchedIds.includes(id) || (selectedEn && selectedZh)) return;
+      selectedZh = (selectedZh === id) ? null : id;
+      render();
+      checkMatch();
+    };
+
+    // --- UI 渲染邏輯 ---
+    const appElement = document.getElementById('app');
+
+    const getBtnStyle = (item, type) => {
+      const isMatched = matchedIds.includes(item.id);
+      const isSelected = (type === 'en') ? selectedEn === item.id : selectedZh === item.id;
+      
+      let baseClass = "w-full text-lg md:text-xl font-semibold py-5 px-6 rounded-2xl transition-all duration-300 border-b-4 flex justify-between items-center ";
+      
+      if (isMatched) {
+        return baseClass + "bg-green-100 text-green-400 border-green-200 opacity-60 cursor-default scale-95";
+      }
+      
+      if (isSelected && isError) {
+        return baseClass + "bg-red-500 text-white border-red-700 animate-shake";
+      }
+      
+      if (isSelected) {
+        if (type === 'en') return baseClass + "bg-indigo-500 text-white border-indigo-700 ring-4 ring-indigo-200 scale-105";
+        return baseClass + "bg-pink-500 text-white border-pink-700 ring-4 ring-pink-200 scale-105";
+      }
+      
+      return baseClass + "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 btn-active hover:-translate-y-1 shadow-sm";
+    };
+
+    const render = () => {
+      let html = '';
+
+      if (gameState === 'intro') {
+        html = `
+          <div class="min-h-screen bg-indigo-50 flex flex-col items-center justify-center p-4">
+            <div class="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden p-8 text-center space-y-6">
+              <div class="flex justify-center mb-4 text-7xl">💻</div>
+              <h1 class="text-3xl font-bold text-gray-800">電腦單字配對挑戰</h1>
+              <p class="text-gray-600 text-lg">
+                這是一款專為初中生設計的遊戲。<br/>
+                配對英文與中文意思，<br/>
+                每關 <span class="font-bold text-indigo-600">10分</span> 即可休息並升級！<br/>
+                準備好挑戰你的電腦詞彙量了嗎？
+              </p>
+              <button onclick="startGame()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-xl transition-all btn-active shadow-lg shadow-indigo-200">
+                ▶️ 開始挑戰
+              </button>
+            </div>
+          </div>
+        `;
+      } 
+      else if (gameState === 'break') {
+        html = `
+          <div class="min-h-screen bg-green-50 flex flex-col items-center justify-center p-4">
+            <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6 border-4 border-green-100">
+              <div class="flex justify-center text-7xl mb-4 animate-bounce">☕</div>
+              <h2 class="text-3xl font-bold text-gray-800">休息一下！</h2>
+              <p class="text-gray-600 text-lg">
+                太棒了！你已經拿到了 10 分，完成了第 ${level} 關。<br/>
+                目前的總分是：<span class="font-bold text-green-600 text-2xl">${score}</span> 分
+              </p>
+              <div class="bg-green-100 rounded-xl p-4 text-green-800 text-sm font-semibold">
+                下一關單字難度將會提升，準備好了再點擊繼續！
+              </div>
+              <button onclick="nextLevel()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-xl transition-all btn-active shadow-lg shadow-green-200">
+                進入第 ${level + 1} 關 ➡️
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      else if (gameState === 'finished') {
+        html = `
+          <div class="min-h-screen bg-yellow-50 flex flex-col items-center justify-center p-4">
+            <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center space-y-6 border-4 border-yellow-200">
+              <div class="flex justify-center text-7xl mb-4">🏆</div>
+              <h2 class="text-4xl font-black text-gray-800">挑戰成功！</h2>
+              <p class="text-gray-600 text-xl">
+                你是電腦單字大師！<br/>
+                總得分：<span class="font-bold text-yellow-600 text-3xl">${score}</span> / 40
+              </p>
+              <button onclick="startGame()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 text-xl transition-all btn-active shadow-lg shadow-yellow-200">
+                🔄 再玩一次
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      else if (gameState === 'playing') {
+        html = `
+          <div class="min-h-screen flex flex-col items-center py-8 p-4">
+            <!-- 頂部資訊列 -->
+            <div class="w-full max-w-4xl flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-8 border border-slate-100">
+              <div class="flex items-center gap-3">
+                <div class="bg-indigo-100 p-3 rounded-xl text-indigo-700 font-bold text-xl flex items-center gap-2">
+                  關卡 ${level} 
+                  <span class="text-sm font-normal text-indigo-500 bg-white px-3 py-1 rounded-lg border border-indigo-100 shadow-inner">
+                    進度: ${levelProgress}/10
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-xl border border-yellow-100">
+                <span class="text-2xl">⭐</span>
+                <span class="text-3xl font-black text-slate-700">${score}</span>
+              </div>
+            </div>
+
+            <!-- 遊戲區塊 -->
+            <div class="w-full max-w-4xl flex flex-col md:flex-row gap-8">
+              
+              <!-- 英文單字列 -->
+              <div class="flex-1 space-y-4">
+                <h3 class="text-xl font-bold text-indigo-400 mb-4 text-center border-b-2 border-indigo-100 pb-2">英文單字</h3>
+                ${enList.map(item => `
+                  <button 
+                    onclick="handleSelectEn('${item.id}')"
+                    class="${getBtnStyle(item, 'en')}"
+                    ${(matchedIds.includes(item.id) || (selectedEn && selectedZh)) ? 'disabled' : ''}
+                  >
+                    <span>${item.text}</span>
+                    ${matchedIds.includes(item.id) ? '<span class="text-green-500 text-2xl">✅</span>' : ''}
+                  </button>
+                `).join('')}
+              </div>
+
+              <!-- 中文單字列 -->
+              <div class="flex-1 space-y-4">
+                <h3 class="text-xl font-bold text-pink-400 mb-4 text-center border-b-2 border-pink-100 pb-2">中文意思</h3>
+                ${zhList.map(item => `
+                  <button 
+                    onclick="handleSelectZh('${item.id}')"
+                    class="${getBtnStyle(item, 'zh')}"
+                    ${(matchedIds.includes(item.id) || (selectedEn && selectedZh)) ? 'disabled' : ''}
+                  >
+                    <span>${item.text}</span>
+                    ${matchedIds.includes(item.id) ? '<span class="text-green-500 text-2xl">✅</span>' : ''}
+                  </button>
+                `).join('')}
+              </div>
+
+            </div>
+          </div>
+        `;
+      }
+
+      appElement.innerHTML = html;
+    };
+
+    // 初始化渲染
+    render();
+  </script>
+</body>
+</html>
+        { id: '4-1', en: 'Encryption', zh: '加密' },
+        { id: '4-2', en: 'Firewall', zh: '防火牆' },
+        { id: '4-3', en: 'Bandwidth', zh: '頻寬' },
+        { id: '4-4', en: 'Protocol', zh: '協定' },
+        { id: '4-5', en: 'Cache', zh: '快取' },
+        { id: '4-6', en: 'Terminal', zh: '終端機' },
+        { id: '4-7', en: 'Virtual', zh: '虛擬的' },
+        { id: '4-8', en: 'Interface', zh: '介面' },
+        { id: '4-9', en: 'Compile', zh: '編譯' },
+        { id: '4-10', en: 'Resolution', zh: '解析度' },
+      ]

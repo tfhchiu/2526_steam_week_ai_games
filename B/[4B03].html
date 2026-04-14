@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Match: 2-WORD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        :root {
+            --neon-green: #0f0;
+            --neon-blue: #0ff;
+            --neon-red: #f00;
+            --dark-bg: #0a0a0a;
+            --card-bg: #1a1a1a;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', 'Noto Sans TC', monospace;
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            background-image: 
+                linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 0, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            overflow: hidden;
+            user-select: none;
+            perspective: 1200px;
+        }
+
+        /* 3D 空間容器 */
+        #tilt-wrapper {
+            transform-style: preserve-3d;
+            transition: transform 0.1s linear;
+            will-change: transform;
+        }
+        #game-screen, #game-board, .card {
+            transform-style: preserve-3d;
+        }
+
+        /* 霓虹特效 */
+        .neon-text { text-shadow: 0 0 5px var(--neon-green), 0 0 10px var(--neon-green); }
+        .neon-text-blue { color: var(--neon-blue); text-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue); }
+        
+        .neon-btn {
+            border: 2px solid var(--neon-green);
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3), inset 0 0 10px rgba(0, 255, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .neon-btn:hover {
+            background: var(--neon-green);
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px var(--neon-green), inset 0 0 20px var(--neon-green);
+        }
+
+        /* 卡牌 3D 翻轉與實體化效果 */
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1), box-shadow 0.5s;
+        }
+
+        /* 預設與懸停 */
+        .card .card-inner { transform: rotateY(0deg) translateZ(0); }
+        .card:not(.flipped):hover .card-inner {
+            transform: rotateY(0deg) translateZ(15px);
+            box-shadow: 0 15px 25px rgba(0, 255, 0, 0.15);
+        }
+
+        /* 翻開與配對狀態 */
+        .card.flipped .card-inner { transform: rotateY(180deg) translateZ(0); }
+        .card.matched .card-inner { transform: rotateY(180deg) translateZ(30px) scale(1.02); }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+        }
+
+        .card-front {
+            background: repeating-linear-gradient(45deg, var(--card-bg), var(--card-bg) 10px, #222 10px, #222 20px);
+            color: #555;
+            font-size: 2rem;
+            border: 2px solid rgba(0, 255, 0, 0.2);
+            border-bottom-width: 4px; border-right-width: 4px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        .card-back {
+            background: var(--card-bg);
+            color: #fff;
+            transform: rotateY(180deg);
+            border: 2px solid rgba(0, 255, 0, 0.5);
+            border-bottom-width: 4px; border-right-width: 4px;
+            box-shadow: inset 0 0 15px rgba(0, 255, 0, 0.2), -2px 2px 0px 1px rgba(0, 200, 0, 0.2);
+            transition: all 0.3s;
+        }
+
+        .card.matched .card-back {
+            border-color: var(--neon-green);
+            background: rgba(0, 40, 0, 0.8);
+            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.4), 0 0 20px var(--neon-green), -3px 3px 0px 1px rgba(0, 255, 0, 0.6);
+            color: var(--neon-green);
+        }
+
+        .card.error .card-back {
+            border-color: var(--neon-red);
+            box-shadow: 0 0 15px var(--neon-red), inset 0 0 15px var(--neon-red);
+            color: var(--neon-red);
+            animation: shake 0.4s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: rotateY(180deg) translateX(0); }
+            25% { transform: rotateY(180deg) translateX(-5px); }
+            50% { transform: rotateY(180deg) translateX(5px); }
+            75% { transform: rotateY(180deg) translateX(-5px); }
+        }
+
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px; pointer-events: none; z-index: 50;
+        }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center">
+
+    <div class="scanlines"></div>
+
+    <div id="tilt-wrapper" class="absolute inset-0 w-full h-full flex flex-col items-center justify-center">
+
+        <!-- 主選單 -->
+        <div id="menu-screen" class="flex flex-col items-center justify-center z-10 w-full max-w-md p-8 bg-black/80 border-2 border-green-500 rounded-xl shadow-[0_0_30px_rgba(0,255,0,0.2)] backdrop-blur-sm">
+            <h1 class="text-5xl font-bold mb-2 neon-text text-center">CYBER-MATCH</h1>
+            <p class="text-green-400 mb-2 tracking-widest text-sm text-center">SYSTEM_2WORD_COMBINATION_v2.0</p>
+            <p class="text-gray-400 mb-8 text-xs text-center border border-gray-700 p-2 rounded bg-black/50">
+                任務提示：找出兩個單字，組合成完整的電腦詞彙<br>
+                (例: Data + Base = Database)
+            </p>
+            
+            <button onclick="startCountdown()" class="neon-btn w-full py-4 text-xl font-bold rounded mb-4 tracking-widest uppercase">
+                [ 初始化遊戲 ]<br><span class="text-sm font-normal">Start Game</span>
+            </button>
+            <button onclick="showLeaderboard()" class="w-full py-3 text-lg font-bold rounded border border-green-700 text-green-600 hover:text-green-400 hover:border-green-400 transition-colors tracking-widest">
+                [ 歷史紀錄 ] Leaderboard
+            </button>
+        </div>
+
+        <!-- 倒數準備畫面 -->
+        <div id="countdown-screen" class="hide flex-col items-center justify-center z-20 absolute inset-0 bg-black/90 backdrop-blur-md">
+            <h2 class="text-3xl text-green-500 mb-4">記憶模組啟動中...</h2>
+            <div id="countdown-number" class="text-9xl font-bold neon-text">3</div>
+        </div>
+
+        <!-- 遊戲畫面 -->
+        <div id="game-screen" class="hide flex-col items-center justify-center w-full max-w-4xl p-4 z-10 h-full">
+            <div class="w-full flex justify-between items-end mb-6 border-b border-green-800 pb-2">
+                <div>
+                    <p class="text-xs text-green-600 mb-1">TIME_REMAINING</p>
+                    <div id="timer" class="text-4xl font-bold neon-text">60.00</div>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-green-600 mb-1">COMBINATIONS_FOUND</p>
+                    <div id="progress" class="text-2xl font-bold text-green-400">0 / 8</div>
+                </div>
+            </div>
+
+            <!-- 卡牌網格 (4x4) -->
+            <div id="game-board" class="grid grid-cols-4 gap-3 md:gap-5 w-full aspect-square md:aspect-auto md:h-[65vh]">
+                <!-- 卡牌由 JS 生成 -->
+            </div>
+
+            <button onclick="returnToMenu()" class="mt-8 px-6 py-2 border border-green-800 text-green-700 hover:text-green-500 hover:border-green-500 rounded transition-colors">
+                中止任務 (Abort)
+            </button>
+        </div>
+
+        <!-- 遊戲結束/結算畫面 -->
+        <div id="result-screen" class="hide flex-col items-center justify-center z-20 absolute inset-0 bg-black/95 backdrop-blur-md">
+            <div class="w-full max-w-md p-8 border border-green-500 rounded-lg text-center shadow-[0_0_40px_rgba(0,255,0,0.15)] bg-black">
+                <h2 id="result-title" class="text-4xl font-bold mb-4"></h2>
+                <p id="result-message" class="text-xl text-green-400 mb-6"></p>
+                
+                <div id="high-score-form" class="hide mb-6 p-4 border border-cyan-500 bg-cyan-900/20 rounded">
+                    <p class="text-cyan-400 font-bold mb-2 animate-pulse">>>> 新紀錄達成 <<<</p>
+                    <p class="text-sm text-cyan-600 mb-4">請輸入你的特工代號以登錄排行榜</p>
+                    <input type="text" id="player-name" maxlength="10" placeholder="ENTER_NAME" class="w-full bg-black border-2 border-cyan-500 text-cyan-300 px-4 py-2 text-center uppercase focus:outline-none focus:border-cyan-300 focus:shadow-[0_0_10px_#0ff] mb-4">
+                    <button onclick="saveHighScore()" class="w-full py-2 bg-cyan-600 text-black font-bold hover:bg-cyan-400 transition-colors">儲存紀錄</button>
+                </div>
+                <button onclick="returnToMenu()" class="neon-btn w-full py-3 text-lg font-bold rounded">返回主系統</button>
+            </div>
+        </div>
+
+        <!-- 排行榜畫面 -->
+        <div id="leaderboard-screen" class="hide flex-col items-center justify-center z-20 absolute inset-0 bg-black/95 backdrop-blur-md">
+             <div class="w-full max-w-md p-8 border border-green-500 rounded-lg shadow-[0_0_40px_rgba(0,255,0,0.15)] bg-black">
+                <h2 class="text-3xl font-bold mb-6 text-center neon-text">TOP_OPERATORS</h2>
+                <div class="flex justify-between text-green-700 text-sm border-b border-green-900 pb-2 mb-4">
+                    <span>RANK</span><span>CODE_NAME</span><span>TIME_LEFT</span>
+                </div>
+                <div id="leaderboard-list" class="space-y-3 mb-8 min-h-[150px]"></div>
+                <button onclick="returnToMenu()" class="neon-btn w-full py-3 text-lg font-bold rounded">返回主系統</button>
+             </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 2-WORD 組合字詞庫 ---
+        // 將完整的電腦生字拆分為 p1 和 p2 兩個部分
+        const vocabularyList = [
+            { id: 1, p1: "Mother", p2: "Board", full: "Motherboard", zh: "主機板" },
+            { id: 2, p1: "Hard", p2: "Drive", full: "Hard Drive", zh: "硬碟" },
+            { id: 3, p1: "Data", p2: "Base", full: "Database", zh: "資料庫" },
+            { id: 4, p1: "Source", p2: "Code", full: "Source Code", zh: "原始碼" },
+            { id: 5, p1: "Fire", p2: "Wall", full: "Firewall", zh: "防火牆" },
+            { id: 6, p1: "Lap", p2: "Top", full: "Laptop", zh: "筆記型電腦" },
+            { id: 7, p1: "Key", p2: "Board", full: "Keyboard", zh: "鍵盤" },
+            { id: 8, p1: "Band", p2: "Width", full: "Bandwidth", zh: "頻寬" }
+        ];
+
+        const TOTAL_TIME = 60000;
+        let gameCards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let timerInterval;
+        let startTime;
+        let timeRemaining = TOTAL_TIME;
+        let isGameRunning = false;
+
+        const screens = {
+            menu: document.getElementById('menu-screen'),
+            countdown: document.getElementById('countdown-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen'),
+            leaderboard: document.getElementById('leaderboard-screen')
+        };
+        const board = document.getElementById('game-board');
+        const timerDisplay = document.getElementById('timer');
+        const progressDisplay = document.getElementById('progress');
+        const countdownNumber = document.getElementById('countdown-number');
+
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hide'));
+            screens[screenName].classList.remove('hide');
+            if(screenName === 'game') screens.game.style.display = 'flex';
+        }
+
+        function returnToMenu() {
+            clearInterval(timerInterval);
+            isGameRunning = false;
+            showScreen('menu');
+        }
+
+        function initGame() {
+            board.innerHTML = '';
+            flippedCards = [];
+            matchedPairs = 0;
+            timeRemaining = TOTAL_TIME;
+            progressDisplay.innerText = `0 / ${vocabularyList.length}`;
+            updateTimerDisplay();
+
+            gameCards = [];
+            vocabularyList.forEach(item => {
+                gameCards.push({ id: item.id, type: 'p1', text: item.p1 });
+                gameCards.push({ id: item.id, type: 'p2', text: item.p2 });
+            });
+
+            // Fisher-Yates 洗牌
+            for (let i = gameCards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [gameCards[i], gameCards[j]] = [gameCards[j], gameCards[i]];
+            }
+
+            // 渲染卡牌
+            gameCards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card cursor-pointer w-full h-full';
+                cardEl.dataset.index = index;
+                cardEl.dataset.id = card.id;
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <span class="opacity-30">\\//</span>
+                        </div>
+                        <div class="card-back text-2xl md:text-3xl tracking-wide">
+                            ${card.text}
+                        </div>
+                    </div>
+                `;
+                cardEl.addEventListener('click', () => handleCardClick(cardEl));
+                board.appendChild(cardEl);
+            });
+        }
+
+        function startCountdown() {
+            initGame();
+            showScreen('countdown');
+            let count = 3;
+            countdownNumber.innerText = count;
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) countdownNumber.innerText = count;
+                else if (count === 0) countdownNumber.innerText = "GO!";
+                else { clearInterval(countInterval); startGame(); }
+            }, 1000);
+        }
+
+        function startGame() {
+            showScreen('game');
+            isGameRunning = true;
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                if(!isGameRunning) return;
+                const elapsedTime = Date.now() - startTime;
+                timeRemaining = TOTAL_TIME - elapsedTime;
+                if (timeRemaining <= 0) { timeRemaining = 0; endGame(false); }
+                updateTimerDisplay();
+            }, 10);
+        }
+
+        function updateTimerDisplay() {
+            const seconds = Math.floor(timeRemaining / 1000);
+            const milliseconds = Math.floor((timeRemaining % 1000) / 10);
+            timerDisplay.innerText = `${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+            if (timeRemaining < 10000) {
+                timerDisplay.classList.add('text-red-500');
+                timerDisplay.classList.remove('neon-text');
+                timerDisplay.style.textShadow = '0 0 10px red';
+            } else {
+                timerDisplay.classList.remove('text-red-500');
+                timerDisplay.classList.add('neon-text');
+                timerDisplay.style.textShadow = '';
+            }
+        }
+
+        function handleCardClick(cardEl) {
+            if (!isGameRunning) return;
+            if (flippedCards.length >= 2) return;
+            if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push(cardEl);
+
+            if (flippedCards.length === 2) checkMatch();
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            const id1 = card1.dataset.id;
+            const id2 = card2.dataset.id;
+
+            if (id1 === id2) {
+                // 配對成功
+                matchedPairs++;
+                progressDisplay.innerText = `${matchedPairs} / ${vocabularyList.length}`;
+                
+                // 取得完整單字資料
+                const wordData = vocabularyList.find(w => w.id == id1);
+                
+                setTimeout(() => {
+                    card1.classList.add('matched');
+                    card2.classList.add('matched');
+                    
+                    // 學習特效：成功時將兩張卡牌的文字融合，並顯示中文翻譯
+                    const combinedHTML = `
+                        <div class="flex flex-col items-center justify-center w-full">
+                            <span class="text-xl md:text-2xl text-green-300 font-bold mb-1">${wordData.full}</span>
+                            <span class="text-sm md:text-base text-green-500 opacity-80">${wordData.zh}</span>
+                        </div>
+                    `;
+                    card1.querySelector('.card-back').innerHTML = combinedHTML;
+                    card2.querySelector('.card-back').innerHTML = combinedHTML;
+
+                    flippedCards = [];
+                    if (matchedPairs === vocabularyList.length) setTimeout(() => endGame(true), 1000);
+                }, 300);
+            } else {
+                // 配對失敗
+                card1.classList.add('error');
+                card2.classList.add('error');
+                setTimeout(() => {
+                    card1.classList.remove('error', 'flipped');
+                    card2.classList.remove('error', 'flipped');
+                    flippedCards = [];
+                }, 800);
+            }
+        }
+
+        function endGame(isWin) {
+            clearInterval(timerInterval);
+            isGameRunning = false;
+            showScreen('result');
+
+            const title = document.getElementById('result-title');
+            const msg = document.getElementById('result-message');
+            const form = document.getElementById('high-score-form');
+            form.classList.add('hide');
+
+            if (isWin) {
+                const timeLeftStr = timerDisplay.innerText;
+                title.innerText = "MISSION ACCOMPLISHED";
+                title.className = "text-4xl font-bold mb-4 neon-text-blue";
+                msg.innerHTML = `成功重組所有資料檔案<br>剩餘時間: <span class="font-bold text-white">${timeLeftStr}</span> 秒`;
+                
+                if (checkIfHighScore(timeRemaining)) {
+                    form.classList.remove('hide');
+                    document.getElementById('player-name').value = '';
+                    document.getElementById('player-name').focus();
+                }
+            } else {
+                title.innerText = "SYSTEM LOCKDOWN";
+                title.className = "text-4xl font-bold mb-4 text-red-500";
+                title.style.textShadow = "0 0 10px red";
+                msg.innerText = "連線超時，任務失敗。";
+            }
+        }
+
+        function getLeaderboard() {
+            const data = localStorage.getItem('cyberMatch2WordScores');
+            return data ? JSON.parse(data) : [];
+        }
+
+        function checkIfHighScore(timeLeftMs) {
+            const scores = getLeaderboard();
+            if (scores.length < 3) return true;
+            return timeLeftMs > scores[scores.length - 1].timeLeft;
+        }
+
+        function saveHighScore() {
+            let name = document.getElementById('player-name').value.trim().toUpperCase();
+            if (!name) name = "UNKNOWN";
+            if (name.length > 10) name = name.substring(0, 10);
+
+            const newScore = { name: name, timeLeft: timeRemaining, displayTime: timerDisplay.innerText };
+            let scores = getLeaderboard();
+            scores.push(newScore);
+            scores.sort((a, b) => b.timeLeft - a.timeLeft);
+            scores = scores.slice(0, 3);
+            localStorage.setItem('cyberMatch2WordScores', JSON.stringify(scores));
+            
+            document.getElementById('high-score-form').classList.add('hide');
+            showLeaderboard();
+        }
+
+        function showLeaderboard() {
+            showScreen('leaderboard');
+            const listEl = document.getElementById('leaderboard-list');
+            const scores = getLeaderboard();
+            listEl.innerHTML = '';
+            
+            if (scores.length === 0) {
+                listEl.innerHTML = '<div class="text-center text-green-800 mt-8">NO_DATA_FOUND</div>';
+                return;
+            }
+
+            scores.forEach((score, index) => {
+                const rankColor = index === 0 ? 'text-yellow-400 font-bold text-lg' : index === 1 ? 'text-gray-300' : 'text-orange-400';
+                listEl.innerHTML += `
+                    <div class="flex justify-between items-center bg-green-900/20 p-3 rounded border border-green-800/50 hover:border-green-500/50 transition-colors">
+                        <span class="${rankColor} w-8">#${index + 1}</span>
+                        <span class="text-white tracking-wider flex-1 ml-4">${score.name}</span>
+                        <span class="text-green-400 font-mono">${score.displayTime}s</span>
+                    </div>
+                `;
+            });
+        }
+
+        // 3D 滑鼠視差特效
+        const tiltWrapper = document.getElementById('tilt-wrapper');
+        if (window.matchMedia("(pointer: fine)").matches) {
+            document.addEventListener('mousemove', (e) => {
+                const x = (e.clientX / window.innerWidth - 0.5) * 2;
+                const y = (e.clientY / window.innerHeight - 0.5) * 2;
+                tiltWrapper.style.transform = `rotateX(${-y * 10}deg) rotateY(${x * 10}deg) translateZ(10px)`;
+            });
+            document.addEventListener('mouseleave', () => {
+                tiltWrapper.style.transform = `rotateX(0deg) rotateY(0deg) translateZ(0px)`;
+                tiltWrapper.style.transition = `transform 0.5s ease-out`;
+            });
+            document.addEventListener('mouseenter', () => {
+                tiltWrapper.style.transition = `transform 0.1s linear`;
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>後宮打字傳：初中電腦科</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 強制背景設定 */
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background-image: 
+                url('IMG_0146.jpeg'),
+                url('./IMG_0146.jpeg'),
+                url('/IMG_0146.jpeg'),
+                url('https://images.unsplash.com/photo-1584333145963-490356e431e5?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-color: #5c0a0a;
+            overflow: hidden;
+            font-family: 'Georgia', serif;
+        }
+
+        /* 琉璃面板特效 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid rgba(242, 208, 128, 0.6);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 隱藏捲動條但保留功能 */
+        ::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 掉落單字樣式 */
+        .falling-word {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: top 0.05s linear;
+            z-index: 10;
+        }
+
+        /* 震動與閃爍動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .animate-shake { animation: shake 0.3s ease-in-out; }
+        
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.4s ease-out forwards; }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <div id="game-container" class="glass-panel w-full max-w-md h-[700px] max-h-[90vh] rounded-2xl relative flex flex-col">
+        
+        <!-- 四角金邊裝飾 -->
+        <div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[#f2d080] rounded-tl-xl z-20"></div>
+        <div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[#f2d080] rounded-tr-xl z-20"></div>
+        <div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-[#f2d080] rounded-bl-xl z-20"></div>
+        <div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-[#f2d080] rounded-br-xl z-20"></div>
+
+        <!-- 頂部資訊列 -->
+        <div id="hud" class="w-full p-3 sm:p-4 flex justify-between items-start z-30 bg-gradient-to-b from-black/50 to-transparent relative shrink-0">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <span id="rank-icon" class="text-3xl sm:text-4xl drop-shadow-lg">🧹</span>
+                <div>
+                    <h1 id="rank-name" class="text-lg sm:text-xl font-bold tracking-widest text-white drop-shadow-md">官女子</h1>
+                    <p id="rank-palace" class="text-[10px] sm:text-xs font-semibold text-white/80 drop-shadow-md">居所：碎玉軒（偏殿）</p>
+                </div>
+            </div>
+            <div class="text-right flex flex-col items-end">
+                <div class="text-white font-bold text-[10px] mb-1 bg-white/20 border border-white/50 px-2 py-0.5 rounded shadow-sm">
+                    容錯：<span id="lives-display" class="tracking-widest ml-1 text-xs sm:text-sm">🏮🏮🏮</span>
+                </div>
+                <div class="flex items-end gap-2">
+                    <p class="text-[10px] sm:text-xs font-bold text-white/90 pb-1">恩寵</p>
+                    <p id="score-display" class="text-2xl sm:text-3xl font-black text-[#f2d080] drop-shadow-md leading-none cursor-pointer hover:text-yellow-300" onclick="cheatCode()">0</p>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#f2d080] to-transparent"></div>
+        </div>
+
+        <!-- 畫面區域容器 -->
+        <div class="flex-1 relative overflow-hidden flex flex-col">
+            
+            <!-- 畫面 1：開始選單 -->
+            <div id="screen-start" class="absolute inset-0 z-40 bg-black/40 p-4 overflow-y-auto no-scrollbar">
+                <div class="flex flex-col items-center justify-center min-h-full py-4 space-y-4">
+                    <h2 class="text-3xl sm:text-4xl font-black text-white tracking-widest drop-shadow-[0_4px_6px_rgba(0,0,0,0.8)] shrink-0">後宮打字傳</h2>
+                    <div class="w-24 sm:w-32 h-1 bg-gradient-to-r from-transparent via-[#f2d080] to-transparent shrink-0"></div>
+                    
+                    <div class="w-full bg-black/40 p-4 sm:p-5 rounded-lg backdrop-blur-md border border-white/20 text-center shrink-0">
+                        <p class="text-xs sm:text-sm font-bold text-white drop-shadow-md leading-loose tracking-wide">
+                            《初中電腦科專修》<br>
+                            敲擊鍵盤，如撥琴弦。<br>西洋代碼將從天而降，請依序打出。
+                        </p>
+                    </div>
+
+                    <button onclick="startGame()" class="mt-2 shrink-0 px-10 py-3 sm:px-12 sm:py-4 bg-gradient-to-r from-[#d4af37] to-[#eebd70] text-[#5c0a0a] font-black rounded-full shadow-lg hover:scale-105 transition-transform duration-300 tracking-widest text-lg sm:text-xl">
+                        開始入宮
+                    </button>
+                </div>
+            </div>
+
+            <!-- 畫面 2：遊戲進行區 -->
+            <div id="screen-playing" class="hidden absolute inset-0 overflow-hidden">
+                <!-- 紅色受傷特效 -->
+                <div id="damage-flash" class="hidden absolute inset-0 bg-red-500/40 z-0 pointer-events-none"></div>
+                
+                <!-- 宮鬥事件特效區 -->
+                <div id="event-container" class="hidden absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden"></div>
+                
+                <!-- 單字掉落區 -->
+                <div id="words-container" class="absolute inset-0"></div>
+
+                <div class="absolute bottom-2 w-full text-center text-[10px] font-bold text-white/40 tracking-widest pointer-events-none">
+                    直接敲擊鍵盤輸入對應字母
+                </div>
+            </div>
+
+            <!-- 畫面 3：晉升畫面 -->
+            <div id="screen-rankup" class="hidden absolute inset-0 z-40 bg-black/50 backdrop-blur-sm overflow-y-auto no-scrollbar p-4">
+                <div class="flex flex-col items-center justify-center min-h-full py-4 space-y-4 animate-fade-in">
+                    <div class="flex items-center gap-3 shrink-0">
+                        <span id="rankup-icon" class="text-5xl animate-bounce drop-shadow-2xl"></span>
+                        <div class="text-left">
+                            <h2 class="text-xl font-black text-[#f2d080] tracking-widest drop-shadow-lg">奉天承運</h2>
+                            <h3 id="rankup-name" class="text-lg font-bold text-white tracking-widest drop-shadow-md">晉封</h3>
+                        </div>
+                    </div>
+                    
+                    <!-- 娘娘講課區塊 -->
+                    <div class="w-full bg-white/10 backdrop-blur-md p-4 border border-white/30 rounded-lg shadow-xl text-left shrink-0">
+                        <p id="rankup-lastword" class="text-xs text-[#f2d080] mb-3 font-bold">新學會的西洋詞彙：</p>
+                        
+                        <button id="btn-tutor" onclick="fetchAiTutor()" class="w-full py-2 bg-[#f2d080]/20 border border-[#f2d080] text-[#f2d080] text-xs font-bold rounded hover:bg-[#f2d080]/40 transition-all">
+                            ✨ 傳召宮中貴人為您講解
+                        </button>
+                        <div id="text-tutor" class="hidden mt-3 text-xs text-white leading-relaxed bg-black/40 p-3 rounded border-l-2 border-[#f2d080] whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="flex flex-col gap-3 w-full shrink-0">
+                        <button onclick="resumeGame()" class="w-full py-3 bg-gradient-to-r from-[#d4af37] to-[#eebd70] text-[#5c0a0a] font-bold rounded-full shadow-lg hover:scale-105 transition-all tracking-widest text-sm">
+                            謝恩，繼續晉升
+                        </button>
+                        <button onclick="quitGame()" class="w-full py-2 bg-white/10 border border-white/50 text-white font-bold rounded-full hover:bg-white/20 transition-all tracking-widest text-xs backdrop-blur-md">
+                            稱病，退出後宮
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 畫面 4：退出遊戲 / 冷宮 -->
+            <div id="screen-gameover" class="hidden absolute inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto no-scrollbar p-4">
+                <div class="flex flex-col items-center justify-center min-h-full py-4 space-y-5 animate-fade-in text-center">
+                    <span id="gameover-icon" class="text-6xl drop-shadow-2xl shrink-0">🍂</span>
+                    <h2 id="gameover-title" class="text-3xl font-black text-white drop-shadow-lg tracking-widest shrink-0">退出後宮</h2>
+                    <div class="w-full h-px bg-gradient-to-r from-transparent via-white/80 to-transparent shrink-0"></div>
+                    <div id="gameover-desc" class="w-full text-sm font-bold text-white bg-white/10 p-5 border border-white/30 rounded-lg shadow-xl leading-loose shrink-0"></div>
+                    <button onclick="initGameUI()" class="mt-4 shrink-0 px-10 py-3 bg-gradient-to-r from-white/30 to-white/10 border-2 border-white text-white font-bold rounded-full hover:bg-white/40 transition-all tracking-widest text-sm shadow-lg">
+                        重新入宮選秀
+                    </button>
+                </div>
+            </div>
+
+            <!-- 畫面 5：破關 (皇后) -->
+            <div id="screen-won" class="hidden absolute inset-0 z-50 bg-black/60 backdrop-blur-md overflow-y-auto no-scrollbar p-4">
+                <div class="flex flex-col items-center justify-center min-h-full py-4 space-y-4 animate-fade-in text-center">
+                    <span class="text-5xl animate-bounce drop-shadow-2xl shrink-0">👑</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[#f2d080] tracking-widest drop-shadow-lg shrink-0">皇后娘娘 萬福金安</h2>
+                    
+                    <div id="edict-container" class="relative mt-2 w-full bg-white/10 backdrop-blur-md p-5 border-2 border-[#f2d080] text-white font-serif text-left text-sm leading-relaxed shadow-2xl rounded-lg min-h-[150px] flex items-center justify-center shrink-0">
+                        <div id="edict-loading" class="animate-pulse flex flex-col items-center">
+                            <span class="text-3xl mb-2">📜</span>
+                            <p class="font-bold tracking-widest text-xs">養心殿傳旨中...</p>
+                        </div>
+                        <p id="edict-text" class="hidden whitespace-pre-wrap font-bold drop-shadow-md w-full"></p>
+                    </div>
+
+                    <button onclick="initGameUI()" class="mt-4 shrink-0 px-10 py-3 bg-gradient-to-r from-[#d4af37] to-[#eebd70] text-[#5c0a0a] font-bold rounded-full shadow-lg hover:scale-105 transition-all tracking-widest text-sm">
+                        重新入宮
+                    </button>
+                </div>
+            </div>
+
+        </div>
+        
+        <!-- 底部進度條 -->
+        <div id="progress-bar-container" class="w-full p-3 sm:p-4 z-20 relative bg-gradient-to-t from-black/50 to-transparent shrink-0">
+            <div class="flex justify-between text-white font-bold text-[10px] mb-1 drop-shadow-md px-1">
+                <span id="progress-current">當前：官女子 (0題)</span>
+                <span id="progress-next">下一階：答應</span>
+            </div>
+            <div class="w-full bg-white/30 backdrop-blur-sm h-1.5 rounded-full border border-white/50 overflow-hidden shadow-inner">
+                <div id="progress-fill" class="bg-gradient-to-r from-[#f2d080] to-[#d4af37] h-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(242,208,128,0.8)]" style="width: 0%"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 遊戲腳本 -->
+    <script>
+        // --- 初中電腦科詞彙庫 (Junior Secondary ICT Vocabulary) ---
+        const RAW_ICT_VOCAB = [
+            { word: "Hardware", answer: "硬件" }, { word: "Software", answer: "軟件" },
+            { word: "Keyboard", answer: "鍵盤" }, { word: "Mouse", answer: "滑鼠" },
+            { word: "Monitor", answer: "顯示器" }, { word: "Printer", answer: "打印機" },
+            { word: "Network", answer: "網絡" }, { word: "Internet", answer: "互聯網" },
+            { word: "Browser", answer: "瀏覽器" }, { word: "Website", answer: "網站" },
+            { word: "Email", answer: "電子郵件" }, { word: "Password", answer: "密碼" },
+            { word: "Folder", answer: "資料夾" }, { word: "File", answer: "檔案" },
+            { word: "Data", answer: "數據" }, { word: "Information", answer: "資訊" },
+            { word: "Server", answer: "伺服器" }, { word: "Client", answer: "客戶端" },
+            { word: "Virus", answer: "病毒" }, { word: "Hacker", answer: "黑客" },
+            { word: "Coding", answer: "編程" }, { word: "Program", answer: "程式" },
+            { word: "Input", answer: "輸入" }, { word: "Output", answer: "輸出" },
+            { word: "Storage", answer: "儲存" }, { word: "Memory", answer: "記憶體" },
+            { word: "Byte", answer: "位元組" }, { word: "Pixel", answer: "像素" },
+            { word: "Screen", answer: "螢幕" }, { word: "Speaker", answer: "揚聲器" }
+        ];
+
+        const ICT_VOCAB = RAW_ICT_VOCAB.map(item => ({
+            ...item,
+            typeTarget: item.word.replace(/\s+/g, '')
+        }));
+
+        const RANKS = [
+            { level: 0, name: "官女子", palace: "碎玉軒（偏殿）", icon: "🧹" },
+            { level: 1, name: "答應", palace: "碎玉軒（正殿）", icon: "🌸" },
+            { level: 2, name: "常在", palace: "延禧宮", icon: "🍵" },
+            { level: 3, name: "貴人", palace: "咸福宮", icon: "🪕" },
+            { level: 4, name: "嬪", palace: "儲秀宮", icon: "🦚" },
+            { level: 5, name: "妃", palace: "承乾宮", icon: "🌺" },
+            { level: 6, name: "貴妃", palace: "翊坤宮", icon: "⚜️" },
+            { level: 7, name: "皇貴妃", palace: "鍾粹宮", icon: "🦚" },
+            { level: 8, name: "皇后", palace: "景仁宮", icon: "👑" }
+        ];
+
+        // --- 狀態管理 ---
+        let state = {
+            status: 'start', 
+            score: 0,
+            missedCount: 0,
+            words: [], 
+            focusedWordId: null,
+            correctWordsLog: [],
+            event: null 
+        };
+
+        let gameLoopId;
+        let spawnIntervalId;
+        let eventIntervalId;
+        let lastTime = 0;
+
+        // DOM 元素快取
+        const DOM = {
+            screens: {
+                start: document.getElementById('screen-start'),
+                playing: document.getElementById('screen-playing'),
+                rankup: document.getElementById('screen-rankup'),
+                gameover: document.getElementById('screen-gameover'),
+                won: document.getElementById('screen-won')
+            },
+            hud: {
+                rankIcon: document.getElementById('rank-icon'),
+                rankName: document.getElementById('rank-name'),
+                rankPalace: document.getElementById('rank-palace'),
+                lives: document.getElementById('lives-display'),
+                score: document.getElementById('score-display')
+            },
+            progress: {
+                current: document.getElementById('progress-current'),
+                next: document.getElementById('progress-next'),
+                fill: document.getElementById('progress-fill')
+            },
+            playing: {
+                container: document.getElementById('words-container'),
+                damageFlash: document.getElementById('damage-flash'),
+                eventContainer: document.getElementById('event-container')
+            }
+        };
+
+        // --- 初始化 UI ---
+        function initGameUI() {
+            state.status = 'start';
+            state.score = 0;
+            state.missedCount = 0;
+            state.correctWordsLog = [];
+            
+            showScreen('start');
+            updateHUD();
+            clearWords();
+            clearEvent();
+        }
+
+        function showScreen(screenName) {
+            Object.values(DOM.screens).forEach(el => el.classList.add('hidden'));
+            DOM.screens[screenName].classList.remove('hidden');
+        }
+
+        function updateHUD() {
+            const rankIndex = Math.min(Math.floor(state.score / 10), RANKS.length - 1);
+            const rank = RANKS[rankIndex];
+            
+            DOM.hud.rankIcon.innerText = rank.icon;
+            DOM.hud.rankName.innerText = rank.name;
+            DOM.hud.rankPalace.innerText = `居所：${rank.palace}`;
+            DOM.hud.score.innerText = state.score;
+            
+            let livesStr = '';
+            for (let i = 0; i < 3; i++) {
+                livesStr += i < (3 - Math.min(state.missedCount, 3)) ? '🏮' : '🌑';
+            }
+            DOM.hud.lives.innerText = livesStr;
+
+            DOM.progress.current.innerText = `當前：${rank.name} (${state.score}題)`;
+            if (state.score >= 80) {
+                DOM.progress.next.innerText = "已達頂峰";
+                DOM.progress.fill.style.width = '100%';
+            } else {
+                const nextRank = RANKS[Math.min(rankIndex + 1, RANKS.length - 1)];
+                DOM.progress.next.innerText = `下一階：${nextRank.name}`;
+                DOM.progress.fill.style.width = `${(state.score % 10) * 10}%`;
+            }
+
+            // 冷宮特效
+            const gameContainer = document.getElementById('game-container');
+            if (state.status === 'gameover' && state.missedCount >= 3) {
+                gameContainer.style.filter = 'grayscale(100%) brightness(0.6)';
+            } else {
+                gameContainer.style.filter = 'none';
+            }
+        }
+
+        // --- 核心遊戲邏輯 ---
+        function startGame() {
+            state.status = 'playing';
+            showScreen('playing');
+            lastTime = performance.now();
+            scheduleNextSpawn();
+            scheduleNextEvent();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function resumeGame() {
+            state.status = 'playing';
+            showScreen('playing');
+            clearWords();
+            lastTime = performance.now();
+            scheduleNextSpawn();
+            scheduleNextEvent();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function spawnWord() {
+            if (state.status !== 'playing') return;
+
+            // 增加同時在場上的單字上限為 4，提升挑戰性但允許空間分散
+            if (state.words.length >= 4) {
+                scheduleNextSpawn();
+                return;
+            }
+
+            // 【防重疊機制 1：Y 軸間距】確保最新出來的字已經掉落了一段距離 (至少 15%)，才允許生新字
+            const topMostY = state.words.reduce((minY, w) => Math.min(minY, w.y), 100);
+            if (state.words.length > 0 && topMostY < 15) {
+                scheduleNextSpawn(); // 延後生成，避免垂直擠壓
+                return;
+            }
+
+            const vocab = ICT_VOCAB[Math.floor(Math.random() * ICT_VOCAB.length)];
+            
+            // 【防重疊機制 2：X 軸間距】尋找一個不會跟上方單字重疊的 X 座標
+            let newX = 10;
+            let validX = false;
+            let attempts = 0;
+            
+            while (!validX && attempts < 15) {
+                newX = Math.random() * 55 + 5; // 限制在 5% 到 60% 之間 (右邊留白避免被切掉)
+                validX = true;
+                
+                for (let w of state.words) {
+                    // 如果畫面中有單字還在上方 (Y < 40)，且水平距離太近 (相差 < 25%)，就重新抽一次位置
+                    if (w.y < 40 && Math.abs(w.x - newX) < 25) {
+                        validX = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+
+            const newWord = {
+                id: 'word_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+                wordInfo: vocab,
+                typed: '',
+                x: newX, 
+                y: -15, // 從畫面外一點點開始往下掉，視覺更自然
+                el: document.createElement('div')
+            };
+
+            newWord.el.className = 'falling-word bg-white/20 border-2 border-white/50 backdrop-blur-md shadow-lg rounded-md px-3 py-1 text-white font-bold';
+            newWord.el.style.left = `${newWord.x}%`;
+            newWord.el.innerHTML = renderWordHTML(newWord);
+            
+            DOM.playing.container.appendChild(newWord.el);
+            state.words.push(newWord);
+
+            scheduleNextSpawn();
+        }
+
+        function renderWordHTML(wordObj) {
+            const isFocused = state.focusedWordId === wordObj.id;
+            const target = wordObj.wordInfo.typeTarget;
+            const typedPart = target.substring(0, wordObj.typed.length);
+            const untypedPart = target.substring(wordObj.typed.length);
+
+            let html = `
+                <div class="text-xl font-mono tracking-wider whitespace-nowrap ${isFocused ? 'text-yellow-300 drop-shadow-md' : ''}">
+                    <span class="${isFocused ? 'text-white' : ''}">${typedPart}</span><span class="${isFocused ? 'opacity-80' : 'opacity-60'}">${untypedPart}</span>
+                </div>
+                <div class="text-[10px] mt-1 tracking-widest px-2 py-0.5 rounded-full border border-white/40 shadow-sm whitespace-nowrap ${isFocused ? 'bg-white text-[#5c0a0a]' : 'bg-black/30'}">
+                    ${wordObj.wordInfo.answer}
+                </div>
+            `;
+            
+            if (isFocused) {
+                wordObj.el.classList.remove('bg-white/20', 'border-white/50');
+                wordObj.el.classList.add('bg-gradient-to-r', 'from-yellow-500/90', 'to-orange-600/90', 'border-white', 'scale-110', 'z-20');
+            } else {
+                wordObj.el.classList.add('bg-white/20', 'border-white/50');
+                wordObj.el.classList.remove('bg-gradient-to-r', 'from-yellow-500/90', 'to-orange-600/90', 'border-white', 'scale-110', 'z-20');
+                if (state.focusedWordId) {
+                    wordObj.el.style.opacity = '0.4';
+                    wordObj.el.style.filter = 'blur(1px)';
+                } else {
+                    wordObj.el.style.opacity = '1';
+                    wordObj.el.style.filter = 'none';
+                }
+            }
+            return html;
+        }
+
+        function scheduleNextSpawn() {
+            clearTimeout(spawnIntervalId);
+            const rankIndex = Math.min(Math.floor(state.score / 10), RANKS.length - 1);
+            
+            // 由於有防重疊機制，這裡的頻率可以快一點，系統會自動在有空間時才落下
+            const spawnRate = Math.max(600, 1600 - rankIndex * 150);
+            
+            spawnIntervalId = setTimeout(() => {
+                if(state.status === 'playing') spawnWord();
+            }, spawnRate);
+        }
+
+        function gameLoop(timestamp) {
+            if (state.status !== 'playing') return;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            const rankIndex = Math.min(Math.floor(state.score / 10), RANKS.length - 1);
+            
+            // 基礎降落速度
+            let baseSpeed = 0.1 + (rankIndex * 0.015);
+            
+            // 處理事件加速 (華妃事件會更加快)
+            if (state.event && state.event.type === 'huafei') {
+                baseSpeed *= 2.0;
+            }
+            
+            // 移除過期事件
+            if (state.event && timestamp > state.event.expires) {
+                clearEvent();
+            }
+
+            for (let i = state.words.length - 1; i >= 0; i--) {
+                let w = state.words[i];
+                w.y += baseSpeed * (deltaTime / 16); 
+                w.el.style.top = `${w.y}%`;
+
+                if (w.y >= 85) {
+                    // Missed
+                    triggerDamage();
+                    w.el.remove();
+                    state.words.splice(i, 1);
+                    if (w.id === state.focusedWordId) state.focusedWordId = null;
+                }
+            }
+
+            // 更新 DOM 渲染
+            state.words.forEach(w => {
+                w.el.innerHTML = renderWordHTML(w);
+            });
+
+            if (state.status === 'playing') {
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function triggerDamage() {
+            state.missedCount++;
+            updateHUD();
+            
+            DOM.playing.damageFlash.classList.remove('hidden');
+            document.getElementById('game-container').classList.add('animate-shake');
+            
+            setTimeout(() => {
+                DOM.playing.damageFlash.classList.add('hidden');
+                document.getElementById('game-container').classList.remove('animate-shake');
+            }, 300);
+
+            if (state.missedCount >= 3) {
+                handleGameOver(true);
+            }
+        }
+
+        function clearWords() {
+            state.words.forEach(w => w.el.remove());
+            state.words = [];
+            state.focusedWordId = null;
+        }
+
+        // --- 鍵盤輸入處理 ---
+        window.addEventListener('keydown', (e) => {
+            if (state.status !== 'playing') return;
+            if (e.key === ' ') e.preventDefault();
+            if (e.ctrlKey || e.metaKey || e.altKey || e.key.length > 1) return;
+
+            const key = e.key.toLowerCase();
+            let wordCompleted = null;
+
+            let focused = state.words.find(w => w.id === state.focusedWordId);
+
+            if (focused) {
+                const expectedChar = focused.wordInfo.typeTarget[focused.typed.length].toLowerCase();
+                if (key === expectedChar) {
+                    focused.typed += focused.wordInfo.typeTarget[focused.typed.length];
+                    if (focused.typed.length === focused.wordInfo.typeTarget.length) {
+                        wordCompleted = focused;
+                    }
+                }
+            } else {
+                // 尋找可以開始打的字 (優先打最下面的)
+                let available = state.words.filter(w => w.wordInfo.typeTarget[0].toLowerCase() === key);
+                if (available.length > 0) {
+                    available.sort((a, b) => b.y - a.y);
+                    let target = available[0];
+                    target.typed = target.wordInfo.typeTarget[0];
+                    state.focusedWordId = target.id;
+                    if (target.typed.length === target.wordInfo.typeTarget.length) {
+                        wordCompleted = target;
+                    }
+                }
+            }
+
+            if (wordCompleted) {
+                state.score++;
+                state.correctWordsLog.push(wordCompleted.wordInfo);
+                
+                // 移除打完的字
+                wordCompleted.el.remove();
+                state.words = state.words.filter(w => w.id !== wordCompleted.id);
+                state.focusedWordId = null;
+                
+                updateHUD();
+                checkRankUpOrWin();
+            }
+        });
+
+        function checkRankUpOrWin() {
+            if (state.score >= 80) {
+                handleWin();
+            } else if (state.score > 0 && state.score % 10 === 0) {
+                handleRankUp();
+            }
+        }
+
+        function handleRankUp() {
+            state.status = 'rankup';
+            cancelAnimationFrame(gameLoopId);
+            clearTimeout(spawnIntervalId);
+            clearTimeout(eventIntervalId);
+            clearEvent();
+            
+            const rank = RANKS[Math.floor(state.score / 10)];
+            document.getElementById('rankup-icon').innerText = rank.icon;
+            document.getElementById('rankup-name').innerText = `晉封 ${rank.name}`;
+            
+            const lastWord = state.correctWordsLog[state.correctWordsLog.length - 1];
+            document.getElementById('rankup-lastword').innerText = `新學會的西洋詞彙：${lastWord ? lastWord.word : ''}`;
+            
+            // 重置講課 UI
+            document.getElementById('btn-tutor').classList.remove('hidden');
+            document.getElementById('btn-tutor').innerText = '✨ 傳召宮中貴人為您講解';
+            document.getElementById('text-tutor').classList.add('hidden');
+            document.getElementById('text-tutor').innerText = '';
+
+            showScreen('rankup');
+        }
+
+        function handleGameOver(isColdPalace = false) {
+            state.status = 'gameover';
+            cancelAnimationFrame(gameLoopId);
+            clearTimeout(spawnIntervalId);
+            clearTimeout(eventIntervalId);
+            clearEvent();
+            updateHUD(); 
+
+            const icon = document.getElementById('gameover-icon');
+            const title = document.getElementById('gameover-title');
+            const desc = document.getElementById('gameover-desc');
+
+            if (isColdPalace) {
+                icon.innerText = '🥀';
+                icon.classList.add('grayscale');
+                title.innerText = '打入冷宮';
+                title.className = 'text-4xl font-black text-red-500 tracking-widest drop-shadow-md';
+                desc.className = 'text-sm font-bold text-white bg-red-900/60 p-5 border-2 border-red-500 rounded-lg shadow-xl leading-loose';
+                desc.innerHTML = `連連失誤，惹怒聖顏！<br>皇上下令褫奪封號，降為庶人，<br>即刻打入冷宮！<br><br><span class="text-[#f2d080]">最終位份：${RANKS[Math.min(Math.floor(state.score / 10), RANKS.length - 1)].name} (恩寵: ${state.score})</span>`;
+            } else {
+                icon.innerText = '🍂';
+                icon.classList.remove('grayscale');
+                title.innerText = '退出後宮';
+                title.className = 'text-3xl font-black text-white tracking-widest drop-shadow-md';
+                desc.className = 'text-sm font-bold text-white bg-white/10 p-5 border border-white/30 rounded-lg shadow-xl leading-loose';
+                desc.innerHTML = `小主稱病不出，不問世事。<br><br><span class="text-[#f2d080] text-lg">最終位份：${RANKS[Math.min(Math.floor(state.score / 10), RANKS.length - 1)].name}</span><br>此生共積累恩寵：${state.score}`;
+            }
+
+            showScreen('gameover');
+        }
+
+        function quitGame() {
+            handleGameOver(false);
+        }
+
+        function handleWin() {
+            state.status = 'won';
+            cancelAnimationFrame(gameLoopId);
+            clearTimeout(spawnIntervalId);
+            clearTimeout(eventIntervalId);
+            clearEvent();
+            showScreen('won');
+            fetchQueenEdict();
+        }
+
+        function cheatCode() {
+            if (state.status === 'playing') {
+                state.score += 9;
+                state.correctWordsLog.push({word: "Cheat", answer: "作弊"});
+                updateHUD();
+                checkRankUpOrWin();
+            }
+        }
+
+        // --- 宮鬥事件系統 ---
+        function scheduleNextEvent() {
+            clearTimeout(eventIntervalId);
+            eventIntervalId = setTimeout(() => {
+                if(state.status === 'playing' && !state.event && Math.random() < 0.3) {
+                    triggerEvent();
+                }
+                scheduleNextEvent();
+            }, 6000);
+        }
+
+        function triggerEvent() {
+            const types = ['huafei', 'cat', 'qifei'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            let msg = "";
+            let duration = 0;
+            let html = "";
+
+            if (type === 'huafei') { 
+                msg = "華妃：賤人就是矯情！給我加快！"; duration = 4000; 
+                html = `<div class="absolute inset-0 border-[6px] border-red-500/80 animate-pulse bg-red-500/10 rounded-xl">
+                            <div class="absolute top-10 w-full text-center">
+                                <span class="bg-red-600/90 text-white font-black border-2 border-white px-5 py-2 text-lg tracking-widest inline-block shadow-2xl rounded-full">${msg}</span>
+                            </div>
+                        </div>`;
+            } 
+            else if (type === 'cat') { 
+                msg = "皇后：松子，去！(肥貓擋視線)"; duration = 3500; 
+                html = `<div class="absolute animate-bounce flex flex-col items-center">
+                            <div class="text-[120px] drop-shadow-2xl animate-[spin_3s_linear_infinite]">🐈</div>
+                            <div class="text-xs font-bold bg-white/90 text-[#5c0a0a] px-4 py-1.5 mt-2 border-2 border-[#5c0a0a] tracking-widest rounded-full shadow-lg">${msg}</div>
+                        </div>`;
+            } 
+            else if (type === 'qifei') { 
+                msg = "齊妃：皇上最愛看臣妾穿粉色了..."; duration = 5000;
+                html = `<div class="absolute inset-0 bg-pink-400/20 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                            <div class="text-white text-base font-black bg-pink-600/90 px-6 py-4 border-2 border-white rotate-[-5deg] tracking-widest shadow-2xl rounded-lg">🌸 ${msg}</div>
+                        </div>`;
+            }
+
+            state.event = { type, expires: performance.now() + duration };
+            DOM.playing.eventContainer.innerHTML = html;
+            DOM.playing.eventContainer.classList.remove('hidden');
+        }
+
+        function clearEvent() {
+            state.event = null;
+            DOM.playing.eventContainer.innerHTML = '';
+            DOM.playing.eventContainer.classList.add('hidden');
+        }
+
+        // --- Gemini API 整合 ---
+        const apiKey = ""; // 執行時注入
+        const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        async function fetchGemini(prompt, systemInstruction) {
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const response = await fetch(apiURL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    }
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+                }
+            }
+            return null;
+        }
+
+        async function fetchAiTutor() {
+            const btn = document.getElementById('btn-tutor');
+            const txt = document.getElementById('text-tutor');
+            btn.innerText = '小太監傳話中...';
+
+            const chars = ["華妃", "皇后", "甄嬛", "蘇培盛", "安陵容"];
+            const char = chars[Math.floor(Math.random() * chars.length)];
+            const lastWordObj = state.correctWordsLog[state.correctWordsLog.length - 1] || { word: "Computer", answer: "電腦" };
+            
+            const prompt = `玩家剛在遊戲打出了西洋詞彙「${lastWordObj.word} (意思: ${lastWordObj.answer})」。請扮演《甄嬛傳》的「${char}」，用專屬語氣和口頭禪，把這個「初中電腦科詞彙」用宮廷生活比喻解釋給玩家聽。字數80字左右。繁體中文。`;
+            const instruction = `Roleplay as ${char} from Zhen Huan Zhuan. Explain the basic IT vocabulary using palace analogies. Use Traditional Chinese.`;
+
+            const result = await fetchGemini(prompt, instruction);
+
+            btn.classList.add('hidden');
+            txt.classList.remove('hidden');
+            txt.innerText = result ? `【${char}】\n${result.trim()}` : `【${char}】\n本宮乏了，這西洋玩意兒你自己去琢磨吧！`;
+        }
+
+        async function fetchQueenEdict() {
+            const loading = document.getElementById('edict-loading');
+            const txt = document.getElementById('edict-text');
+            loading.classList.remove('hidden');
+            txt.classList.add('hidden');
+
+            const recentWords = state.correctWordsLog.slice(-5).map(w => w.word).join(', ');
+            const prompt = `玩家在打字遊戲中神速輸入了 ${recentWords} 等電腦科詞彙，獲滿分正式封后！請扮演雍正皇帝，用繁體中文擬一道幽默的「封后聖旨」讚賞她打字快。字數100字左右。`;
+            const instruction = `Roleplay as Emperor Yongzheng. Write an edict crowning the player Empress due to her fast typing skills of IT vocab. Traditional Chinese.`;
+
+            const result = await fetchGemini(prompt, instruction);
+
+            loading.classList.add('hidden');
+            txt.classList.remove('hidden');
+            txt.innerText = result ? result.trim() : "奉天承運，皇帝詔曰：\n\n爾小主聰慧過人，精通西洋電腦之術，打字如飛，深得朕心。着即冊封為皇后，賜居景仁宮，欽此！";
+        }
+
+        // 初始化
+        initGameUI();
+
+    </script>
+</body>
+</html>

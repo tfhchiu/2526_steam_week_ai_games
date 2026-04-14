@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數位解碼：英文與邏輯解謎</title>
+    <style>
+        :root {
+            --neon-blue: #00d4ff;
+            --neon-purple: #9400d3;
+            --bg-dark: #050505;
+            --terminal-green: #33ff33;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: #e0e0e0;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-box {
+            width: 800px;
+            height: 550px;
+            background: #111;
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 20px var(--neon-blue);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            padding: 15px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #terminal {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.8);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .input-area {
+            padding: 15px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex-grow: 1;
+            background: #000;
+            border: 1px solid var(--neon-blue);
+            color: var(--terminal-green);
+            padding: 8px;
+            outline: none;
+        }
+
+        button {
+            background: var(--neon-blue);
+            border: none;
+            color: #000;
+            padding: 8px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover { background: #fff; box-shadow: 0 0 10px #fff; }
+
+        .system-msg { color: var(--neon-blue); }
+        .error-msg { color: #ff3333; }
+        .success-msg { color: var(--terminal-green); }
+        .highlight { color: #ffff33; font-weight: bold; }
+
+        #progress-dots { display: flex; gap: 5px; }
+        .dot { width: 10px; height: 10px; border: 1px solid var(--neon-blue); }
+        .dot.active { background: var(--neon-blue); }
+
+        /* 謎題UI */
+        #puzzle-container {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px dashed #555;
+            background: #0a0a0a;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-box">
+    <div class="header">
+        <div>🔒 系統狀態：<span id="level-name">正在載入...</span></div>
+        <div id="progress-dots"></div>
+    </div>
+
+    <div id="terminal">
+        <div class="system-msg">正在初始化遠端連線...</div>
+        <div class="system-msg">連線成功。正在載入主控台。</div>
+        <hr>
+        <div id="story-text"></div>
+        <div id="puzzle-container"></div>
+    </div>
+
+    <div class="input-area">
+        <span>></span>
+        <input type="text" id="user-input" placeholder="在這裡輸入答案並按 Enter" autocomplete="off">
+        <button onclick="checkAnswer()">提交 (Submit)</button>
+    </div>
+</div>
+
+<script>
+    const levels = [
+        {
+            name: "Level 1: Binary Logic (二進位邏輯)",
+            story: "你需要存取伺服器的第一層，但門禁系統需要一個 8-bit 的密碼。密碼就在下方：",
+            puzzle: "英文關鍵字：<span class='highlight'>BINARY</span><br>題目：將十進位數字 <span class='highlight'>13</span> 轉換為 4 位二進位碼。<br>(提示：8-4-2-1 規則)",
+            answer: "1101",
+            hint: "13 = 8 + 4 + 1。也就是 2³ + 2² + 2⁰。"
+        },
+        {
+            name: "Level 2: Boolean Search (布林搜索)",
+            story: "門開了，但你需要從亂碼中找出備份文件的名稱。邏輯開關已開啟：",
+            puzzle: "英文關鍵字：<span class='highlight'>BOOLEAN (布林)</span><br>題目：如果 A = TRUE 且 B = FALSE，那麼下列邏輯運算的結果是什麼？<br><span class='highlight'>(A AND B) OR A</span>",
+            answer: "TRUE",
+            hint: "(TRUE AND FALSE) 是 FALSE。接著 FALSE OR TRUE 的結果是？"
+        },
+        {
+            name: "Level 3: Algorithm Sort (演算法排序)",
+            story: "文件已損壞！你需要將打亂的數據序列按由小到大排序，這是修復數據的唯一方法：",
+            puzzle: "英文關鍵字：<span class='highlight'>ALGORITHM (演算法)</span><br>題目：將此數列按順序排列：<span class='highlight'>[5, 1, 9, 3]</span>。<br>(請直接輸入數字，中間不留空格，如: 1234)",
+            answer: "1359",
+            hint: "只需按數字從小到大排列即可。"
+        },
+        {
+            name: "Level 4: Encryption Key (加密密鑰)",
+            story: "最後一步！核心伺服器被凱撒密碼 (Caesar Cipher) 加密了。密鑰是向後移動 3 格。",
+            puzzle: "英文關鍵字：<span class='highlight'>ENCRYPTION (加密)</span><br>題目：將單字 <span class='highlight'>'DATA'</span> 向後移 3 格後的結果是什麼？<br>(例：A 變 D, B 變 E...)",
+            answer: "Gdwd",
+            hint: "D->G, A->D, T->W, A->D"
+        }
+    ];
+
+    let currentLevel = 0;
+    const terminal = document.getElementById('terminal');
+    const inputField = document.getElementById('user-input');
+
+    function initGame() {
+        renderProgress();
+        loadLevel();
+        inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') checkAnswer();
+        });
+    }
+
+    function renderProgress() {
+        const dots = document.getElementById('progress-dots');
+        dots.innerHTML = "";
+        for(let i=0; i<levels.length; i++) {
+            const dot = document.createElement('div');
+            dot.className = "dot" + (i <= currentLevel ? " active" : "");
+            dots.appendChild(dot);
+        }
+    }
+
+    function loadLevel() {
+        if(currentLevel >= levels.length) {
+            victory();
+            return;
+        }
+        const lvl = levels[currentLevel];
+        document.getElementById('level-name').innerText = lvl.name;
+        
+        const content = `
+            <div class="system-msg">>>> 解鎖任務更新...</div>
+            <p>${lvl.story}</p>
+            <div id="puzzle-container">${lvl.puzzle}</div>
+        `;
+        appendToTerminal(content);
+        renderProgress();
+    }
+
+    function appendToTerminal(html) {
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        terminal.appendChild(div);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function checkAnswer() {
+        const val = inputField.value.trim().toUpperCase();
+        if(!val) return;
+
+        const correct = levels[currentLevel].answer.toUpperCase();
+
+        if(val === correct) {
+            appendToTerminal(`<div class="success-msg">驗證成功！正在前往下一層...</div><hr>`);
+            currentLevel++;
+            inputField.value = "";
+            setTimeout(loadLevel, 800);
+        } else {
+            appendToTerminal(`<div class="error-msg">驗證失敗。請重新嘗試。輸入 'HINT' 獲取提示。</div>`);
+            if(val === "HINT") {
+                appendToTerminal(`<div class="highlight">提示：${levels[currentLevel].hint}</div>`);
+            }
+            inputField.value = "";
+        }
+    }
+
+    function victory() {
+        document.getElementById('level-name').innerText = "SYSTEM REPAIRED";
+        appendToTerminal(`
+            <h2 class="success-msg">恭喜！系統已完全修復！</h2>
+            <p>你展示了非凡的英文邏輯與運算思維能力。</p>
+            <p>你學會了：二進位、布林運算、演算法排序與基礎加密概念。</p>
+            <button onclick="location.reload()">重新挑戰 (Restart)</button>
+        `);
+        inputField.disabled = true;
+    }
+
+    initGame();
+</script>
+</body>
+</html>

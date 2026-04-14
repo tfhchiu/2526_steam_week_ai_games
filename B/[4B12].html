@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>魔法森林守護者 - STEAM Week 專案 (優化版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #064e3b;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(to bottom, #022c22 0%, #064e3b 80%, #0f172a 100%);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+            cursor: crosshair;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .ui-panel {
+            pointer-events: auto;
+            background: rgba(2, 44, 34, 0.85);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            border: 2px solid #34d399;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+        @keyframes pulse-animation {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        /* 增加受傷時的螢幕紅光閃爍特效 */
+        .damage-flash {
+            animation: flash-red 0.3s ease-out;
+        }
+        @keyframes flash-red {
+            0% { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.8); }
+            100% { box-shadow: inset 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body id="gameBody" class="flex items-center justify-center h-screen w-screen relative">
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas" width="600" height="800" class="max-w-full max-h-full"></canvas>
+
+    <!-- UI 覆蓋層 -->
+    <div id="uiLayer" class="ui-layer">
+        <!-- 開始畫面 -->
+        <div id="startPanel" class="ui-panel pulse">
+            <div class="text-6xl mb-4">🧙‍♂️</div>
+            <h1 class="text-4xl font-bold text-emerald-400 mb-2">魔法森林守護者</h1>
+            <p class="text-lg text-emerald-200 mb-6">點擊螢幕發射火球，阻止怪物入侵！</p>
+            <div class="flex justify-center gap-4 mb-6 text-sm text-gray-300">
+                <div class="bg-emerald-900/50 p-2 rounded">👾 史萊姆: 10分</div>
+                <div class="bg-emerald-900/50 p-2 rounded border border-red-500/30">🦇 蝙蝠: 20分 (速度快)</div>
+            </div>
+            <button id="startBtn" class="bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-3 px-8 rounded-full text-xl transition transform hover:scale-110 shadow-lg shadow-emerald-500/50">
+                開始施法
+            </button>
+        </div>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="gameOverPanel" class="ui-panel hidden">
+            <h1 class="text-4xl font-bold text-red-500 mb-2">防線被突破了！</h1>
+            <p class="text-xl mb-6 text-gray-300">怪物入侵了魔法森林...</p>
+            <div class="bg-black/30 rounded-lg p-4 mb-6">
+                <p class="text-lg">最終擊退分數</p>
+                <p id="finalScore" class="text-5xl font-bold text-yellow-400 my-2">0</p>
+            </div>
+            <button id="restartBtn" class="bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-3 px-8 rounded-full text-xl transition transform hover:scale-110 shadow-lg shadow-emerald-500/50">
+                重新集結
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲進行中的狀態列 -->
+    <div class="absolute top-4 left-4 right-4 flex justify-between pointer-events-none hidden" id="hudDisplay">
+        <div class="bg-black/60 px-4 py-2 rounded-lg border border-emerald-500/50 shadow-lg">
+            <span class="text-emerald-400 font-bold">分數: </span>
+            <span id="currentScore" class="text-2xl font-bold text-white">0</span>
+        </div>
+        <div class="bg-black/60 px-4 py-2 rounded-lg border border-red-500/50 shadow-lg">
+            <span class="text-red-400 font-bold">生命: </span>
+            <span id="currentLives" class="text-2xl font-bold text-white tracking-widest">❤️❤️❤️</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameBody = document.getElementById('gameBody');
+        
+        // UI 元素
+        const startPanel = document.getElementById('startPanel');
+        const gameOverPanel = document.getElementById('gameOverPanel');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const hudDisplay = document.getElementById('hudDisplay');
+        const currentScoreEl = document.getElementById('currentScore');
+        const currentLivesEl = document.getElementById('currentLives');
+        const finalScoreEl = document.getElementById('finalScore');
+
+        // 遊戲核心變數
+        let gameState = 'START';
+        let score = 0;
+        let lives = 3;
+        let animationId;
+        let lastTime = 0;
+
+        // 實體陣列
+        let projectiles = [];
+        let enemies = [];
+        let particles = []; 
+
+        // 玩家 (魔法師)
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 80,
+            size: 60,
+            icon: '🧙‍♂️'
+        };
+
+        // 難度控制
+        let spawnTimer = 0;
+        let spawnInterval = 1500; 
+
+        // --- 畫布自適應 ---
+        function resizeCanvas() {
+            const windowRatio = window.innerWidth / window.innerHeight;
+            const canvasRatio = canvas.width / canvas.height;
+            if (windowRatio < canvasRatio) {
+                canvas.style.width = '100vw';
+                canvas.style.height = 'auto';
+            } else {
+                canvas.style.width = 'auto';
+                canvas.style.height = '100vh';
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- 輸入控制 ---
+        canvas.addEventListener('pointerdown', (e) => {
+            if (gameState !== 'PLAYING') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+
+            shootProjectile(clickX, clickY);
+        });
+
+        // --- 遊戲邏輯函數 ---
+        function shootProjectile(targetX, targetY) {
+            const angle = Math.atan2(targetY - player.y, targetX - player.x);
+            const speed = 700; // 稍微調快火球速度，手感更好
+
+            projectiles.push({
+                x: player.x,
+                y: player.y - 20,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 25,
+                icon: '🔥'
+            });
+        }
+
+        function spawnEnemy() {
+            const isBat = Math.random() < 0.3; 
+            const size = isBat ? 45 : 55; // 稍微放大一點點，更容易點擊
+            const x = size + Math.random() * (canvas.width - size * 2);
+            
+            enemies.push({
+                x: x,
+                y: -size,
+                size: size,
+                type: isBat ? 'bat' : 'slime',
+                icon: isBat ? '🦇' : '👾',
+                // 蝙蝠紅色光暈，史萊姆綠色光暈
+                glowColor: isBat ? 'rgba(239, 68, 68, 0.5)' : 'rgba(52, 211, 153, 0.4)',
+                speed: isBat ? (150 + score * 0.5) : (80 + score * 0.3),
+                points: isBat ? 20 : 10
+            });
+        }
+
+        function createExplosion(x, y, colorStr) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 250,
+                    vy: (Math.random() - 0.5) * 250,
+                    life: 1,
+                    color: colorStr
+                });
+            }
+        }
+
+        function triggerDamageFlash() {
+            gameBody.classList.remove('damage-flash');
+            // 觸發重繪以重啟動畫
+            void gameBody.offsetWidth; 
+            gameBody.classList.add('damage-flash');
+        }
+
+        function updateLivesDisplay() {
+            let hearts = '';
+            for(let i=0; i<lives; i++) hearts += '❤️';
+            for(let i=lives; i<3; i++) hearts += '🖤';
+            currentLivesEl.innerText = hearts;
+        }
+
+        function initGame() {
+            score = 0;
+            lives = 3;
+            projectiles = [];
+            enemies = [];
+            particles = [];
+            spawnInterval = 1500;
+            
+            currentScoreEl.innerText = score;
+            updateLivesDisplay();
+            gameBody.classList.remove('damage-flash');
+            
+            gameState = 'PLAYING';
+            lastTime = performance.now();
+            
+            startPanel.classList.add('hidden');
+            gameOverPanel.classList.add('hidden');
+            hudDisplay.classList.remove('hidden');
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            cancelAnimationFrame(animationId);
+            finalScoreEl.innerText = score;
+            
+            gameOverPanel.classList.remove('hidden');
+            hudDisplay.classList.add('hidden');
+        }
+
+        // --- 主遊戲迴圈 ---
+        function gameLoop(currentTime) {
+            if (gameState !== 'PLAYING') return;
+
+            let deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            // 【優化重點 2】：限制 deltaTime 上限
+            // 如果玩家切換分頁或電腦卡頓，deltaTime 會變得非常大。
+            // 限制在 0.1 秒（相當於最低 10 FPS），防止怪物「瞬間移動」甚至直接掉出畫面外。
+            if (deltaTime > 0.1) {
+                deltaTime = 0.1;
+            }
+
+            // 1. 清除畫布並繪製防線
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(0, player.y + 30, canvas.width, canvas.height); 
+            ctx.strokeStyle = '#34d399';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, player.y + 30);
+            ctx.lineTo(canvas.width, player.y + 30);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 2. 生成怪物
+            spawnTimer += deltaTime * 1000;
+            if (spawnTimer >= spawnInterval) {
+                spawnEnemy();
+                spawnTimer = 0;
+                if (spawnInterval > 500) {
+                    spawnInterval -= 20; 
+                }
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // 3. 粒子特效
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * deltaTime;
+                p.y += p.vy * deltaTime;
+                p.life -= deltaTime * 2; 
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+
+            // 4. 發射物 (火球)
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let proj = projectiles[i];
+                proj.x += proj.vx * deltaTime;
+                proj.y += proj.vy * deltaTime;
+
+                // 畫火球的微弱發光
+                ctx.beginPath();
+                ctx.arc(proj.x, proj.y, proj.size * 0.4, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
+                ctx.fill();
+
+                ctx.font = `${proj.size}px Arial`;
+                ctx.fillText(proj.icon, proj.x, proj.y);
+
+                if (proj.x < 0 || proj.x > canvas.width || proj.y < 0 || proj.y > canvas.height) {
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            // 5. 怪物更新與碰撞
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let enemy = enemies[i];
+                enemy.y += enemy.speed * deltaTime;
+
+                // 【優化重點 1】：繪製怪物發光底圈
+                // 這解決了「深色蝙蝠在深色背景中隱形」的對比度問題
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.size * 0.45, 0, Math.PI * 2);
+                ctx.fillStyle = enemy.glowColor;
+                ctx.fill();
+
+                // 畫怪物 Emoji
+                ctx.font = `${enemy.size}px Arial`;
+                ctx.fillText(enemy.icon, enemy.x, enemy.y);
+
+                // 檢查是否突破防線
+                if (enemy.y > canvas.height) {
+                    enemies.splice(i, 1);
+                    lives--;
+                    updateLivesDisplay();
+                    triggerDamageFlash(); // 呼叫畫面紅光閃爍特效
+                    createExplosion(enemy.x, canvas.height - 20, '#ef4444'); 
+                    
+                    if (lives <= 0) {
+                        gameOver();
+                        return; 
+                    }
+                    continue;
+                }
+
+                // 檢查碰撞
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    let proj = projectiles[j];
+                    const dx = enemy.x - proj.x;
+                    const dy = enemy.y - proj.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < (enemy.size + proj.size) / 2.5) {
+                        score += enemy.points;
+                        currentScoreEl.innerText = score;
+                        createExplosion(enemy.x, enemy.y, enemy.type === 'slime' ? '#34d399' : '#8b5cf6');
+
+                        enemies.splice(i, 1);
+                        projectiles.splice(j, 1);
+                        break; 
+                    }
+                }
+            }
+
+            // 6. 繪製玩家
+            ctx.font = `${player.size}px Arial`;
+            ctx.fillText(player.icon, player.x, player.y);
+
+            // 繼續迴圈
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // 初始繪製
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(0, player.y + 30, canvas.width, canvas.height);
+        ctx.font = `${player.size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(player.icon, player.x, player.y);
+
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', initGame);
+
+    </script>
+</body>
+</html>

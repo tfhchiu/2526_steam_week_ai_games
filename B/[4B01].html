@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>單詞推推樂</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            touch-action: none; /* 防止手機端滑動頁面 */
+        }
+        .cell {
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            transition: transform 0.15s ease-in-out;
+            text-align: center;
+            line-height: 1;
+        }
+        .wall {
+            background-color: #4b5563;
+            border-radius: 4px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .target {
+            border: 2px dashed #9ca3af;
+            border-radius: 6px;
+            background-color: rgba(229, 231, 235, 0.5);
+            color: #374151;
+            z-index: 10;
+        }
+        .exit-point {
+            border: 2px solid #3b82f6;
+            border-radius: 6px;
+            background-color: rgba(59, 130, 246, 0.2);
+            z-index: 5;
+        }
+        .box {
+            background-color: #f59e0b;
+            color: white;
+            border: 2px solid #b45309;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 20;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            word-break: break-all;
+            padding: 2px;
+            overflow: hidden;
+        }
+        .box.correct {
+            background-color: #10b981;
+            border-color: #047857;
+            transform: scale(1.05); /* 增加一點視覺回饋 */
+        }
+        .player {
+            z-index: 30;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+        }
+        .board-container {
+            position: relative;
+            background-color: #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 0 auto;
+        }
+        .board-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center font-sans text-gray-800">
+
+    <!-- 主選單 -->
+    <div id="menu-view" class="w-full max-w-md p-6 bg-white rounded-2xl shadow-xl text-center">
+        <h1 class="text-4xl font-extrabold text-blue-600 mb-2">單詞推推樂</h1>
+        <p class="text-gray-500 mb-6">將英文單詞推到對應的中文翻譯格子裡，<br>最後操控小人站上 🏁 終點格子即可通關！</p>
+        
+        <div class="space-y-3">
+            <button onclick="startGame('easy')" class="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md">
+                簡單難度 (3詞)
+            </button>
+            <button onclick="startGame('medium')" class="w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md">
+                中等難度 (5詞)
+            </button>
+            <button onclick="startGame('hard')" class="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md">
+                困難難度 (7詞)
+            </button>
+            <button onclick="startGame('ultimate')" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md animate-pulse">
+                💥 終極無敵爆炸難 (10詞) 💥
+            </button>
+        </div>
+        
+        <div class="mt-6 text-sm text-gray-400">
+            支援鍵盤方向鍵 (或WASD) 和螢幕按鈕操作<br>按 <kbd class="bg-gray-200 px-1 rounded text-gray-600">Z</kbd> 鍵可以悔棋
+        </div>
+    </div>
+
+    <!-- 遊戲介面 -->
+    <div id="game-view" class="hidden w-full max-w-lg flex flex-col items-center">
+        <!-- 頭部資訊 -->
+        <div class="w-full flex justify-between items-center px-4 mb-4 mt-2">
+            <button onclick="backToMenu()" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-gray-700 transition text-sm">
+                返回
+            </button>
+            <div class="flex flex-col items-center">
+                <div class="text-lg sm:text-xl font-bold text-blue-800">
+                    <span id="level-display">簡單 - 關卡 1</span>
+                </div>
+                <div id="score-display" class="text-sm font-bold text-orange-500 transition-colors duration-300">
+                    本關分數: 0
+                </div>
+            </div>
+            <div class="flex space-x-2">
+                <button id="undo-btn" onclick="undoMove()" class="px-3 py-2 bg-yellow-100 hover:bg-yellow-200 rounded-lg font-bold text-yellow-700 transition text-sm opacity-50 cursor-not-allowed">
+                    悔棋
+                </button>
+                <button onclick="restartLevel()" class="px-3 py-2 bg-blue-100 hover:bg-blue-200 rounded-lg font-bold text-blue-700 transition text-sm">
+                    重置
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲區域 -->
+        <div class="board-wrapper">
+            <div id="board" class="board-container"></div>
+        </div>
+
+        <!-- 虛擬方向鍵 -->
+        <div class="grid grid-cols-3 gap-2 mt-4 w-48 mx-auto">
+            <div></div>
+            <button onclick="movePlayer(-1, 0)" class="bg-gray-200 active:bg-gray-300 p-4 rounded-xl flex justify-center items-center shadow-sm transition-transform active:scale-90 text-2xl">⬆️</button>
+            <div></div>
+            <button onclick="movePlayer(0, -1)" class="bg-gray-200 active:bg-gray-300 p-4 rounded-xl flex justify-center items-center shadow-sm transition-transform active:scale-90 text-2xl">⬅️</button>
+            <button onclick="movePlayer(1, 0)" class="bg-gray-200 active:bg-gray-300 p-4 rounded-xl flex justify-center items-center shadow-sm transition-transform active:scale-90 text-2xl">⬇️</button>
+            <button onclick="movePlayer(0, 1)" class="bg-gray-200 active:bg-gray-300 p-4 rounded-xl flex justify-center items-center shadow-sm transition-transform active:scale-90 text-2xl">➡️</button>
+        </div>
+    </div>
+
+    <!-- 勝利彈窗 -->
+    <div id="win-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4 transform transition-transform scale-100">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-3xl font-bold text-green-600 mb-2">過關啦！</h2>
+            <p id="final-score-text" class="text-xl font-bold text-orange-500 mb-2">得分: 0</p>
+            <p class="text-gray-600 mb-6">太棒了，你找對了所有單詞！</p>
+            <button onclick="nextLevel()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-md transition-transform active:scale-95">
+                下一關
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const VOCAB_EASY_MEDIUM = [
+            {en: "apple", zh: "蘋果", pos: "n."}, {en: "book", zh: "書本", pos: "n."}, 
+            {en: "tree", zh: "樹木", pos: "n."}, {en: "bird", zh: "小鳥", pos: "n."},
+            {en: "fish", zh: "魚兒", pos: "n."}, {en: "star", zh: "星星", pos: "n."},
+            {en: "milk", zh: "牛奶", pos: "n."}, {en: "rice", zh: "米飯", pos: "n."},
+            {en: "game", zh: "遊戲", pos: "n."}, {en: "time", zh: "時間", pos: "n."},
+            {en: "music", zh: "音樂", pos: "n."}, {en: "light", zh: "光線", pos: "n."},
+            {en: "color", zh: "顏色", pos: "n."}, {en: "house", zh: "房子", pos: "n."},
+            {en: "train", zh: "火車", pos: "n."}, {en: "cloud", zh: "雲朵", pos: "n."}
+        ];
+
+        const VOCAB_HARD = [
+            {en: "science", zh: "科學", pos: "n."}, {en: "history", zh: "歷史", pos: "n."},
+            {en: "nature", zh: "自然", pos: "n."}, {en: "health", zh: "健康", pos: "n."},
+            {en: "reason", zh: "原因", pos: "n."}, {en: "system", zh: "系統", pos: "n."},
+            {en: "theory", zh: "理論", pos: "n."}, {en: "method", zh: "方法", pos: "n."},
+            {en: "achieve", zh: "實現", pos: "v."}, {en: "balance", zh: "平衡", pos: "n."},
+            {en: "culture", zh: "文化", pos: "n."}, {en: "improve", zh: "改善", pos: "v."},
+            {en: "success", zh: "成功", pos: "n."}, {en: "freedom", zh: "自由", pos: "n."},
+            {en: "journey", zh: "旅程", pos: "n."}, {en: "courage", zh: "勇氣", pos: "n."},
+            {en: "wealth", zh: "財富", pos: "n."}, {en: "memory", zh: "記憶", pos: "n."},
+            {en: "result", zh: "結果", pos: "n."}, {en: "society", zh: "社會", pos: "n."}
+        ];
+
+        const VOCAB_ULTIMATE = [
+            {en: "pneumonoultramicroscopicsilicovolcanoconiosis", zh: "肺塵病", pos: "n."},
+            {en: "hippopotomonstrosesquippedaliophobia", zh: "長詞恐懼症", pos: "n."},
+            {en: "supercalifragilisticexpialidocious", zh: "奇妙無比的", pos: "adj."},
+            {en: "pseudopseudohypoparathyroidism", zh: "假性副甲狀腺", pos: "n."},
+            {en: "floccinaucinihilipilification", zh: "視為無價值", pos: "n."},
+            {en: "antidisestablishmentarianism", zh: "反政教分離", pos: "n."},
+            {en: "honorificabilitudinitatibus", zh: "不勝光榮", pos: "n."},
+            {en: "thyroparathyroidectomized", zh: "甲狀腺切除", pos: "adj."},
+            {en: "dichlorodifluoromethane", zh: "二氯二氟甲烷", pos: "n."},
+            {en: "incomprehensibilities", zh: "不可理解事物", pos: "n."},
+            {en: "uncharacteristically", zh: "非同尋常地", pos: "adv."},
+            {en: "psychoneuroendocrinological", zh: "心理內分泌的", pos: "adj."},
+            {en: "hepaticocholangiocholecystenterostomies", zh: "肝膽管吻合術", pos: "n."},
+            {en: "spectrophotofluorometrically", zh: "分光螢光光度", pos: "adv."},
+            {en: "otorhinolaryngological", zh: "耳鼻喉科的", pos: "adj."},
+            {en: "inconceivabilities", zh: "不可思議的事", pos: "n."}
+        ];
+
+        // 重新加入障礙物，恢復推箱子的解謎樂趣，小心不要把箱子推死囉！
+        const LEVELS = {
+            easy: [ // 5關 (3個生字)
+                [
+                    "##########",
+                    "#        #",
+                    "#  A B C #",
+                    "#  # # # #",
+                    "#  a b c #",
+                    "#   @ X  #",
+                    "##########"
+                ],
+                [
+                    "##########",
+                    "#        #",
+                    "# A  # a #",
+                    "# B  # b #",
+                    "# C  # c #",
+                    "#   @ X  #",
+                    "##########"
+                ],
+                [
+                    "##########",
+                    "#        #",
+                    "# A # B  #",
+                    "# a # b  #",
+                    "# C # c  #",
+                    "# @   X  #",
+                    "##########"
+                ],
+                [
+                    "##########",
+                    "#        #",
+                    "#  A a   #",
+                    "# ### ## #",
+                    "#  B b   #",
+                    "#  C c@X #",
+                    "##########"
+                ],
+                [
+                    "##########",
+                    "#        #",
+                    "# A B C  #",
+                    "# a b c  #",
+                    "# ###### #",
+                    "#  @ X   #",
+                    "##########"
+                ]
+            ],
+            medium: [ // 5關 (5個生字)
+                [
+                    "############",
+                    "#          #",
+                    "# A B # C  #",
+                    "# a b # c  #",
+                    "# D E # d e#",
+                    "#    @  X  #",
+                    "############"
+                ],
+                [
+                    "############",
+                    "#          #",
+                    "# A B C D E#",
+                    "# ######## #",
+                    "# a b c d e#",
+                    "#  @    X  #",
+                    "############"
+                ],
+                [
+                    "############",
+                    "#          #",
+                    "# A # a # E#",
+                    "# B # b # d#",
+                    "# C # c # e#",
+                    "#  D  @ X  #",
+                    "############"
+                ],
+                [
+                    "############",
+                    "#          #",
+                    "# A a  B b #",
+                    "#  ####    #",
+                    "# C c  D d #",
+                    "#  ####  E #",
+                    "# @ X    e #",
+                    "############"
+                ],
+                [
+                    "############",
+                    "#          #",
+                    "#  A  a  E #",
+                    "#  B  b  d #",
+                    "#  C  c  e #",
+                    "#  D  @  X #",
+                    "############"
+                ]
+            ],
+            hard: [ // 5關 (7個生字)
+                [
+                    "##############",
+                    "#            #",
+                    "# A B # C D  #",
+                    "# a b # c d  #",
+                    "# E F # e f  #",
+                    "# G g @ X    #",
+                    "##############"
+                ],
+                [
+                    "##############",
+                    "#            #",
+                    "# A B C      #",
+                    "# ######     #",
+                    "# a b c      #",
+                    "#        ### #",
+                    "# D E F d e f#",
+                    "# G g    @ X #",
+                    "##############"
+                ],
+                [
+                    "##############",
+                    "#            #",
+                    "# A a B b C c#",
+                    "#   #   #    #",
+                    "# D d E e F f#",
+                    "# G g @ X    #",
+                    "##############"
+                ],
+                [
+                    "##############",
+                    "#            #",
+                    "# A a  B b   #",
+                    "#  ###  ###  #",
+                    "# C c  D d   #",
+                    "#  ###  ###  #",
+                    "# E e  F f   #",
+                    "# G g    @ X #",
+                    "##############"
+                ],
+                [
+                    "##############",
+                    "#            #",
+                    "# A # a B # b#",
+                    "# C # c D # d#",
+                    "# E # e F # f#",
+                    "# G   g   @X #",
+                    "##############"
+                ]
+            ],
+            ultimate: [ // 3關 (10個生字)
+                [
+                    "################",
+                    "#              #",
+                    "# A B # C D E  #",
+                    "# a b # c d e  #",
+                    "# F G # H I J  #",
+                    "# f g # h i j  #",
+                    "#      @   X   #",
+                    "################"
+                ],
+                [
+                    "################",
+                    "#              #",
+                    "# A B C  a b c #",
+                    "# #####  ##### #",
+                    "# D E F  d e f #",
+                    "# #####  ##### #",
+                    "# G H I  g h i #",
+                    "# J j   @  X   #",
+                    "################"
+                ],
+                [
+                    "################",
+                    "#              #",
+                    "# A a  B b C c #",
+                    "#   #    #     #",
+                    "# D d  E e F f #",
+                    "#   #    #     #",
+                    "# G g H h I i J#",
+                    "#  j  @   X    #",
+                    "################"
+                ]
+            ]
+        };
+
+        let CELL_SIZE = 40; 
+        
+        let currentState = {
+            difficulty: '',
+            levelIndex: 0,
+            walls: [],
+            targets: [],
+            boxes: [],
+            player: {r: 0, c: 0},
+            exitPoint: null,
+            cols: 0,
+            rows: 0,
+            isWin: false,
+            hintItem: null,
+            isHintActive: false,
+            history: [], 
+            baseScore: 0,    // 透過推箱子獲得的原始分數
+            penaltyScore: 0  // 悔棋造成的扣分懲罰
+        };
+
+        function shuffleArray(array) {
+            let res = [...array];
+            for (let i = res.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [res[i], res[j]] = [res[j], res[i]];
+            }
+            return res;
+        }
+
+        function getRandomWordPairs(count, difficulty) {
+            let pool;
+            if (difficulty === 'ultimate') {
+                pool = [...VOCAB_ULTIMATE];
+            } else if (difficulty === 'hard') {
+                pool = [...VOCAB_HARD];
+            } else {
+                pool = [...VOCAB_EASY_MEDIUM];
+            }
+            let shuffled = shuffleArray(pool);
+            return shuffled.slice(0, count);
+        }
+
+        function startGame(difficulty) {
+            document.getElementById('menu-view').classList.add('hidden');
+            document.getElementById('game-view').classList.remove('hidden');
+            currentState.difficulty = difficulty;
+            currentState.levelIndex = 0;
+            loadLevel();
+        }
+
+        function backToMenu() {
+            document.getElementById('menu-view').classList.remove('hidden');
+            document.getElementById('game-view').classList.add('hidden');
+            document.getElementById('win-modal').classList.add('hidden');
+        }
+
+        function restartLevel() {
+            if(!currentState.isWin) {
+                loadLevel();
+            }
+        }
+
+        function nextLevel() {
+            document.getElementById('win-modal').classList.add('hidden');
+            currentState.levelIndex++;
+            if (currentState.levelIndex >= LEVELS[currentState.difficulty].length) {
+                currentState.levelIndex = 0;
+            }
+            loadLevel();
+        }
+
+        // === 計分系統 UI 更新 ===
+        function updateScoreDisplay() {
+            let el = document.getElementById('score-display');
+            if (el) {
+                let total = currentState.baseScore - currentState.penaltyScore;
+                el.innerText = `本關分數: ${total}`;
+                
+                if (total > 0) el.className = "text-sm font-bold text-green-600 transition-colors duration-300";
+                else if (total < 0) el.className = "text-sm font-bold text-red-500 transition-colors duration-300";
+                else el.className = "text-sm font-bold text-orange-500 transition-colors duration-300";
+            }
+        }
+
+        // 計算當前有幾個箱子放在正確的目標上
+        function getCurrentWinCount() {
+            let count = 0;
+            currentState.boxes.forEach(box => {
+                currentState.targets.forEach(target => {
+                    if (box.r === target.r && box.c === target.c && box.pairIndex === target.pairIndex) {
+                        count++;
+                    }
+                });
+            });
+            return count;
+        }
+
+        function loadLevel() {
+            currentState.isWin = false;
+            currentState.history = [];
+            currentState.baseScore = 0;    // 關卡重置時清空分數
+            currentState.penaltyScore = 0; // 關卡重置時清空懲罰
+            updateScoreDisplay();
+            updateUndoBtn();
+            
+            let layout = LEVELS[currentState.difficulty][currentState.levelIndex];
+            
+            currentState.walls = [];
+            currentState.targets = [];
+            currentState.boxes = [];
+            
+            currentState.rows = layout.length;
+            currentState.cols = Math.max(...layout.map(row => row.length));
+
+            for (let r = 0; r < layout.length; r++) {
+                for (let c = 0; c < layout[r].length; c++) {
+                    let char = layout[r][c];
+                    if (char === '#') {
+                        currentState.walls.push({r, c});
+                    } else if (char === '@') {
+                        currentState.player = {r, c};
+                    } else if (char === 'X') {
+                        currentState.exitPoint = {r, c};
+                    } else if (/[A-Z]/.test(char)) {
+                        currentState.boxes.push({id: char, r, c, word: '', pos: '', pairIndex: -1, el: null});
+                    } else if (/[a-z]/.test(char)) {
+                        currentState.targets.push({id: char.toUpperCase(), r, c, word: '', pos: '', pairIndex: -1, el: null});
+                    }
+                }
+            }
+
+            let numWords = currentState.boxes.length;
+            let pairs = getRandomWordPairs(numWords, currentState.difficulty);
+
+            let boxIndices = shuffleArray([...Array(numWords).keys()]);
+            let targetIndices = shuffleArray([...Array(numWords).keys()]);
+
+            for (let i = 0; i < numWords; i++) {
+                currentState.boxes[i].word = pairs[boxIndices[i]].en;
+                currentState.boxes[i].pos = pairs[boxIndices[i]].pos;
+                currentState.boxes[i].pairIndex = boxIndices[i];
+                
+                currentState.targets[i].word = pairs[targetIndices[i]].zh;
+                currentState.targets[i].pos = pairs[targetIndices[i]].pos;
+                currentState.targets[i].pairIndex = targetIndices[i];
+            }
+
+            let reachableSpaces = [];
+            let visited = new Set();
+            let queue = [ {r: currentState.player.r, c: currentState.player.c} ];
+            visited.add(`${currentState.player.r},${currentState.player.c}`);
+
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                let dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+                for (let d of dirs) {
+                    let nr = curr.r + d[0];
+                    let nc = curr.c + d[1];
+                    let key = `${nr},${nc}`;
+                    
+                    if (nr >= 0 && nr < currentState.rows && nc >= 0 && nc < currentState.cols && !visited.has(key)) {
+                        let char = layout[nr][nc];
+                        if (char !== '#') {
+                            visited.add(key);
+                            queue.push({r: nr, c: nc});
+                            if (char === ' ') {
+                                reachableSpaces.push({r: nr, c: nc});
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (reachableSpaces.length > 0) {
+                let rs = reachableSpaces[Math.floor(Math.random() * reachableSpaces.length)];
+                currentState.hintItem = { r: rs.r, c: rs.c, active: true, el: null };
+            } else {
+                currentState.hintItem = null;
+            }
+
+            currentState.isHintActive = false;
+
+            const diffNames = { easy: "簡單", medium: "中等", hard: "困難", ultimate: "💥 終極 💥" };
+            document.getElementById('level-display').innerText = `${diffNames[currentState.difficulty]} - 關卡 ${currentState.levelIndex + 1}`;
+
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            
+            const maxBoardWidth = Math.min(window.innerWidth - 32, 600);
+            CELL_SIZE = Math.floor(maxBoardWidth / currentState.cols);
+            CELL_SIZE = Math.max(28, Math.min(CELL_SIZE, 45)); // 微調最小格子容納更多單字
+
+            board.style.width = `${currentState.cols * CELL_SIZE}px`;
+            board.style.height = `${currentState.rows * CELL_SIZE}px`;
+
+            currentState.walls.forEach(w => {
+                let el = document.createElement('div');
+                el.className = 'cell wall';
+                el.style.width = `${CELL_SIZE}px`;
+                el.style.height = `${CELL_SIZE}px`;
+                el.style.transform = `translate(${w.c * CELL_SIZE}px, ${w.r * CELL_SIZE}px)`;
+                board.appendChild(el);
+            });
+
+            currentState.targets.forEach(t => {
+                let el = document.createElement('div');
+                el.className = 'cell target';
+                
+                let baseSize = Math.max(9, CELL_SIZE * 0.3);
+                if (currentState.isHintActive) {
+                    el.innerText = `${t.word}\n(${t.pos})`;
+                    el.style.fontSize = `${baseSize * 0.8}px`;
+                } else {
+                    el.innerText = t.word;
+                    el.style.fontSize = `${baseSize}px`;
+                }
+                
+                el.style.width = `${CELL_SIZE}px`;
+                el.style.height = `${CELL_SIZE}px`;
+                el.style.transform = `translate(${t.c * CELL_SIZE}px, ${t.r * CELL_SIZE}px)`;
+                t.el = el;
+                board.appendChild(el);
+            });
+
+            if (currentState.exitPoint) {
+                let el = document.createElement('div');
+                el.className = 'cell exit-point';
+                el.style.width = `${CELL_SIZE}px`;
+                el.style.height = `${CELL_SIZE}px`;
+                el.style.transform = `translate(${currentState.exitPoint.c * CELL_SIZE}px, ${currentState.exitPoint.r * CELL_SIZE}px)`;
+                el.innerHTML = `<span style="font-size: ${CELL_SIZE * 0.5}px">🏁</span>`;
+                board.appendChild(el);
+            }
+
+            if (currentState.hintItem && currentState.hintItem.active) {
+                let el = document.createElement('div');
+                el.className = 'cell';
+                el.style.width = `${CELL_SIZE}px`;
+                el.style.height = `${CELL_SIZE}px`;
+                el.style.transform = `translate(${currentState.hintItem.c * CELL_SIZE}px, ${currentState.hintItem.r * CELL_SIZE}px)`;
+                el.style.zIndex = '15'; 
+                
+                let icon = document.createElement('div');
+                icon.innerText = '🔍';
+                icon.style.fontSize = `${CELL_SIZE * 0.6}px`;
+                icon.className = 'animate-bounce drop-shadow-md';
+                el.appendChild(icon);
+                
+                board.appendChild(el);
+                currentState.hintItem.el = el;
+            }
+
+            currentState.boxes.forEach(b => {
+                let el = document.createElement('div');
+                el.className = 'cell box';
+                el.style.width = `${CELL_SIZE}px`;
+                el.style.height = `${CELL_SIZE}px`;
+                
+                let estFontSize;
+                if (b.word.length > 15) {
+                    estFontSize = Math.max(7, (CELL_SIZE * 2.2) / b.word.length);
+                } else {
+                    estFontSize = (CELL_SIZE * 1.5) / b.word.length;
+                }
+                
+                let finalFontSize = Math.min(CELL_SIZE * 0.35, Math.max(7, estFontSize));
+                if (currentState.isHintActive) {
+                    el.innerText = `${b.word}\n(${b.pos})`;
+                    el.style.fontSize = `${finalFontSize * 0.75}px`;
+                } else {
+                    el.innerText = b.word;
+                    el.style.fontSize = `${finalFontSize}px`;
+                }
+                
+                el.style.transform = `translate(${b.c * CELL_SIZE}px, ${b.r * CELL_SIZE}px)`;
+                b.el = el;
+                board.appendChild(el);
+            });
+
+            let playerEl = document.createElement('div');
+            playerEl.className = 'cell player';
+            playerEl.innerText = '🏃';
+            playerEl.id = 'player-el';
+            playerEl.style.width = `${CELL_SIZE}px`;
+            playerEl.style.height = `${CELL_SIZE}px`;
+            playerEl.style.fontSize = `${CELL_SIZE * 0.55}px`;
+            playerEl.style.transform = `translate(${currentState.player.c * CELL_SIZE}px, ${currentState.player.r * CELL_SIZE}px)`;
+            board.appendChild(playerEl);
+            
+            checkGameState();
+        }
+
+        function updatePositions() {
+            const playerEl = document.getElementById('player-el');
+            if(playerEl) {
+                playerEl.style.transform = `translate(${currentState.player.c * CELL_SIZE}px, ${currentState.player.r * CELL_SIZE}px)`;
+            }
+            
+            currentState.boxes.forEach(b => {
+                if(b.el) {
+                    b.el.style.transform = `translate(${b.c * CELL_SIZE}px, ${b.r * CELL_SIZE}px)`;
+                }
+            });
+            
+            checkGameState();
+        }
+
+        function updateUndoBtn() {
+            const btn = document.getElementById('undo-btn');
+            if(btn) {
+                if(currentState.history.length > 0 && !currentState.isWin) {
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        function movePlayer(dr, dc) {
+            if(currentState.isWin) return;
+
+            let nr = currentState.player.r + dr;
+            let nc = currentState.player.c + dc;
+
+            if (currentState.walls.some(w => w.r === nr && w.c === nc)) return;
+
+            let canMove = true;
+            let boxToMove = null;
+
+            let boxIndex = currentState.boxes.findIndex(b => b.r === nr && b.c === nc);
+            
+            if (boxIndex !== -1) {
+                let box = currentState.boxes[boxIndex];
+                let bnr = box.r + dr;
+                let bnc = box.c + dc;
+
+                if (currentState.walls.some(w => w.r === bnr && w.c === bnc)) canMove = false;
+                if (currentState.boxes.some(b => b.r === bnr && b.c === bnc)) canMove = false;
+
+                if (canMove) {
+                    boxToMove = { box: box, r: bnr, c: bnc };
+                }
+            }
+
+            if (!canMove) return;
+
+            // === 記錄歷史狀態（為了正確處理分數，把當前 baseScore 一起存起來） ===
+            currentState.history.push({
+                player: { r: currentState.player.r, c: currentState.player.c },
+                boxes: currentState.boxes.map(b => ({ r: b.r, c: b.c })),
+                hintItemActive: currentState.hintItem ? currentState.hintItem.active : null,
+                baseScore: currentState.baseScore
+            });
+            updateUndoBtn();
+
+            let oldWinCount = getCurrentWinCount(); // 移動前的正確箱子數量
+
+            // === 執行移動 ===
+            if (boxToMove) {
+                boxToMove.box.r = boxToMove.r;
+                boxToMove.box.c = boxToMove.c;
+            }
+
+            currentState.player.r = nr;
+            currentState.player.c = nc;
+
+            let newWinCount = getCurrentWinCount(); // 移動後的正確箱子數量
+
+            // === 動態計算分數 (+10 分 / -10 分) ===
+            let diff = newWinCount - oldWinCount;
+            if (diff !== 0) {
+                currentState.baseScore += diff * 10;
+                updateScoreDisplay();
+            }
+
+            if (currentState.hintItem && currentState.hintItem.active && 
+                currentState.player.r === currentState.hintItem.r && 
+                currentState.player.c === currentState.hintItem.c) {
+                
+                currentState.hintItem.active = false;
+                activateHintItem();
+            }
+
+            updatePositions();
+        }
+
+        function undoMove() {
+            if(currentState.isWin || currentState.history.length === 0) return;
+
+            let lastState = currentState.history.pop();
+
+            currentState.player.r = lastState.player.r;
+            currentState.player.c = lastState.player.c;
+
+            for (let i = 0; i < currentState.boxes.length; i++) {
+                currentState.boxes[i].r = lastState.boxes[i].r;
+                currentState.boxes[i].c = lastState.boxes[i].c;
+            }
+
+            if (currentState.hintItem && lastState.hintItemActive !== null) {
+                if (lastState.hintItemActive && !currentState.hintItem.active) {
+                    currentState.hintItem.el.style.display = 'flex';
+                }
+                currentState.hintItem.active = lastState.hintItemActive;
+            }
+
+            // === 處理分數懲罰 (-5 分) ===
+            currentState.baseScore = lastState.baseScore; // 先退回到移動前獲得的分數狀態
+            currentState.penaltyScore += 5;               // 然後累積 5 分悔棋懲罰
+            updateScoreDisplay();
+
+            updateUndoBtn();
+            updatePositions();
+        }
+
+        function checkGameState() {
+            let winCount = 0;
+            
+            currentState.boxes.forEach(box => {
+                let isOnTarget = false;
+                currentState.targets.forEach(target => {
+                    if (box.r === target.r && box.c === target.c) {
+                        if (box.pairIndex === target.pairIndex) {
+                            isOnTarget = true;
+                            winCount++;
+                        }
+                    }
+                });
+                
+                if (isOnTarget) {
+                    box.el.classList.add('correct');
+                } else {
+                    box.el.classList.remove('correct');
+                }
+            });
+
+            let isPlayerOnExit = false;
+            if (currentState.exitPoint) {
+                isPlayerOnExit = (currentState.player.r === currentState.exitPoint.r && currentState.player.c === currentState.exitPoint.c);
+            }
+
+            if (winCount === currentState.boxes.length && winCount > 0 && isPlayerOnExit) {
+                currentState.isWin = true;
+                
+                // 在結算彈窗顯示最終得分
+                let totalScore = currentState.baseScore - currentState.penaltyScore;
+                document.getElementById('final-score-text').innerText = `最終得分: ${totalScore} 分`;
+                
+                setTimeout(() => {
+                    document.getElementById('win-modal').classList.remove('hidden');
+                }, 300);
+            }
+        }
+
+        let hintTimeout = null;
+
+        function activateHintItem() {
+            if (currentState.isWin) return;
+            currentState.isHintActive = true;
+
+            if (currentState.hintItem && currentState.hintItem.el) {
+                currentState.hintItem.el.style.display = 'none';
+            }
+
+            currentState.boxes.forEach(b => {
+                if (b.el) {
+                    b.el.innerText = `${b.word}\n(${b.pos})`;
+                    b.el.style.fontSize = `${parseFloat(b.el.style.fontSize) * 0.75}px`; 
+                }
+            });
+            currentState.targets.forEach(t => {
+                if (t.el) {
+                    t.el.innerText = `${t.word}\n(${t.pos})`;
+                    t.el.style.fontSize = `${parseFloat(t.el.style.fontSize) * 0.8}px`; 
+                }
+            });
+
+            if (hintTimeout) clearTimeout(hintTimeout);
+            
+            hintTimeout = setTimeout(() => {
+                currentState.isHintActive = false;
+                if (!currentState.isWin) {
+                    renderBoard(); 
+                }
+            }, 8000);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if(currentState.isWin || document.getElementById('game-view').classList.contains('hidden')) return;
+            
+            switch(e.key) {
+                case 'ArrowUp': case 'w': case 'W': movePlayer(-1, 0); break;
+                case 'ArrowDown': case 's': case 'S': movePlayer(1, 0); break;
+                case 'ArrowLeft': case 'a': case 'A': movePlayer(0, -1); break;
+                case 'ArrowRight': case 'd': case 'D': movePlayer(0, 1); break;
+                case 'z': case 'Z': case 'u': case 'U': undoMove(); break;
+            }
+        });
+
+    </script>
+</body>
+</html>

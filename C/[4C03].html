@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D打印射擊防衛戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a202c; /* Tailwind gray-900 */
+            touch-action: none; /* Prevent scrolling on mobile */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(to bottom, #2d3748, #1a202c);
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            z-index: 10;
+            transition: background-color 1s ease; /* 增加平滑過渡效果 */
+        }
+        .hidden {
+            display: none !important;
+        }
+        /* Mobile controls */
+        #mobileControls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 5;
+            pointer-events: none; /* Let clicks pass through where there are no buttons */
+        }
+        .control-btn {
+            pointer-events: auto;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            backdrop-filter: blur(4px);
+        }
+        .control-btn:active {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+        #shootBtn {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            background-color: rgba(239, 68, 68, 0.3); /* Red-ish */
+            border-color: rgba(239, 68, 68, 0.6);
+        }
+        #shootBtn:active {
+            background-color: rgba(239, 68, 68, 0.6);
+        }
+        
+        @media (min-width: 768px) {
+            #mobileControls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HUD -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between text-white text-xl font-bold z-10 pointer-events-none">
+        <div>分數: <span id="scoreDisplay">0</span></div>
+        <div>時間: <span id="timeDisplay" class="text-yellow-300 transition-colors">60</span>s</div>
+        <div>生命: <span id="healthDisplay" class="text-red-400">❤️❤️❤️</span></div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Mobile Controls -->
+    <div id="mobileControls">
+        <div class="flex gap-4">
+            <div id="btnLeft" class="control-btn">◀</div>
+            <div id="btnRight" class="control-btn">▶</div>
+        </div>
+        <div>
+            <div id="shootBtn" class="control-btn">🔥</div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="overlay">
+        <h1 class="text-4xl md:text-6xl font-bold mb-4 text-center text-blue-400 drop-shadow-lg">3D打印防衛戰</h1>
+        <div class="bg-gray-800 p-6 rounded-lg text-lg mb-8 max-w-md border border-gray-600 shadow-xl">
+            <h2 class="text-2xl font-bold mb-2 text-yellow-300 border-b border-gray-600 pb-2">任務說明：</h2>
+            <ul class="list-disc pl-5 space-y-2 text-gray-200">
+                <li>射擊綠色的<span class="text-green-400 font-bold">「好處」</span>來獲得分數！</li>
+                <li>千萬別射擊紅色的<span class="text-red-400 font-bold">「壞處」</span>，會扣分！</li>
+                <li>讓「好處」掉落到底部會扣除生命值。</li>
+                <li><span class="text-yellow-400 font-bold">警告：千萬不要打金色的選擇，會死！</span></li>
+                <li><span class="text-yellow-400 font-bold">提示：打金色的選擇會大幅加分！</span></li>
+                <li id="errorRule" class="hidden"><span class="text-purple-400 font-bold">注意：避開會抖動的「System Error」，打中會大扣分！</span></li>
+            </ul>
+            <div class="mt-4 pt-4 border-t border-gray-600 text-sm text-gray-400 text-center">
+                操作方式：鍵盤左右方向鍵移動，空白鍵射擊。<br>手機用戶請使用螢幕按鈕。
+            </div>
+        </div>
+        <button id="startBtn" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-full text-2xl transition-transform transform hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+            開始遊戲
+        </button>
+    </div>
+
+    <!-- Game Over Screen (BSOD Style) -->
+    <div id="gameOverScreen" class="hidden absolute top-0 left-0 w-full h-full bg-[#0078D7] text-white font-mono flex flex-col items-start justify-center p-8 md:p-24 z-50 overflow-hidden">
+        
+        <!-- 用來裝錯誤彈窗的容器 (提高 z-index 確保不會被文字區塊擋住) -->
+        <div id="errorPopupContainer" class="absolute top-0 left-0 w-full h-full pointer-events-none z-[60]"></div>
+        
+        <div class="z-50 relative max-w-4xl">
+            <h1 class="text-7xl md:text-9xl mb-8 font-bold">:(</h1>
+            <h2 class="text-2xl md:text-4xl mb-6 leading-tight">您的 3D 打印防衛系統遇到問題，需要重新啟動。</h2>
+            <p class="text-lg md:text-xl mb-4">我們正在收集錯誤資訊，完成後您可以重新啟動系統。</p>
+            
+            <!-- 加載條區域 -->
+            <div class="w-full max-w-md mb-8">
+                <div class="flex justify-between mb-2 text-white font-bold">
+                    <span>收集進度</span>
+                    <span id="bsodProgressText">0%</span>
+                </div>
+                <div class="w-full bg-blue-900 rounded-full h-4 border border-white overflow-hidden shadow-inner">
+                    <div id="bsodProgressBar" class="bg-white h-full transition-all duration-200 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="mb-8 text-sm md:text-base text-gray-200">
+                <p>如需了解此問題的詳細資訊與可能的解決方案，請造訪 https://www.3dprint-error.com</p>
+                <p class="mt-4">如果您想聯絡支援人員，請提供以下資訊:</p>
+                <p>終止代碼: <span class="font-bold">FATAL_MATERIAL_CRASH</span></p>
+                <p class="mt-6 text-xl text-white">最終收集分數: <span id="finalScore" class="font-bold text-yellow-300 text-4xl ml-2">0</span></p>
+            </div>
+            <button id="restartBtn" class="hidden mt-4 px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-[#0078D7] font-bold text-sm transition-colors cursor-pointer relative z-50 shadow-md">
+                強制重新啟動
+            </button>
+        </div>
+    </div>
+
+    <!-- Time Up / Victory Screen -->
+    <div id="timeUpScreen" class="hidden overlay z-[60]">
+        <h1 class="text-5xl md:text-7xl font-bold mb-4 text-center text-green-400 drop-shadow-lg">時間到！</h1>
+        <div class="bg-gray-800 p-8 rounded-lg text-xl mb-8 border border-gray-600 shadow-xl text-center">
+            <h2 class="text-2xl mb-4 text-white font-bold">成功防衛 3D 打印機！</h2>
+            <p class="text-gray-300">您的最終生存分數：</p>
+            <p id="timeUpScore" class="text-6xl font-bold text-yellow-400 mt-2 drop-shadow-md">0</p>
+        </div>
+        <button id="restartFromTimeUpBtn" class="px-8 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-full text-2xl transition-transform transform hover:scale-105 shadow-[0_0_15px_rgba(34,197,94,0.5)]">
+            再次挑戰
+        </button>
+    </div>
+
+    <!-- 新手嘲諷彩蛋 (右下角彈出) -->
+    <div id="noobPopup" class="hidden fixed bottom-8 right-8 bg-gray-900 border border-gray-500 text-white px-6 py-4 rounded-lg shadow-2xl z-[70] transition-all duration-500 opacity-0 transform translate-y-10">
+        <p class="font-bold text-xl text-yellow-300">你真是一個新手嗎？😏</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const healthDisplay = document.getElementById('healthDisplay');
+        const finalScore = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const timeUpScreen = document.getElementById('timeUpScreen');
+        const timeUpScore = document.getElementById('timeUpScore');
+        const restartFromTimeUpBtn = document.getElementById('restartFromTimeUpBtn');
+
+        // Mobile buttons
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const shootBtn = document.getElementById('shootBtn');
+
+        // Game Data
+        const PROS = ["客製化生產", "快速成型", "減少材料廢料", "可製作複雜結構", "醫療應用廣泛", "降低庫存成本", "設計自由度高"];
+        const CONS = ["材料選擇受限", "生產速度緩慢", "設備成本昂貴", "版權與盜版問題", "表面需要後處理", "大型物件難印", "精度仍有極限"];
+        const SPECIAL = "一擊必殺";
+
+        // Game State
+        let isPlaying = false;
+        let score = 0;
+        let health = 3;
+        let frameCount = 0;
+        let spawnRate = 90; // Spawn every X frames
+        let screenFlashTime = 0;
+        let glitchModeActive = false; // 追蹤是否進入了隱藏的異常模式
+        
+        let timeLeft = 60; // 遊戲時間限制 (秒)
+        let timerInterval;
+
+        // Resize Canvas
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Input State
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'ArrowLeft') keys.ArrowLeft = true;
+            if(e.code === 'ArrowRight') keys.ArrowRight = true;
+            if(e.code === 'Space') {
+                keys.Space = true;
+                if(isPlaying) player.shoot();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if(e.code === 'ArrowLeft') keys.ArrowLeft = false;
+            if(e.code === 'ArrowRight') keys.ArrowRight = false;
+            if(e.code === 'Space') keys.Space = false;
+        });
+
+        // Mobile Input Handling
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowLeft = true; });
+        btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); keys.ArrowLeft = false; });
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowRight = true; });
+        btnRight.addEventListener('touchend', (e) => { e.preventDefault(); keys.ArrowRight = false; });
+        
+        shootBtn.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            if(isPlaying) player.shoot(); 
+        });
+
+        // Classes
+        class Player {
+            constructor() {
+                this.width = 60;
+                this.height = 60;
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height - 20;
+                this.speed = 7;
+                this.color = '#3b82f6'; // blue-500
+                this.cooldown = 0;
+            }
+
+            update() {
+                if (keys.ArrowLeft) this.x -= this.speed;
+                if (keys.ArrowRight) this.x += this.speed;
+
+                // Bounds
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                
+                // Keep Y positioned correctly on resize
+                this.y = canvas.height - this.height - 20;
+
+                if (this.cooldown > 0) this.cooldown--;
+            }
+
+            draw() {
+                // Draw a simple spaceship / 3D printer nozzle
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.width / 2, this.y); // Top tip
+                ctx.lineTo(this.x + this.width, this.y + this.height); // Bottom right
+                ctx.lineTo(this.x + this.width/2 + 10, this.y + this.height - 10);
+                ctx.lineTo(this.x + this.width/2 - 10, this.y + this.height - 10);
+                ctx.lineTo(this.x, this.y + this.height); // Bottom left
+                ctx.closePath();
+                ctx.fill();
+
+                // Core engine glow
+                ctx.fillStyle = '#60a5fa';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y + this.height - 15, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            shoot() {
+                if (this.cooldown <= 0) {
+                    bullets.push(new Bullet(this.x + this.width / 2, this.y));
+                    this.cooldown = 15; // Fire rate
+                }
+            }
+        }
+
+        class Bullet {
+            constructor(x, y) {
+                this.width = 8;
+                this.height = 20;
+                this.x = x - this.width / 2;
+                this.y = y;
+                this.speed = 10;
+                this.color = '#fbbf24'; // yellow-400
+                this.markedForDeletion = false;
+            }
+
+            update() {
+                this.y -= this.speed;
+                if (this.y < -this.height) this.markedForDeletion = true;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class FallingItem {
+            constructor() {
+                this.width = 140;
+                this.height = 40;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                // Base speed increases slowly with score
+                let baseSpeed = 1.5 + (score * 0.005);
+                this.speed = baseSpeed + Math.random() * 1.5; 
+                
+                // 如果處於異常模式(紅背景)，所有掉落物速度變為兩倍！
+                if (glitchModeActive) {
+                    this.speed *= 2;
+                }
+
+                this.markedForDeletion = false;
+                
+                // Determine Type: 8% Fatal, 12% Special, (10% Error IF Glitch Mode), Rest is Pro/Con
+                const rand = Math.random();
+                if (rand < 0.08) {
+                    this.type = 'fatal';
+                    this.text = "☠️致命錯誤☠️";
+                    this.color = '#eab308'; // yellow-500 (與一擊必殺相同顏色)
+                    this.borderColor = '#fef08a';
+                } else if (rand < 0.20) {
+                    this.type = 'special';
+                    this.text = SPECIAL;
+                    this.color = '#eab308'; // yellow-500
+                    this.borderColor = '#fef08a';
+                } else if (glitchModeActive && rand < 0.30) { // 只有在異常模式開啟時才會出現 System Error
+                    this.type = 'error';
+                    this.text = "System Error";
+                    this.color = '#8b5cf6'; // purple-500
+                    this.borderColor = '#c4b5fd';
+                } else if (rand < 0.65) {
+                    this.type = 'con';
+                    this.text = CONS[Math.floor(Math.random() * CONS.length)];
+                    this.color = '#ef4444'; // red-500
+                    this.borderColor = '#fca5a5';
+                } else {
+                    this.type = 'pro';
+                    this.text = PROS[Math.floor(Math.random() * PROS.length)];
+                    this.color = '#22c55e'; // green-500
+                    this.borderColor = '#86efac';
+                }
+            }
+
+            update() {
+                this.y += this.speed;
+
+                // 如果是系統錯誤，加入左右不規則抖動 (Glitch) 效果
+                if (this.type === 'error') {
+                    this.x += (Math.random() - 0.5) * 6;
+                    // 確保不會抖出畫面外
+                    if (this.x < 0) this.x = 0;
+                    if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                }
+
+                if (this.y > canvas.height) {
+                    this.markedForDeletion = true;
+                    // Penalty if a PRO hits the bottom
+                    if (this.type === 'pro') {
+                        loseHealth();
+                        createFloatingText(this.x + this.width/2, canvas.height - 20, "漏掉了！ -1💖", "#ef4444");
+                    } else if (this.type === 'con') {
+                        // Bonus for letting CON hit bottom safely
+                        addScore(5);
+                        createFloatingText(this.x + this.width/2, canvas.height - 20, "成功避開！ +5", "#22c55e");
+                    } else if (this.type === 'fatal') {
+                        // Bonus for avoiding fatal
+                        addScore(20);
+                        createFloatingText(this.x + this.width/2, canvas.height - 20, "驚險閃避！ +20", "#a855f7");
+                    } else if (this.type === 'error') {
+                        // Bonus for avoiding System Error
+                        addScore(15);
+                        createFloatingText(this.x + this.width/2, canvas.height - 20, "略過錯誤！ +15", "#8b5cf6");
+                    }
+                }
+            }
+
+            draw() {
+                // Box
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = this.borderColor;
+                ctx.lineWidth = 2;
+
+                // Pulsing effect for special and fatal
+                if (this.type === 'special') {
+                    ctx.shadowBlur = 15 + Math.sin(frameCount * 0.1) * 10;
+                    ctx.shadowColor = this.color;
+                } else if (this.type === 'fatal') {
+                    ctx.shadowBlur = 15 + Math.sin(frameCount * 0.2) * 10;
+                    ctx.shadowColor = this.color; // 發光顏色也改為與方塊相同
+                }
+
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.shadowBlur = 0; // reset
+
+                // Text
+                ctx.fillStyle = 'white';
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Adjust font size if text is too long
+                if(this.text.length > 5) {
+                    ctx.font = '14px "Segoe UI", sans-serif';
+                }
+                ctx.fillText(this.text, this.x + this.width / 2, this.y + this.height / 2);
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = Math.random() * 6 - 3;
+                this.speedY = Math.random() * 6 - 3;
+                this.color = color;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.02 + 0.02;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= this.decay;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.life = 1.0;
+                this.speedY = -1.5;
+            }
+            update() {
+                this.y += this.speedY;
+                this.life -= 0.02;
+            }
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.font = 'bold 20px "Segoe UI"';
+                ctx.textAlign = 'center';
+                
+                // Text outline
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.strokeText(this.text, this.x, this.y);
+                ctx.fillText(this.text, this.x, this.y);
+                
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // Entity Lists
+        let player;
+        let bullets = [];
+        let items = [];
+        let particles = [];
+        let floatingTexts = [];
+        
+        // BSOD Effect Variables
+        let bsodInterval;
+        let glitchInterval;
+        
+        // Timeout variables for easter egg
+        let noobTimeout1, noobTimeout2, noobTimeout3;
+
+        // Core Functions
+        function initGame() {
+            player = new Player();
+            bullets = [];
+            items = [];
+            particles = [];
+            floatingTexts = [];
+            score = 0;
+            health = 3;
+            frameCount = 0;
+            spawnRate = 90;
+            screenFlashTime = 0;
+            
+            // 根據是否為異常模式(紅色背景)來決定遊戲時間
+            if (glitchModeActive) {
+                timeLeft = 30; // 異常模式只有 30 秒
+            } else {
+                timeLeft = 60; // 正常模式有 60 秒
+            }
+            
+            // 遊戲重新開始時，清除所有藍屏的特效和彈窗
+            clearInterval(bsodInterval);
+            clearInterval(glitchInterval);
+            clearInterval(timerInterval);
+            document.getElementById('errorPopupContainer').innerHTML = '';
+
+            // 清除並隱藏新手嘲諷彩蛋
+            const noobPopup = document.getElementById('noobPopup');
+            noobPopup.classList.add('hidden', 'opacity-0', 'translate-y-10');
+            noobPopup.classList.remove('opacity-100', 'translate-y-0');
+            clearTimeout(noobTimeout1);
+            clearTimeout(noobTimeout2);
+            clearTimeout(noobTimeout3);
+
+            updateHUD();
+            isPlaying = true;
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            timeUpScreen.classList.add('hidden');
+            
+            // 啟動倒數計時器
+            timerInterval = setInterval(() => {
+                if (!isPlaying) return;
+                timeLeft--;
+                updateHUD();
+                
+                if (timeLeft <= 0) {
+                    timeUp();
+                }
+            }, 1000);
+
+            gameLoop();
+        }
+
+        function updateHUD() {
+            scoreDisplay.innerText = score;
+            healthDisplay.innerText = '❤️'.repeat(Math.max(0, health));
+            timeDisplay.innerText = Math.max(0, timeLeft);
+            
+            // 時間快到時變更為紅色警告
+            if (timeLeft <= 10) {
+                timeDisplay.classList.add('text-red-500');
+                timeDisplay.classList.remove('text-yellow-300');
+            } else {
+                timeDisplay.classList.remove('text-red-500');
+                timeDisplay.classList.add('text-yellow-300');
+            }
+        }
+
+        function addScore(points) {
+            score += points;
+            updateHUD();
+            // Increase difficulty slightly
+            if (score % 100 === 0 && spawnRate > 30) {
+                spawnRate -= 5; 
+            }
+        }
+
+        function loseHealth() {
+            health--;
+            updateHUD();
+            // Flash screen red
+            screenFlashTime = 10;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (health <= 0) {
+                gameOver();
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function createFloatingText(x, y, text, color) {
+            floatingTexts.push(new FloatingText(x, y, text, color));
+        }
+
+        function triggerOneHitKill() {
+            // Flash screen white/yellow
+            screenFlashTime = 20;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            createFloatingText(canvas.width/2, canvas.height/2, "一擊必殺！全數收集！", "#facc15");
+
+            let prosCollected = 0;
+            items.forEach(item => {
+                if (item.type === 'pro') {
+                    item.markedForDeletion = true;
+                    createExplosion(item.x + item.width/2, item.y + item.height/2, item.color);
+                    prosCollected++;
+                }
+            });
+            if(prosCollected > 0) {
+                addScore(prosCollected * 15); // Bonus points for screen clear
+            }
+        }
+
+        function triggerGlitchChaos(container) {
+            // 在 99% 的時候瘋狂生成錯誤彈窗
+            glitchInterval = setInterval(() => {
+                const popup = document.createElement('div');
+                // 模擬經典的 Windows 錯誤視窗樣式
+                popup.className = 'absolute bg-[#ece9d8] text-black border-[3px] border-t-white border-l-white border-b-gray-600 border-r-gray-600 shadow-xl p-1 font-sans text-sm md:text-base pointer-events-auto flex flex-col w-64';
+                
+                // 隨機位置
+                const x = Math.random() * (window.innerWidth - 250);
+                const y = Math.random() * (window.innerHeight - 150);
+                
+                popup.style.left = `${Math.max(0, x)}px`;
+                popup.style.top = `${Math.max(0, y)}px`;
+                popup.innerHTML = `
+                    <div class="bg-[#0055ea] text-white px-2 py-1 font-bold mb-3 flex justify-between items-center cursor-default">
+                        <span class="text-xs">系統錯誤</span>
+                        <div class="bg-[#ece9d8] text-black border border-gray-400 font-bold px-1 text-xs cursor-pointer hover:bg-red-500 hover:text-white close-btn">X</div>
+                    </div>
+                    <div class="flex items-center space-x-3 px-3 pb-4">
+                        <span class="text-3xl">❌</span>
+                        <span class="font-bold">電腦出現故障！<br>檔案已損毀！</span>
+                    </div>
+                    <div class="flex justify-center space-x-4 pb-2">
+                        <button class="bg-[#ece9d8] border-[2px] border-t-white border-l-white border-b-gray-600 border-r-gray-600 px-4 py-1 active:border-t-gray-600 active:border-l-gray-600 active:border-b-white active:border-r-white close-btn">確定</button>
+                        <button class="bg-[#ece9d8] border-[2px] border-t-white border-l-white border-b-gray-600 border-r-gray-600 px-4 py-1 active:border-t-gray-600 active:border-l-gray-600 active:border-b-white active:border-r-white secret-btn text-red-600 font-bold cursor-pointer relative z-10">???</button>
+                    </div>
+                `;
+                
+                // 點擊關閉或確定按鈕可以消掉這個彈窗
+                const closeBtns = popup.querySelectorAll('.close-btn');
+                closeBtns.forEach(btn => {
+                    const closeAction = (e) => { e.preventDefault(); popup.remove(); };
+                    btn.addEventListener('click', closeAction);
+                    btn.addEventListener('touchstart', closeAction, {passive: false});
+                });
+
+                // 點擊「???」神秘按鈕，直接回到開始畫面並變更背景
+                const secretBtn = popup.querySelector('.secret-btn');
+                if (secretBtn) {
+                    const secretAction = (e) => {
+                        e.preventDefault();
+                        clearInterval(glitchInterval);
+                        container.innerHTML = ''; // 清除所有彈窗
+                        gameOverScreen.classList.add('hidden'); // 隱藏藍屏
+                        startScreen.classList.remove('hidden'); // 顯示開始畫面
+                        document.getElementById('restartBtn').classList.add('hidden'); // 確保重新啟動按鈕隱藏
+                        
+                        // 將開始畫面的背景改為詭異的深紅色
+                        startScreen.style.backgroundColor = 'rgba(100, 0, 0, 0.95)';
+                        
+                        // 啟用異常模式，並顯示隱藏的警告規則
+                        glitchModeActive = true;
+                        document.getElementById('errorRule').classList.remove('hidden');
+                    };
+                    secretBtn.addEventListener('click', secretAction);
+                    secretBtn.addEventListener('touchstart', secretAction, {passive: false});
+                }
+
+                container.appendChild(popup);
+
+                // 限制最多彈出 60 個，以免瀏覽器真的崩潰
+                if (container.childElementCount > 60) {
+                    clearInterval(glitchInterval);
+                    // 彈窗完結後，顯示強制重新啟動按鈕
+                    document.getElementById('restartBtn').classList.remove('hidden');
+                }
+            }, 80); // 每 0.08 秒彈出一個，製造中毒般的快速彈窗效果
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            clearInterval(timerInterval); // 死亡時停止計時
+            finalScore.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+            
+            // 進入藍屏時先隱藏重新啟動按鈕
+            restartBtn.classList.add('hidden');
+
+            // 啟動藍屏加載條動畫
+            let progress = 0;
+            const progressBar = document.getElementById('bsodProgressBar');
+            const progressText = document.getElementById('bsodProgressText');
+            const popupContainer = document.getElementById('errorPopupContainer');
+            
+            progressBar.style.width = '0%';
+            progressText.innerText = '0%';
+
+            bsodInterval = setInterval(() => {
+                // 隨機增加進度，製造真實的卡頓感
+                progress += Math.floor(Math.random() * 8) + 1;
+                
+                if (progress >= 99) {
+                    progress = 99;
+                    progressBar.style.width = progress + '%';
+                    progressText.innerText = progress + '%';
+                    clearInterval(bsodInterval);
+                    // 卡在 99% 時，觸發彈窗地獄
+                    triggerGlitchChaos(popupContainer);
+                } else {
+                    progressBar.style.width = progress + '%';
+                    progressText.innerText = progress + '%';
+                }
+            }, 400); // 每 0.4 秒更新一次進度
+        }
+
+        function timeUp() {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            
+            // 顯示勝利結算畫面
+            timeUpScore.innerText = score;
+            timeUpScreen.classList.remove('hidden');
+
+            // 如果是在「非異常模式(正常藍色背景)」下通關，觸發右下角嘲諷彩蛋
+            if (!glitchModeActive) {
+                const noobPopup = document.getElementById('noobPopup');
+                noobPopup.classList.remove('hidden');
+                
+                // 延遲一點點時間讓 CSS 動畫生效 (滑入)
+                noobTimeout1 = setTimeout(() => {
+                    noobPopup.classList.remove('opacity-0', 'translate-y-10');
+                    noobPopup.classList.add('opacity-100', 'translate-y-0');
+                }, 100);
+
+                // 10秒後消失 (滑出)
+                noobTimeout2 = setTimeout(() => {
+                    noobPopup.classList.remove('opacity-100', 'translate-y-0');
+                    noobPopup.classList.add('opacity-0', 'translate-y-10');
+                    
+                    // 等待淡出動畫結束後完全隱藏
+                    noobTimeout3 = setTimeout(() => {
+                        noobPopup.classList.add('hidden');
+                    }, 500); 
+                }, 10000); // 10秒 = 10000毫秒
+            }
+        }
+
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        // Main Game Loop
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Screen Flash Effect
+            if (screenFlashTime > 0) {
+                ctx.fillStyle = screenFlashTime > 15 ? 'rgba(255, 255, 255, 0.5)' : 'rgba(239, 68, 68, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                screenFlashTime--;
+            }
+
+            // Spawn Items
+            frameCount++;
+            if (frameCount % spawnRate === 0) {
+                items.push(new FallingItem());
+            }
+
+            // Update & Draw Player
+            player.update();
+            player.draw();
+
+            // Update & Draw Bullets
+            bullets.forEach((bullet, bIndex) => {
+                bullet.update();
+                bullet.draw();
+                
+                // Bullet collision with items
+                items.forEach((item, iIndex) => {
+                    if (!bullet.markedForDeletion && !item.markedForDeletion && checkCollision(bullet, item)) {
+                        bullet.markedForDeletion = true;
+                        item.markedForDeletion = true;
+                        createExplosion(item.x + item.width/2, item.y + item.height/2, item.color);
+
+                        if (item.type === 'pro') {
+                            addScore(10);
+                            createFloatingText(item.x + item.width/2, item.y, "+10", "#4ade80");
+                        } else if (item.type === 'con') {
+                            addScore(-10); // Penalty
+                            createFloatingText(item.x + item.width/2, item.y, "壞處不能打! -10", "#ef4444");
+                        } else if (item.type === 'error') {
+                            addScore(-30); // Heavy Penalty
+                            createFloatingText(item.x + item.width/2, item.y, "系統異常! -30", "#8b5cf6");
+                            screenFlashTime = 15;
+                            // Flash purple
+                            ctx.fillStyle = 'rgba(139, 92, 246, 0.4)';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        } else if (item.type === 'special') {
+                            triggerOneHitKill();
+                        } else if (item.type === 'fatal') {
+                            health = 0;
+                            updateHUD();
+                            screenFlashTime = 30;
+                            ctx.fillStyle = 'rgba(220, 38, 38, 0.8)';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            gameOver();
+                        }
+                    }
+                });
+            });
+
+            // Update & Draw Items
+            items.forEach(item => {
+                item.update();
+                item.draw();
+            });
+
+            // Update & Draw Particles
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // Update & Draw Floating Texts
+            floatingTexts.forEach(ft => {
+                ft.update();
+                ft.draw();
+            });
+
+            // Cleanup marked entities
+            bullets = bullets.filter(b => !b.markedForDeletion);
+            items = items.filter(i => !i.markedForDeletion);
+            particles = particles.filter(p => p.life > 0);
+            floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listeners for UI
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', initGame);
+        restartFromTimeUpBtn.addEventListener('click', initGame);
+
+    </script>
+</body>
+</html>

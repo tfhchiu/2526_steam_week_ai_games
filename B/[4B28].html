@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英文生字配對遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #fff7ed; /* Tailwind orange-50 */
+        }
+
+        /* 卡片 3D 翻轉效果的自訂 CSS */
+        .scene {
+            perspective: 1000px;
+            cursor: pointer;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        .scene.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .scene.matched .card-inner {
+            transform: rotateY(180deg) scale(0.95);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 卡片背面 (未翻開時顯示的圖案) */
+        .card-front {
+            background: linear-gradient(135deg, #f97316, #ea580c); /* Tailwind orange-500 to orange-600 */
+            color: white;
+            font-size: 2rem;
+        }
+
+        /* 卡片正面 (翻開後顯示的文字) */
+        .card-back {
+            background-color: white;
+            transform: rotateY(180deg);
+            border: 2px solid #e5e7eb; /* gray-200 */
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: #1f2937; /* gray-800 */
+            word-break: break-word;
+            padding: 0.5rem;
+        }
+
+        .scene.matched .card-back {
+            background-color: #dcfce7; /* green-100 */
+            border-color: #22c55e; /* green-500 */
+            color: #15803d; /* green-700 */
+        }
+
+        /* 遊戲結束動畫 */
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal-animate {
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-10 px-4">
+
+    <div class="max-w-2xl w-full">
+        <!-- 遊戲標題與計分板 -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">🔤 英文生字配對遊戲</h1>
+            
+            <!-- 新增：難度選擇 -->
+            <div class="flex justify-center space-x-2 md:space-x-4 mb-6">
+                <button id="btn-easy" class="diff-btn bg-orange-100 text-orange-700 font-semibold px-4 py-1 rounded-full border border-orange-300 transition hover:bg-orange-200">簡單 (4對)</button>
+                <button id="btn-medium" class="diff-btn bg-orange-500 text-white font-semibold px-4 py-1 rounded-full border border-orange-500 transition shadow-md">中等 (8對)</button>
+                <button id="btn-hard" class="diff-btn bg-orange-100 text-orange-700 font-semibold px-4 py-1 rounded-full border border-orange-300 transition hover:bg-orange-200">困難 (12對)</button>
+            </div>
+
+            <div class="flex justify-center space-x-8 text-lg md:text-xl font-semibold text-gray-600">
+                <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                    步數: <span id="moves" class="text-orange-600">0</span>
+                </div>
+                <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                    配對: <span id="matches" class="text-green-600">0</span> / <span id="total-pairs-display">8</span>
+                </div>
+            </div>
+            <!-- 新增：排行榜按鈕 -->
+            <button id="show-leaderboard-btn" class="mt-4 bg-orange-50 text-orange-700 hover:bg-orange-100 font-semibold py-2 px-6 rounded-full transition shadow-sm border border-orange-200">
+                🏆 查看排行榜與數據
+            </button>
+        </header>
+
+        <!-- 遊戲網格 -->
+        <main>
+            <div id="game-board" class="grid grid-cols-4 gap-3 md:gap-4 h-96 md:h-[32rem]">
+                <!-- 卡片會由 JavaScript 動態生成在這裡 -->
+            </div>
+        </main>
+
+        <!-- 控制區 -->
+        <footer class="mt-8 text-center">
+            <button id="restart-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95">
+                重新開始遊戲
+            </button>
+        </footer>
+    </div>
+
+    <!-- 遊戲過關提示視窗 (預設隱藏) -->
+    <div id="win-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl modal-animate">
+            <div class="text-5xl mb-4">🎉</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">恭喜過關！</h2>
+            <p class="text-gray-600 mb-4">你總共用了 <span id="final-moves" class="font-bold text-orange-600">0</span> 步完成所有配對。</p>
+            
+            <!-- 新增：紀錄名稱輸入框 -->
+            <div class="mb-6 text-left">
+                <label for="player-name" class="block text-sm font-medium text-gray-700 mb-1">輸入你的名字記錄成績：</label>
+                <input type="text" id="player-name" placeholder="例如：小明" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+            </div>
+
+            <div class="flex flex-col space-y-3">
+                <button id="save-record-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-xl transition">
+                    💾 儲存紀錄
+                </button>
+                <button id="play-again-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl transition">
+                    🔄 直接再玩一次
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增：排行榜與數據視窗 -->
+    <div id="leaderboard-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl modal-animate">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">🏆 排行榜與數據</h2>
+                <button id="close-leaderboard-btn" class="text-gray-500 hover:text-gray-700 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <!-- 數據統計 -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6 grid grid-cols-3 gap-2 text-center border border-gray-200">
+                <div>
+                    <div class="text-xs text-gray-500">遊玩次數</div>
+                    <div id="stat-games" class="text-lg font-bold text-gray-800">0</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500">最佳步數</div>
+                    <div id="stat-best" class="text-lg font-bold text-green-600">-</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500">平均步數</div>
+                    <div id="stat-avg" class="text-lg font-bold text-orange-600">-</div>
+                </div>
+            </div>
+
+            <!-- 排行榜清單 -->
+            <h3 class="text-lg font-semibold text-gray-700 mb-3 border-b pb-1">👑 前五名紀錄</h3>
+            <div id="leaderboard-list" class="space-y-2 mb-6">
+                <div class="text-center text-gray-500 py-4 text-sm">尚無紀錄，趕快來挑戰吧！</div>
+            </div>
+
+            <button id="close-leaderboard-btn-bottom" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-xl transition">
+                關閉
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 生字庫：擴充生字庫以支援更多難度，並且每次都會隨機挑選 (已更新為校園主題)
+        const fullVocabularyPool = [
+            { id: 1, en: 'Classroom', zh: '教室' }, { id: 2, en: 'Library', zh: '圖書館' },
+            { id: 3, en: 'Student', zh: '學生' }, { id: 4, en: 'Teacher', zh: '老師' },
+            { id: 5, en: 'Blackboard', zh: '黑板' }, { id: 6, en: 'Textbook', zh: '教科書' },
+            { id: 7, en: 'Homework', zh: '作業' }, { id: 8, en: 'Exam', zh: '考試' },
+            { id: 9, en: 'Cafeteria', zh: '學生餐廳' }, { id: 10, en: 'Playground', zh: '操場' },
+            { id: 11, en: 'Principal', zh: '校長' }, { id: 12, en: 'Backpack', zh: '書包' },
+            { id: 13, en: 'Pencil', zh: '鉛筆' }, { id: 14, en: 'Uniform', zh: '制服' },
+            { id: 15, en: 'Semester', zh: '學期' }, { id: 16, en: 'Graduation', zh: '畢業' }
+        ];
+
+        const gameBoard = document.getElementById('game-board');
+        const movesElement = document.getElementById('moves');
+        const matchesElement = document.getElementById('matches');
+        const totalPairsDisplay = document.getElementById('total-pairs-display');
+        const restartBtn = document.getElementById('restart-btn');
+        const winModal = document.getElementById('win-modal');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const finalMovesElement = document.getElementById('final-moves');
+
+        // 排行榜與數據相關 DOM
+        const playerNameInput = document.getElementById('player-name');
+        const saveRecordBtn = document.getElementById('save-record-btn');
+        const showLeaderboardBtn = document.getElementById('show-leaderboard-btn');
+        const leaderboardModal = document.getElementById('leaderboard-modal');
+        const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
+        const closeLeaderboardBtnBottom = document.getElementById('close-leaderboard-btn-bottom');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const statGames = document.getElementById('stat-games');
+        const statBest = document.getElementById('stat-best');
+        const statAvg = document.getElementById('stat-avg');
+        const diffBtns = document.querySelectorAll('.diff-btn');
+
+        let cards = [];
+        let hasFlippedCard = false;
+        let lockBoard = false;
+        let firstCard, secondCard;
+        let moves = 0;
+        let matchedPairs = 0;
+        
+        // 難度設定
+        let pairCount = 8; // 預設為中等
+        let currentDifficultyText = '中等';
+        let totalPairs = pairCount;
+
+        // 排行榜與數據狀態 (單次遊玩工作階段)
+        let sessionRecords = [];
+        let stats = { gamesPlayed: 0, totalMoves: 0, bestMoves: Infinity };
+
+        // 初始化遊戲
+        function initGame() {
+            // 重置狀態
+            hasFlippedCard = false;
+            lockBoard = false;
+            firstCard = null;
+            secondCard = null;
+            moves = 0;
+            matchedPairs = 0;
+            totalPairs = pairCount;
+            
+            movesElement.textContent = moves;
+            matchesElement.textContent = matchedPairs;
+            totalPairsDisplay.textContent = totalPairs;
+            winModal.classList.add('hidden');
+            gameBoard.innerHTML = '';
+
+            // 調整版面以適應不同難度
+            gameBoard.className = 'grid gap-3 md:gap-4 h-96 md:h-[32rem]';
+            if (pairCount === 4) {
+                gameBoard.classList.add('grid-cols-4');
+                gameBoard.classList.replace('h-96', 'h-64'); 
+                gameBoard.classList.replace('md:h-[32rem]', 'md:h-80');
+            } else if (pairCount === 8) {
+                gameBoard.classList.add('grid-cols-4');
+            } else if (pairCount === 12) {
+                gameBoard.classList.add('grid-cols-4', 'md:grid-cols-6');
+            }
+
+            // 從大題庫中打亂並選出對應難度的生字數量
+            let shuffledPool = [...fullVocabularyPool].sort(() => 0.5 - Math.random());
+            let selectedVocab = shuffledPool.slice(0, pairCount);
+
+            // 產生牌組 (將中英文拆成獨立的卡片)
+            let deck = [];
+            selectedVocab.forEach(item => {
+                deck.push({ id: item.id, text: item.en, type: 'en' });
+                deck.push({ id: item.id, text: item.zh, type: 'zh' });
+            });
+
+            // 洗牌 (Fisher-Yates Shuffle)
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+
+            // 建立卡片 DOM 元素
+            deck.forEach(cardData => {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('scene');
+                cardElement.dataset.id = cardData.id;
+
+                cardElement.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <span>?</span>
+                        </div>
+                        <div class="card-back text-sm md:text-lg">
+                            ${cardData.text}
+                        </div>
+                    </div>
+                `;
+
+                cardElement.addEventListener('click', flipCard);
+                gameBoard.appendChild(cardElement);
+            });
+        }
+
+        // 翻牌邏輯
+        function flipCard() {
+            if (lockBoard) return;
+            if (this === firstCard) return;
+
+            this.classList.add('flipped');
+
+            if (!hasFlippedCard) {
+                hasFlippedCard = true;
+                firstCard = this;
+                return;
+            }
+
+            secondCard = this;
+            moves++;
+            movesElement.textContent = moves;
+            
+            checkForMatch();
+        }
+
+        // 檢查是否配對成功
+        function checkForMatch() {
+            let isMatch = firstCard.dataset.id === secondCard.dataset.id;
+
+            if (isMatch) {
+                disableCards();
+            } else {
+                unflipCards();
+            }
+        }
+
+        // 配對成功
+        function disableCards() {
+            firstCard.removeEventListener('click', flipCard);
+            secondCard.removeEventListener('click', flipCard);
+            
+            setTimeout(() => {
+                firstCard.classList.add('matched');
+                secondCard.classList.add('matched');
+            }, 300);
+
+            matchedPairs++;
+            matchesElement.textContent = matchedPairs;
+
+            resetBoard();
+
+            if (matchedPairs === totalPairs) {
+                setTimeout(showWinScreen, 800);
+            }
+        }
+
+        // 配對失敗
+        function unflipCards() {
+            lockBoard = true;
+            setTimeout(() => {
+                firstCard.classList.remove('flipped');
+                secondCard.classList.remove('flipped');
+                resetBoard();
+            }, 1000);
+        }
+
+        function resetBoard() {
+            [hasFlippedCard, lockBoard] = [false, false];
+            [firstCard, secondCard] = [null, null];
+        }
+
+        function showWinScreen() {
+            finalMovesElement.textContent = moves;
+            playerNameInput.value = '';
+            winModal.classList.remove('hidden');
+            
+            stats.gamesPlayed++;
+            stats.totalMoves += moves;
+            if (moves < stats.bestMoves) {
+                stats.bestMoves = moves;
+            }
+            updateStatsUI();
+        }
+
+        function updateStatsUI() {
+            statGames.textContent = stats.gamesPlayed;
+            statBest.textContent = stats.bestMoves === Infinity ? '-' : stats.bestMoves;
+            statAvg.textContent = stats.gamesPlayed === 0 ? '-' : Math.round(stats.totalMoves / stats.gamesPlayed);
+        }
+
+        function saveRecord() {
+            const name = playerNameInput.value.trim() || '匿名玩家';
+            
+            // 加入紀錄並帶上難度標籤
+            sessionRecords.push({ name: name, moves: moves, difficulty: currentDifficultyText });
+            
+            sessionRecords.sort((a, b) => a.moves - b.moves);
+            
+            if (sessionRecords.length > 5) {
+                sessionRecords.pop();
+            }
+
+            renderLeaderboard();
+            winModal.classList.add('hidden');
+            leaderboardModal.classList.remove('hidden');
+        }
+
+        function renderLeaderboard() {
+            if (sessionRecords.length === 0) {
+                leaderboardList.innerHTML = '<div class="text-center text-gray-500 py-4 text-sm">尚無紀錄，趕快來挑戰吧！</div>';
+                return;
+            }
+
+            leaderboardList.innerHTML = sessionRecords.map((record, index) => {
+                let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `<span class="px-2 text-gray-500">${index + 1}</span>`;
+                return `
+                    <div class="flex justify-between items-center p-2 rounded-lg ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border border-gray-100">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl w-6 text-center">${medal}</span>
+                            <span class="font-bold text-gray-700">${record.name}</span>
+                            <span class="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full whitespace-nowrap">${record.difficulty}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-orange-600">${record.moves}</span> <span class="text-xs text-gray-500">步</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 綁定難度選擇按鈕事件
+        diffBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // 重置所有按鈕樣式
+                diffBtns.forEach(b => {
+                    b.classList.remove('bg-orange-500', 'text-white', 'shadow-md');
+                    b.classList.add('bg-orange-100', 'text-orange-700');
+                });
+                // 標記選取的按鈕
+                e.target.classList.remove('bg-orange-100', 'text-orange-700');
+                e.target.classList.add('bg-orange-500', 'text-white', 'shadow-md');
+
+                if (e.target.id === 'btn-easy') pairCount = 4;
+                else if (e.target.id === 'btn-medium') pairCount = 8;
+                else if (e.target.id === 'btn-hard') pairCount = 12;
+
+                currentDifficultyText = e.target.textContent.split(' ')[0]; // 取得「簡單」、「中等」、「困難」
+                initGame();
+            });
+        });
+
+        restartBtn.addEventListener('click', initGame);
+        playAgainBtn.addEventListener('click', () => {
+            winModal.classList.add('hidden');
+            initGame();
+        });
+        
+        saveRecordBtn.addEventListener('click', saveRecord);
+        showLeaderboardBtn.addEventListener('click', () => {
+            renderLeaderboard();
+            updateStatsUI();
+            leaderboardModal.classList.remove('hidden');
+        });
+        closeLeaderboardBtn.addEventListener('click', () => leaderboardModal.classList.add('hidden'));
+        closeLeaderboardBtnBottom.addEventListener('click', () => leaderboardModal.classList.add('hidden'));
+
+        // 遊戲載入時初始化
+        initGame();
+
+    </script>
+</body>
+</html>

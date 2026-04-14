@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寶可夢 40 隻精緻建模聯賽</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #050507;
+            color: white;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            width: 950px;
+            height: 700px;
+            background: #111;
+            border: 12px solid #222;
+            image-rendering: pixelated;
+            overflow: hidden;
+            box-shadow: 0 0 100px rgba(0,0,0,0.9);
+        }
+
+        .battle-bg {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            display: none;
+        }
+
+        #selection-screen {
+            position: absolute;
+            inset: 0;
+            background: #0a0f1a;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #poke-scroll-container {
+            width: 100%;
+            height: 480px;
+            overflow-y: auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            scrollbar-width: thin;
+            scrollbar-color: #3b82f6 #1e293b;
+        }
+
+        .hp-bar-container {
+            width: 220px;
+            height: 16px;
+            background: #1e293b;
+            border: 3px solid #000;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .hp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            transition: width 0.5s ease-out;
+        }
+
+        .message-box {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.98);
+            color: #0f172a;
+            border-top: 6px solid #334155;
+            padding: 25px;
+            box-sizing: border-box;
+            font-size: 14px;
+            line-height: 1.8;
+            display: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            background: #f8fafc;
+            border: 3px solid #334155;
+            padding: 12px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 11px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            box-shadow: 4px 4px 0px #334155;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #cbd5e1;
+            transform: translate(-1px, -1px);
+            box-shadow: 5px 5px 0px #334155;
+        }
+
+        .type-tag {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .type-fire { background: #ef4444; }
+        .type-water { background: #3b82f6; }
+        .type-grass { background: #22c55e; }
+        .type-electric { background: #facc15; color: black; }
+        .type-psychic { background: #ec4899; }
+        .type-ghost { background: #8b5cf6; }
+        .type-dragon { background: #6366f1; }
+        .type-ice { background: #06b6d4; }
+        .type-steel { background: #64748b; }
+        .type-poison { background: #a855f7; }
+        .type-earth { background: #92400e; }
+        .type-normal { background: #94a3b8; }
+
+        .poke-card {
+            background: #1e293b;
+            border: 4px solid #334155;
+            padding: 12px;
+            cursor: pointer;
+            text-align: center;
+            border-radius: 12px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .poke-card:hover {
+            border-color: #60a5fa;
+            transform: translateY(-5px);
+        }
+
+        .poke-card.selected {
+            border-color: #facc15;
+            background: #334155;
+            box-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+        }
+
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-size: 12px;
+            z-index: 100;
+            border: 2px solid #3b82f6;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="score-board" class="hidden">
+        ROUND: <span id="round-num">1</span>/3 | SCORE <span id="p-score">0</span>:<span id="e-score">0</span>
+    </div>
+
+    <!-- 選擇介面 -->
+    <div id="selection-screen">
+        <h1 class="text-2xl mt-4 mb-2 font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-red-500 uppercase tracking-widest">
+            POKEMON LEAGUE
+        </h1>
+        <p id="selection-hint" class="text-[10px] mb-6 text-blue-300">請從 40 位精銳中挑選 3 位成員</p>
+        <div id="poke-scroll-container"></div>
+        <button id="start-btn" class="mt-8 hidden bg-yellow-500 hover:bg-yellow-600 text-black px-16 py-4 border-4 border-black text-sm font-black shadow-[8px_8px_0px_#000] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
+            開始聯賽對決
+        </button>
+    </div>
+
+    <!-- 戰鬥場景 -->
+    <div id="battle-scene" class="battle-bg">
+        <!-- 敵人 UI -->
+        <div id="enemy-ui" class="absolute top-10 left-10 p-4 bg-white/90 border-4 border-black rounded-lg text-black z-10 w-64">
+            <div class="flex items-center justify-between mb-2">
+                <span id="enemy-name" class="text-[12px] font-black uppercase">ENEMY</span>
+                <span id="enemy-type" class="type-tag">TYPE</span>
+            </div>
+            <div class="hp-bar-container"><div id="enemy-hp" class="hp-bar-fill" style="width: 100%;"></div></div>
+        </div>
+
+        <!-- 玩家 UI -->
+        <div id="player-ui" class="absolute bottom-60 right-10 p-4 bg-white/90 border-4 border-black rounded-lg text-black z-10 w-64">
+            <div class="flex items-center justify-between mb-2">
+                <span id="player-name" class="text-[12px] font-black uppercase">PLAYER</span>
+                <span id="player-type" class="type-tag">TYPE</span>
+            </div>
+            <div class="hp-bar-container"><div id="player-hp" class="hp-bar-fill" style="width: 100%;"></div></div>
+            <div id="player-pp" class="text-[10px] mt-2 text-right font-bold text-blue-800">PP: 30 / 30</div>
+        </div>
+
+        <canvas id="battleCanvas" width="950" height="700"></canvas>
+    </div>
+
+    <div id="msg-box" class="message-box">
+        <div id="text-display" class="font-bold text-lg mb-4">歡迎來到寶可夢聯賽...</div>
+        <div id="menu-controls" class="controls"></div>
+        <button id="next-round-btn" class="hidden absolute right-10 bottom-10 bg-blue-600 text-white px-10 py-4 text-xs font-bold border-4 border-black rounded hover:bg-blue-700">下一回合</button>
+        <button id="reset-btn" class="hidden absolute right-10 bottom-10 bg-red-600 text-white px-10 py-4 text-xs font-bold border-4 border-black rounded hover:bg-red-700">重新開始</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('battleCanvas');
+    const ctx = canvas.getContext('2d');
+    const textDisplay = document.getElementById('text-display');
+    const menuControls = document.getElementById('menu-controls');
+    const selectionScreen = document.getElementById('selection-screen');
+    const battleScene = document.getElementById('battle-scene');
+    const msgBox = document.getElementById('msg-box');
+    const nextRoundBtn = document.getElementById('next-round-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const startBtn = document.getElementById('start-btn');
+
+    // 完整的屬性克制邏輯
+    const TYPE_CHART = {
+        'Fire':     { 'Fire': 1, 'Water': 0.5, 'Grass': 2,   'Ice': 2,    'Steel': 2, 'Dragon': 0.5 },
+        'Water':    { 'Fire': 2, 'Water': 1,   'Grass': 0.5, 'Earth': 2,  'Dragon': 0.5 },
+        'Grass':    { 'Fire': 0.5, 'Water': 2, 'Grass': 1,   'Earth': 2,  'Poison': 0.5, 'Dragon': 0.5 },
+        'Electric': { 'Water': 2,  'Grass': 0.5, 'Electric': 0.5, 'Earth': 0, 'Dragon': 0.5 },
+        'Earth':    { 'Fire': 2, 'Electric': 2, 'Grass': 0.5, 'Poison': 2, 'Steel': 2 },
+        'Psychic':  { 'Psychic': 0.5, 'Poison': 2, 'Steel': 0.5 },
+        'Ghost':    { 'Psychic': 2, 'Ghost': 2, 'Normal': 0 },
+        'Dragon':   { 'Dragon': 2, 'Steel': 0.5 },
+        'Ice':      { 'Fire': 0.5, 'Water': 0.5, 'Grass': 2, 'Dragon': 2, 'Ice': 0.5 },
+        'Steel':    { 'Fire': 0.5, 'Water': 0.5, 'Ice': 2, 'Steel': 0.5 },
+        'Poison':   { 'Grass': 2, 'Poison': 0.5, 'Earth': 0.5, 'Steel': 0 },
+        'Normal':   { 'Ghost': 0, 'Steel': 0.5 }
+    };
+
+    const TYPE_LABELS = { 
+        'Fire':'火', 'Water':'水', 'Grass':'草', 'Electric':'電', 'Earth':'土',
+        'Psychic':'超', 'Ghost':'幽', 'Dragon':'龍', 'Ice':'冰', 'Steel':'鋼',
+        'Poison':'毒', 'Normal':'普'
+    };
+
+    const NAMES = [
+        "皮卡丘", "小火龍", "傑尼龜", "妙蛙種子", "噴火龍", "水箭龜", "妙蛙花", "超夢", "耿鬼", "快龍",
+        "乘龍", "雷伊布", "火伊布", "水伊布", "胡地", "雙彈瓦斯", "巨鉗螳螂", "暴鯉龍", "化石翼龍", "班基拉斯",
+        "巨金怪", "烈咬陸鯊", "路卡利歐", "冰伊布", "葉伊布", "大鋼蛇", "臭臭泥", "多龍梅西亞", "蒼響", "月亮伊布",
+        "太陽伊布", "波克基斯", "電擊魔獸", "鴨嘴炎獸", "堅果啞鈴", "甲賀忍蛙", "熾焰咆哮虎", "西獅海壬", "小拳石", "索羅亞克"
+    ];
+
+    const TYPES = ['Electric', 'Fire', 'Water', 'Grass', 'Fire', 'Water', 'Grass', 'Psychic', 'Ghost', 'Dragon', 
+                  'Ice', 'Electric', 'Fire', 'Water', 'Psychic', 'Poison', 'Steel', 'Water', 'Dragon', 'Earth',
+                  'Steel', 'Dragon', 'Steel', 'Ice', 'Grass', 'Steel', 'Poison', 'Ghost', 'Steel', 'Ghost',
+                  'Psychic', 'Normal', 'Electric', 'Fire', 'Grass', 'Water', 'Fire', 'Water', 'Earth', 'Ghost'];
+
+    const COLORS = ['#FBBF24', '#F97316', '#3B82F6', '#22C55E', '#EA580C', '#2563EB', '#16A34A', '#D946EF', '#8B5CF6', '#F59E0B',
+                   '#06B6D4', '#EAB308', '#EF4444', '#60A5FA', '#F97316', '#A855F7', '#64748B', '#1D4ED8', '#94A3B8', '#15803D',
+                   '#475569', '#0F766E', '#1E293B', '#22D3EE', '#4ADE80', '#94A3B8', '#7E22CE', '#4F46E5', '#E2E8F0', '#1F2937',
+                   '#F472B6', '#FEF3C7', '#CA8A04', '#B91C1C', '#3F6212', '#1E40AF', '#991B1B', '#DB2777', '#78350F', '#4C1D95'];
+
+    // 精緻建模類別
+    const BODY_TYPES = {
+        'TALL': 'tall',     // 人形/垂直型
+        'BEAST': 'beast',   // 四足/有翅型
+        'MULTI': 'multi',   // 關節/多節型
+        'SQUARE': 'square', // 塊狀/重裝型
+        'ROUND': 'round'    // 球形/可愛型
+    };
+
+    const POKEMON_LIST = NAMES.map((name, i) => {
+        let bType = BODY_TYPES.ROUND;
+        if(['皮卡丘','小火龍','傑尼龜','路卡利歐','甲賀忍蛙','超夢','熾焰咆哮虎'].includes(name)) bType = BODY_TYPES.TALL;
+        if(['噴火龍','快龍','乘龍','化石翼龍','烈咬陸鯊','蒼響'].includes(name)) bType = BODY_TYPES.BEAST;
+        if(['大鋼蛇','暴鯉龍','雙彈瓦斯','多龍梅西亞'].includes(name)) bType = BODY_TYPES.MULTI;
+        if(['水箭龜','妙蛙花','巨金怪','班基拉斯','小拳石','堅果啞鈴'].includes(name)) bType = BODY_TYPES.SQUARE;
+
+        return {
+            id: `pkmn_${i}`,
+            name: name,
+            type: TYPES[i],
+            hp: 130 + (i % 5) * 10,
+            maxHp: 130 + (i % 5) * 10,
+            color: COLORS[i],
+            bodyType: bType,
+            moves: [
+                { name: '屬性強攻', damage: 40, cost: 7, type: TYPES[i] },
+                { name: '快速打擊', damage: 20, cost: 3, type: 'Normal' },
+                { name: '極巨奧義', damage: 80, cost: 18, type: TYPES[i] }
+            ]
+        };
+    });
+
+    let playerTeam = [];
+    let enemyTeam = [];
+    let currentRound = 0;
+    let playerScore = 0;
+    let enemyScore = 0;
+    let player, enemy, isTurnBusy = false;
+    let particles = [];
+    let ambientParticles = [];
+
+    function initSelection() {
+        selectionScreen.style.display = 'flex';
+        battleScene.style.display = 'none';
+        msgBox.style.display = 'none';
+        document.getElementById('score-board').classList.add('hidden');
+        playerTeam = [];
+        updateSelectionUI();
+
+        const container = document.getElementById('poke-scroll-container');
+        container.innerHTML = '';
+        POKEMON_LIST.forEach(poke => {
+            const card = document.createElement('div');
+            card.className = 'poke-card';
+            card.innerHTML = `
+                <div class="text-[9px] mb-3 font-black">${poke.name}</div>
+                <div class="type-tag type-${poke.type.toLowerCase()}">${TYPE_LABELS[poke.type]}</div>
+            `;
+            card.onclick = () => toggleSelect(poke, card);
+            container.appendChild(card);
+        });
+    }
+
+    function toggleSelect(poke, card) {
+        const idx = playerTeam.findIndex(p => p.id === poke.id);
+        if (idx > -1) {
+            playerTeam.splice(idx, 1);
+            card.classList.remove('selected');
+        } else if (playerTeam.length < 3) {
+            playerTeam.push(poke);
+            card.classList.add('selected');
+        }
+        updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+        document.getElementById('selection-hint').innerText = `已招募成員: ${playerTeam.length} / 3`;
+        startBtn.classList.toggle('hidden', playerTeam.length < 3);
+    }
+
+    startBtn.onclick = () => {
+        currentRound = 0;
+        playerScore = 0;
+        enemyScore = 0;
+        enemyTeam = [...POKEMON_LIST].sort(() => 0.5 - Math.random()).slice(0, 3);
+        startRound();
+    };
+
+    function startRound() {
+        selectionScreen.style.display = 'none';
+        battleScene.style.display = 'block';
+        msgBox.style.display = 'block';
+        nextRoundBtn.classList.add('hidden');
+        resetBtn.classList.add('hidden');
+        document.getElementById('score-board').classList.remove('hidden');
+
+        player = JSON.parse(JSON.stringify(playerTeam[currentRound]));
+        player.pp = 30; player.pos = { x: 260, y: 500 };
+        
+        enemy = JSON.parse(JSON.stringify(enemyTeam[currentRound]));
+        enemy.pos = { x: 680, y: 260 };
+
+        document.getElementById('round-num').innerText = currentRound + 1;
+        document.getElementById('p-score').innerText = playerScore;
+        document.getElementById('e-score').innerText = enemyScore;
+
+        updateUIHeaders();
+        updateUIBars();
+        createMoveButtons();
+        
+        textDisplay.innerText = `${player.name} 準備對戰 ${enemy.name}！`;
+        isTurnBusy = false;
+        
+        ambientParticles = [];
+        for(let i=0; i<40; i++) {
+            ambientParticles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random()-0.5) * 1.5,
+                vy: (Math.random()-0.5) * 1.5,
+                size: Math.random() * 3,
+                color: Math.random() > 0.5 ? player.color : enemy.color
+            });
+        }
+
+        if (!window.renderStarted) { window.renderStarted = true; render(); }
+    }
+
+    function updateUIHeaders() {
+        document.getElementById('player-name').innerText = player.name;
+        document.getElementById('enemy-name').innerText = enemy.name;
+        document.getElementById('player-type').className = `type-tag type-${player.type.toLowerCase()}`;
+        document.getElementById('player-type').innerText = TYPE_LABELS[player.type];
+        document.getElementById('enemy-type').className = `type-tag type-${enemy.type.toLowerCase()}`;
+        document.getElementById('enemy-type').innerText = TYPE_LABELS[enemy.type];
+    }
+
+    function updateUIBars() {
+        document.getElementById('player-hp').style.width = (player.hp / player.maxHp * 100) + '%';
+        document.getElementById('enemy-hp').style.width = (enemy.hp / enemy.maxHp * 100) + '%';
+        document.getElementById('player-pp').innerText = `PP: ${player.pp} / 30`;
+    }
+
+    function createMoveButtons() {
+        menuControls.innerHTML = '';
+        player.moves.forEach(move => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.innerHTML = `<div>${move.name}</div><div class="text-[9px] opacity-60">消耗:${move.cost} [${TYPE_LABELS[move.type]}]</div>`;
+            btn.onclick = () => handleMove(move);
+            menuControls.appendChild(btn);
+        });
+    }
+
+    async function handleMove(move) {
+        if (isTurnBusy || player.hp <= 0 || enemy.hp <= 0) return;
+        if (player.pp < move.cost) { textDisplay.innerText = "能量不足！"; return; }
+        isTurnBusy = true; player.pp -= move.cost;
+        await performAttack(player, enemy, move);
+        if (enemy.hp <= 0) {
+            playerScore++;
+            finishRound(`${enemy.name} 體力不支倒下了！`);
+        } else setTimeout(enemyTurn, 800);
+    }
+
+    async function enemyTurn() {
+        const move = enemy.moves[Math.floor(Math.random() * enemy.moves.length)];
+        await performAttack(enemy, player, move);
+        if (player.hp <= 0) {
+            enemyScore++;
+            finishRound(`${player.name} 無法繼續戰鬥...`);
+        } else { isTurnBusy = false; textDisplay.innerText = "輪到你了！"; }
+    }
+
+    function finishRound(msg) {
+        textDisplay.innerText = msg;
+        updateUIBars();
+        if (currentRound < 2) {
+            currentRound++;
+            nextRoundBtn.classList.remove('hidden');
+        } else {
+            const victory = playerScore > enemyScore;
+            textDisplay.innerText += victory ? " 恭喜！你贏得了聯賽總冠軍！" : " 很遺憾，挑戰失敗。";
+            resetBtn.classList.remove('hidden');
+        }
+    }
+
+    nextRoundBtn.onclick = startRound;
+    resetBtn.onclick = initSelection;
+
+    function performAttack(attacker, target, move) {
+        return new Promise(resolve => {
+            textDisplay.innerText = `${attacker.name} 施展了 [${move.name}]！`;
+            let mult = (move.type === 'Normal') ? 1 : (TYPE_CHART[move.type]?.[target.type] ?? 1);
+            const dmg = Math.floor(move.damage * mult);
+            attacker.anim = attacker === player ? 'p-atk' : 'e-atk';
+            
+            createParticles(target.pos.x, target.pos.y, attacker.color, move.type);
+            
+            setTimeout(() => {
+                target.hp = Math.max(0, target.hp - dmg);
+                attacker.anim = '';
+                updateUIBars();
+                if (mult > 1) textDisplay.innerText += " 效果超群！";
+                else if (mult < 1 && mult > 0) textDisplay.innerText += " 效果不佳...";
+                resolve();
+            }, 600);
+        });
+    }
+
+    function createParticles(x, y, color, type) {
+        const count = 30;
+        for(let i=0; i<count; i++) {
+            particles.push({
+                x, y, 
+                vx:(Math.random()-0.5)*18, 
+                vy:(Math.random()-0.5)*18, 
+                life:1.0, 
+                color,
+                type
+            });
+        }
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 渲染背景粒子
+        ambientParticles.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+            if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = 0.15;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+        });
+
+        // 繪製對戰平台
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        ctx.beginPath(); ctx.ellipse(260, 580, 150, 40, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(680, 340, 150, 40, 0, 0, Math.PI * 2); ctx.fill();
+
+        // 戰鬥粒子
+        particles = particles.filter(p => p.life > 0);
+        particles.forEach(p => {
+            p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 6 * p.life, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1.0;
+
+        drawPokemon(player, true);
+        drawPokemon(enemy, false);
+        requestAnimationFrame(render);
+    }
+
+    function drawPokemon(pkmn, isPlayer) {
+        if (!pkmn) return;
+        ctx.save();
+        let x = pkmn.pos.x, y = pkmn.pos.y;
+        if (pkmn.anim === 'p-atk') { x += 60; y -= 40; }
+        if (pkmn.anim === 'e-atk') { x -= 60; y += 40; }
+        const bounce = Math.sin(Date.now() / 300) * 10;
+        ctx.translate(x, y + bounce);
+
+        const time = Date.now();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 5;
+        ctx.lineJoin = 'round';
+
+        // 核心建模邏輯
+        switch(pkmn.bodyType) {
+            case BODY_TYPES.TALL: // 人形
+                ctx.fillStyle = pkmn.color;
+                ctx.beginPath(); ctx.roundRect(-30, -110, 60, 100, [20, 20, 10, 10]); ctx.fill(); ctx.stroke();
+                // 頭部細節
+                ctx.beginPath(); ctx.arc(0, -115, 25, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                // 專屬裝飾
+                if(pkmn.name === '路卡利歐') {
+                    ctx.fillStyle = '#1e293b';
+                    ctx.beginPath(); ctx.roundRect(-35, -125, 15, 40, 5); ctx.fill();
+                    ctx.beginPath(); ctx.roundRect(20, -125, 15, 40, 5); ctx.fill();
+                }
+                break;
+
+            case BODY_TYPES.BEAST: // 四足/有翅
+                ctx.fillStyle = pkmn.color;
+                ctx.beginPath(); ctx.roundRect(-60, -80, 120, 70, 25); ctx.fill(); ctx.stroke();
+                // 脖子與頭
+                ctx.beginPath(); ctx.roundRect(isPlayer?40:-80, -110, 40, 40, 15); ctx.fill(); ctx.stroke();
+                // 翅膀
+                const wingS = Math.sin(time/200) * 40;
+                ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                ctx.beginPath(); ctx.moveTo(0, -60); ctx.lineTo(-70, -110 + wingS); ctx.lineTo(-20, -80); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(0, -60); ctx.lineTo(70, -110 + wingS); ctx.lineTo(20, -80); ctx.fill();
+                break;
+
+            case BODY_TYPES.MULTI: // 關節型
+                for(let i=0; i<4; i++) {
+                    const offX = Math.sin(time/400 + i) * 15;
+                    ctx.fillStyle = pkmn.color;
+                    ctx.beginPath(); ctx.arc(offX, -25 - i*30, 28 - i*4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                }
+                break;
+
+            case BODY_TYPES.SQUARE: // 重裝型
+                ctx.fillStyle = pkmn.color;
+                ctx.beginPath(); ctx.roundRect(-65, -95, 130, 90, 15); ctx.fill(); ctx.stroke();
+                // 頂部構造 (砲台或花)
+                ctx.fillStyle = pkmn.name === '妙蛙花' ? '#f472b6' : '#64748b';
+                ctx.beginPath(); ctx.roundRect(-30, -120, 60, 25, 5); ctx.fill(); ctx.stroke();
+                break;
+
+            default: // ROUND
+                ctx.fillStyle = pkmn.color;
+                ctx.beginPath(); ctx.arc(0, -55, 55, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        }
+
+        // 屬性特效細節
+        if (pkmn.type === 'Fire') {
+            ctx.fillStyle = '#fb923c';
+            ctx.beginPath(); ctx.arc(0, -135, 12 + Math.sin(time/100)*5, 0, Math.PI*2); ctx.fill();
+        } else if (pkmn.type === 'Electric') {
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(-50, -50); ctx.lineTo(-70, -70); ctx.lineTo(-60, -80); ctx.stroke();
+        }
+
+        // 眼睛
+        const eyeX = isPlayer ? 12 : -12;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(eyeX - 25, -90, 15, 15);
+        ctx.fillRect(eyeX + 10, -90, 15, 15);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(eyeX - 18, -84, 7, 7);
+        ctx.fillRect(eyeX + 17, -84, 7, 7);
+
+        ctx.restore();
+    }
+
+    initSelection();
+</script>
+</body>
+</html>

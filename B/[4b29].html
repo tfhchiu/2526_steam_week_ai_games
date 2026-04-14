@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神秘甜點店 - 三麗歐之友</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: #f8f0ff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        .title-font { font-family: 'ZCOOL KuaiLe', cursive; }
+
+        .shop-container {
+            width: 100%;
+            max-width: 900px;
+            height: 700px;
+            background: #fff;
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -12px rgba(182, 150, 255, 0.4);
+            position: relative;
+            overflow: hidden;
+            border: 8px solid #f3ecff;
+        }
+
+        /* 優化遮篷：縮減高度，避免遮擋下方的角色氣泡與公仔 */
+        .awning {
+            height: 40px; /* 從 60px 縮減 */
+            background: repeating-linear-gradient(45deg, #d8b4fe, #d8b4fe 20px, #ffffff 20px, #ffffff 40px);
+            width: 100%;
+            border-bottom: 3px solid #c084fc;
+            z-index: 100;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+
+        .shop-sign {
+            background: white;
+            padding: 2px 25px; /* 縮減 padding */
+            border-radius: 0 0 12px 12px;
+            border: 2px solid #c084fc;
+            border-top: none;
+            color: #9333ea;
+            font-size: 18px; /* 稍微縮小字體 */
+            font-weight: 900;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: absolute;
+            top: 40px;
+        }
+
+        /* 遊戲舞台：增加上方間距，讓角色下移 */
+        .stage {
+            height: 370px;
+            background: #fdfbff;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 30px;
+            background-image: radial-gradient(#f3e8ff 2px, transparent 2px);
+            background-size: 35px 35px;
+        }
+
+        /* 角色區域：確保位置在視線中央 */
+        .character-platform {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+            transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .guest-sprite {
+            width: 150px;
+            height: 150px;
+            filter: drop-shadow(0 10px 10px rgba(182, 150, 255, 0.3));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 90px;
+            background: white;
+            border-radius: 40px;
+            border: 4px solid #f3e8ff;
+        }
+
+        .pet-sprite {
+            width: 65px;
+            height: 65px;
+            position: absolute;
+            bottom: -5px;
+            right: -25px;
+            font-size: 40px;
+            background: white;
+            border-radius: 50%;
+            border: 3px solid #e9d5ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: petBounce 1.5s infinite ease-in-out;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        @keyframes petBounce {
+            0%, 100% { transform: translateY(0) rotate(0); }
+            50% { transform: translateY(-8px) rotate(5deg); }
+        }
+
+        /* 桌子：保持在底部 */
+        .serving-table {
+            width: 380px;
+            height: 12px;
+            background: #f3ecff;
+            border-radius: 20px;
+            position: absolute;
+            bottom: 15px;
+            z-index: 5;
+        }
+
+        /* 對話氣泡：調整位置避免與招牌重疊 */
+        .bubble {
+            background: white;
+            border: 3px solid #c084fc;
+            border-radius: 20px;
+            padding: 8px 16px;
+            position: absolute;
+            top: -90px;
+            white-space: nowrap;
+            box-shadow: 0 6px 15px rgba(192, 132, 252, 0.15);
+            z-index: 50;
+        }
+        .bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 10px 8px 0;
+            border-style: solid;
+            border-color: #c084fc transparent transparent;
+        }
+
+        /* 操作控制區 */
+        .controls {
+            flex: 1;
+            background: #ffffff;
+            border-top: 6px solid #f3ecff;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .btn-option {
+            background: white;
+            border: 3px solid #f3ecff;
+            border-radius: 20px;
+            padding: 12px;
+            font-weight: 800;
+            color: #9333ea;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #f3ecff;
+        }
+        .btn-option:hover {
+            border-color: #c084fc;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0 #f3ecff;
+        }
+        .btn-option:active {
+            transform: translateY(2px);
+            box-shadow: 0 0 0 #f3ecff;
+        }
+
+        /* 飛入特效 */
+        .fly-item {
+            position: absolute;
+            z-index: 200;
+            font-size: 60px;
+            animation: itemFly 0.7s ease-out forwards;
+        }
+        @keyframes itemFly {
+            0% { transform: scale(0.5) translateY(200px); opacity: 0; }
+            50% { transform: scale(1.3) translateY(-50px); opacity: 1; }
+            100% { transform: scale(1) translateY(-150px); opacity: 0; }
+        }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="shop-container flex flex-col">
+        <div class="awning">
+            <div class="shop-sign title-font">神秘甜點店</div>
+        </div>
+
+        <!-- 狀態 HUD：使用更透明的背景並縮小體積 -->
+        <div class="absolute top-12 left-0 right-0 px-6 flex justify-between items-start z-[110]">
+            <div class="space-y-1">
+                <div class="bg-white/70 backdrop-blur-sm border border-purple-100 px-3 py-1 rounded-full shadow-sm flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-purple-400">關卡</span>
+                    <span id="levelText" class="text-lg font-black text-purple-500">1</span>
+                </div>
+                <div class="bg-white/70 backdrop-blur-sm border border-purple-100 px-3 py-1 rounded-full shadow-sm">
+                    <div class="w-20 h-1.5 bg-purple-50 rounded-full overflow-hidden">
+                        <div id="favorBar" class="h-full bg-purple-400 transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-right space-y-1">
+                <div class="bg-white/70 backdrop-blur-sm border border-purple-100 px-3 py-1 rounded-full shadow-sm">
+                    <span class="text-[10px] font-bold text-purple-400">神秘顧客</span>
+                    <span id="guestCount" class="text-base font-black text-slate-600 ml-1">1</span>
+                    <span class="text-[10px] text-slate-300">/ 5</span>
+                </div>
+                <div class="bg-white/70 backdrop-blur-sm border border-red-50 px-3 py-1 rounded-full shadow-sm">
+                    <div class="w-16 h-1.5 bg-red-50 rounded-full overflow-hidden">
+                        <div id="angerBar" class="h-full bg-red-400 transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主場景 -->
+        <div class="stage">
+            <div id="charPlatform" class="character-platform">
+                <div class="bubble">
+                    <span id="orderText" class="text-lg font-bold text-purple-600">探尋神祕的味道...</span>
+                </div>
+                <div id="guestImg" class="guest-sprite">🐰</div>
+                <div id="petImg" class="pet-sprite">🐥</div>
+            </div>
+            <div class="serving-table shadow-inner"></div>
+        </div>
+
+        <!-- 控制台 -->
+        <div class="controls">
+            <div id="effectLayer" class="absolute inset-0 pointer-events-none"></div>
+            <p class="text-purple-300 text-[10px] font-bold tracking-tighter mb-3 uppercase">魔導甜點師，請解讀訂單：</p>
+            <div id="optionsGrid" class="grid grid-cols-2 gap-3 w-full max-w-sm">
+                <!-- 選項按鈕 -->
+            </div>
+        </div>
+
+        <!-- 覆蓋層 -->
+        <div id="overlay" class="absolute inset-0 bg-white/98 z-[200] flex flex-col items-center justify-center p-8 text-center transition-all">
+            <div id="ovIcon" class="text-8xl mb-4">🔮</div>
+            <h1 id="ovTitle" class="text-4xl font-bold text-purple-500 title-font mb-2">神秘甜點店</h1>
+            <p id="ovDesc" class="text-slate-400 mb-8 max-w-xs text-sm font-medium">歡迎來到充滿魔力與甜味的地方...</p>
+            <button id="mainBtn" onclick="startSession()" class="bg-purple-500 text-white font-bold py-4 px-12 rounded-3xl shadow-[0_6px_0_#7e22ce] hover:scale-105 active:translate-y-1 transition-all text-xl">
+                開始探索
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const GUESTS = [
+            { name: '粉紅兔兔', icon: '🐰', pet: '🐥', color: '#fff0f3' },
+            { name: '黃色胖胖犬', icon: '🐶', pet: '🦴', color: '#fff9e6' },
+            { name: '白白貓咪', icon: '🐱', pet: '🐭', color: '#f0f7ff' },
+            { name: '酷酷企鵝', icon: '🐧', pet: '🐟', color: '#eef2f7' },
+            { name: '優雅美樂', icon: '🐑', pet: '🦋', color: '#fff0f9' },
+            { name: '淘氣小猴', icon: '🐒', pet: '🍌', color: '#fdf5e6' },
+            { name: '害羞青蛙', icon: '🐸', pet: '🐞', color: '#f0fff4' },
+            { name: '星星雙子', icon: '⭐', pet: '🌙', color: '#f5f0ff' }
+        ];
+
+        const MENU = {
+            desserts: [
+                { en: 'Macaron', zh: '馬卡龍', icon: '🍪' },
+                { en: 'Souffle', zh: '舒芙蕾', icon: '🍮' },
+                { en: 'Pudding', zh: '布丁', icon: '🍮' },
+                { en: 'Crepe', zh: '可麗餅', icon: '🥞' },
+                { en: 'Tiramisu', zh: '提拉米蘇', icon: '🍰' },
+                { en: 'Waffle', zh: '鬆餅', icon: '🧇' },
+                { en: 'Donut', zh: '甜甜圈', icon: '🍩' },
+                { en: 'Tart', zh: '水果塔', icon: '🥧' }
+            ],
+            flowers: [
+                { en: 'Rose', zh: '玫瑰花', icon: '🌹' },
+                { en: 'Tulip', zh: '鬱金香', icon: '🌷' },
+                { en: 'Lily', zh: '百合花', icon: '🌸' },
+                { en: 'Daisy', zh: '雛菊', icon: '🌼' },
+                { en: 'Sunflower', zh: '向日葵', icon: '🌻' }
+            ],
+            pets: [
+                { en: 'Cat Treat', zh: '貓條', icon: '🍖' },
+                { en: 'Dried Fish', zh: '小魚乾', icon: '🐟' },
+                { en: 'Pet Milk', zh: '寵物牛奶', icon: '🥛' },
+                { en: 'Carrot', zh: '胡蘿蔔', icon: '🥕' },
+                { en: 'Bone', zh: '大骨頭', icon: '🦴' }
+            ]
+        };
+
+        let level = 1;
+        let guestsServed = 0; 
+        let favor = 0;
+        let anger = 0;
+        let currentTarget = null;
+        let isWaiting = false;
+
+        const audio = new (window.AudioContext || window.webkitAudioContext)();
+
+        function sfx(f, d=0.2) {
+            const o = audio.createOscillator();
+            const g = audio.createGain();
+            o.frequency.value = f;
+            g.gain.exponentialRampToValueAtTime(0.01, audio.currentTime + d);
+            o.connect(g); g.connect(audio.destination);
+            o.start(); o.stop(audio.currentTime + d);
+        }
+
+        function startSession() {
+            if (audio.state === 'suspended') audio.resume();
+            document.getElementById('overlay').classList.add('hidden');
+            resetStage();
+        }
+
+        function resetStage() {
+            guestsServed = 0;
+            favor = 0;
+            anger = 0;
+            updateHUD();
+            nextGuest();
+        }
+
+        function nextGuest() {
+            if (guestsServed >= 5) {
+                levelUp();
+                return;
+            }
+            isWaiting = false;
+            const guest = GUESTS[Math.floor(Math.random() * GUESTS.length)];
+            const plat = document.getElementById('charPlatform');
+            document.getElementById('guestImg').innerText = guest.icon;
+            document.getElementById('petImg').innerText = guest.pet;
+            document.getElementById('guestImg').parentElement.style.backgroundColor = guest.color;
+            plat.style.transform = 'translateX(300px)';
+            plat.style.opacity = '0';
+            setTimeout(() => {
+                plat.style.transform = 'translateX(0)';
+                plat.style.opacity = '1';
+                generateTask();
+            }, 100);
+            document.getElementById('guestCount').innerText = guestsServed + 1;
+        }
+
+        function generateTask() {
+            const r = Math.random();
+            let pool, prefix;
+            if (r < 0.6) { pool = MENU.desserts; prefix = "神祕渴望："; }
+            else if (r < 0.8) { pool = MENU.flowers; prefix = "獻上芬芳："; }
+            else { pool = MENU.pets; prefix = "靈獸之食："; }
+            currentTarget = pool[Math.floor(Math.random() * pool.length)];
+            document.getElementById('orderText').innerText = prefix + currentTarget.zh;
+            renderOptions();
+        }
+
+        function renderOptions() {
+            const grid = document.getElementById('optionsGrid');
+            grid.innerHTML = '';
+            let choices = [currentTarget.en];
+            const all = [...MENU.desserts, ...MENU.flowers, ...MENU.pets];
+            while(choices.length < 4) {
+                const pick = all[Math.floor(Math.random() * all.length)].en;
+                if(!choices.includes(pick)) choices.push(pick);
+            }
+            choices.sort(() => Math.random() - 0.5);
+            choices.forEach(c => {
+                const b = document.createElement('button');
+                b.className = 'btn-option';
+                b.innerText = c;
+                b.onclick = () => check(c, b);
+                grid.appendChild(b);
+            });
+        }
+
+        function check(choice, btn) {
+            if(isWaiting) return;
+            if(choice === currentTarget.en) {
+                isWaiting = true;
+                sfx(880);
+                btn.classList.add('bg-purple-100', 'border-purple-300');
+                const f = document.createElement('div');
+                f.className = 'fly-item';
+                f.style.left = '50%';
+                f.style.bottom = '150px';
+                f.innerText = currentTarget.icon;
+                document.getElementById('effectLayer').appendChild(f);
+                setTimeout(() => f.remove(), 700);
+                favor += 25; 
+                if(favor >= 100) {
+                    favor = 100;
+                    updateHUD();
+                    setTimeout(() => {
+                        guestsServed++;
+                        favor = 0;
+                        nextGuest();
+                    }, 1000);
+                } else {
+                    updateHUD();
+                    setTimeout(generateTask, 800);
+                }
+            } else {
+                sfx(220, 0.4);
+                btn.classList.add('shake', 'bg-red-50', 'border-red-200');
+                document.getElementById('charPlatform').classList.add('shake');
+                anger += 20;
+                updateHUD();
+                setTimeout(() => {
+                    btn.classList.remove('shake', 'bg-red-50', 'border-red-200');
+                    document.getElementById('charPlatform').classList.remove('shake');
+                    if(anger >= 100) gameOver();
+                }, 400);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('levelText').innerText = level;
+            document.getElementById('favorBar').style.width = favor + '%';
+            document.getElementById('angerBar').style.width = anger + '%';
+        }
+
+        function levelUp() {
+            if(level >= 5) {
+                victory();
+                return;
+            }
+            level++;
+            showOv('✨', `神秘儀式 ${level-1} 完成！`, `你的魔力日益強大，更多神祕的客人正在前來...`, `解鎖第 ${level} 章`);
+        }
+
+        function victory() {
+            showOv('🌌', '傳奇魔導甜點師！', '你成功揭開了「神秘甜點店」的所有秘密！', '重啟輪迴');
+            document.getElementById('mainBtn').onclick = () => location.reload();
+        }
+
+        function gameOver() {
+            showOv('🔮', '魔力耗盡...', '神祕的氣息消失了，客人們失望地遁入虛空。', '重塑時空');
+            document.getElementById('mainBtn').onclick = () => location.reload();
+        }
+
+        function showOv(icon, title, desc, btn) {
+            const ov = document.getElementById('overlay');
+            document.getElementById('ovIcon').innerText = icon;
+            document.getElementById('ovTitle').innerText = title;
+            document.getElementById('ovDesc').innerText = desc;
+            document.getElementById('mainBtn').innerText = btn;
+            ov.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

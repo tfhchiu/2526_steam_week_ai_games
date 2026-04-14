@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星界裂痕 - MOBA 原型</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+        }
+        .instruction {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+        
+        /* 底部技能與狀態 UI */
+        #bottom-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid #0ff;
+        }
+        .skills {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 8px;
+        }
+        .skill-box {
+            background: #2a2a4a;
+            border: 2px solid #555;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            width: 80px;
+        }
+        .skill-box.ready {
+            border-color: #0ff;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        .skill-key { font-weight: bold; color: #ffeb3b; }
+        /* 新增王者風格 UI 樣式 */
+        .skill-box.ult { border-color: #ffaa00; }
+        .skill-box.ult.ready { box-shadow: 0 0 10px rgba(255, 170, 0, 0.5); }
+        #broadcast {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 32px;
+            font-weight: bold;
+            color: #ff0055;
+            text-shadow: 0 0 10px #fff, 0 0 20px #ff0055;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 100;
+        }
+        .exp-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+        .exp-bar-bg {
+            flex-grow: 1;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .exp-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: #0f0;
+            transition: width 0.2s;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px 50px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            border: 2px solid #0ff;
+        }
+        button {
+            background-color: #0ff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        button:hover { background-color: #00cccc; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui-layer">
+            <div class="instruction">
+                <strong>王者模式操作：</strong><br>
+                [W][A][S][D] - 移動<br>
+                [滑鼠左鍵] - 近戰普攻<br>
+                [Q] - 誓約之盾 (加速+突進)<br>
+                [E] - 回旋打擊 (範圍傷害)<br>
+                [R] - 聖劍裁決 (大招躍擊)<br>
+                [D/F] - 恢復 (補血)<br>
+                [B] - 回城
+            </div>
+        </div>
+        
+        <div id="broadcast">歡迎來到王者峽谷！</div>
+        
+        <div id="bottom-ui">
+            <div class="skills">
+                <div id="skill-q" class="skill-box ready">
+                    <div class="skill-key">Q</div>
+                    <div style="font-size: 12px; margin-top: 5px;">誓約</div>
+                    <div id="cd-q" style="font-size: 12px; color: #ff5555;"></div>
+                </div>
+                <div id="skill-e" class="skill-box ready">
+                    <div class="skill-key">E</div>
+                    <div style="font-size: 12px; margin-top: 5px;">回旋</div>
+                    <div id="cd-e" style="font-size: 12px; color: #ff5555;"></div>
+                </div>
+                <div id="skill-r" class="skill-box ult ready">
+                    <div class="skill-key">R</div>
+                    <div style="font-size: 12px; margin-top: 5px;">大招</div>
+                    <div id="cd-r" style="font-size: 12px; color: #ffaa00;"></div>
+                </div>
+                <div id="skill-d" class="skill-box ready" style="margin-left: 15px; border-radius: 50%;">
+                    <div class="skill-key">D/F</div>
+                    <div style="font-size: 12px; margin-top: 5px;">恢復</div>
+                    <div id="cd-d" style="font-size: 12px; color: #0f0;"></div>
+                </div>
+                <div id="skill-b" class="skill-box ready" style="border-radius: 50%;">
+                    <div class="skill-key">B</div>
+                    <div style="font-size: 12px; margin-top: 5px;">回城</div>
+                    <div id="cd-b" style="font-size: 12px; color: #0ff;"></div>
+                </div>
+            </div>
+            <div class="exp-container">
+                <div style="font-weight: bold; color: #0ff;">Lv. <span id="ui-lv">1</span></div>
+                <div class="exp-bar-bg"><div id="ui-exp" class="exp-bar-fill"></div></div>
+            </div>
+        </div>
+
+        <div id="game-over">
+            <h2 id="result-text">遊戲結束</h2>
+            <button onclick="location.reload()">重新開始</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverScreen = document.getElementById('game-over');
+    const resultText = document.getElementById('result-text');
+
+    // UI 元素
+    const uiLv = document.getElementById('ui-lv');
+    const uiExp = document.getElementById('ui-exp');
+    const uiCdQ = document.getElementById('cd-q');
+    const uiCdE = document.getElementById('cd-e');
+    const boxQ = document.getElementById('skill-q');
+    const boxE = document.getElementById('skill-e');
+    const uiCdR = document.getElementById('cd-r');
+    const boxR = document.getElementById('skill-r');
+    const uiCdD = document.getElementById('cd-d');
+    const boxD = document.getElementById('skill-d');
+    const uiCdB = document.getElementById('cd-b');
+    const boxB = document.getElementById('skill-b');
+    const broadcastEl = document.getElementById('broadcast');
+
+    let isGameOver = false;
+
+    // 廣播功能
+    function showBroadcast(text, color = '#ff0055') {
+        broadcastEl.innerText = text;
+        broadcastEl.style.color = color;
+        broadcastEl.style.textShadow = `0 0 10px #fff, 0 0 20px ${color}`;
+        broadcastEl.style.opacity = 1;
+        setTimeout(() => { broadcastEl.style.opacity = 0; }, 2000);
+    }
+
+    // 輸入處理
+    const keys = { w: false, a: false, s: false, d: false, q: false, e: false };
+    const mouse = { x: 0, y: 0, isDown: false };
+
+    window.addEventListener('keydown', (e) => {
+        if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
+    });
+    window.addEventListener('keyup', (e) => {
+        if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false;
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+    });
+    canvas.addEventListener('mousedown', () => mouse.isDown = true);
+    canvas.addEventListener('mouseup', () => mouse.isDown = false);
+
+    // 特效類
+    class Effect {
+        constructor(x, y, radius, life, color, type="circle") {
+            this.x = x;
+            this.y = y;
+            this.maxRadius = radius;
+            this.radius = 0;
+            this.life = life;
+            this.maxLife = life;
+            this.color = color;
+            this.type = type;
+            this.isDead = false;
+        }
+        update() {
+            this.life--;
+            if (this.type === "circle") {
+                this.radius += (this.maxRadius - this.radius) * 0.2;
+            }
+            if (this.life <= 0) this.isDead = true;
+        }
+        draw(ctx) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color.replace('1)', `${this.life / this.maxLife})`);
+            ctx.fill();
+        }
+    }
+
+    // 草叢類 (提供隱身)
+    class Bush {
+        constructor(x, y, width, height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+        contains(x, y) {
+            return x >= this.x && x <= this.x + this.width && y >= this.y && y <= this.y + this.height;
+        }
+        draw(ctx) {
+            ctx.fillStyle = 'rgba(34, 139, 34, 0.4)'; // 半透明深綠色
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.fillStyle = 'rgba(0, 100, 0, 0.6)';
+            for(let i=0; i<5; i++) {
+                ctx.fillRect(this.x + Math.random()*(this.width-10), this.y + Math.random()*(this.height-10), 10, 10);
+            }
+        }
+    }
+
+    // 血包類
+    class HealPack {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.radius = 10;
+            this.active = true;
+            this.respawnTimer = 0;
+            this.respawnTime = 1800; // 30秒
+        }
+        update(heroTarget) {
+            if (!this.active) {
+                this.respawnTimer++;
+                if (this.respawnTimer >= this.respawnTime) {
+                    this.active = true;
+                    this.respawnTimer = 0;
+                }
+            } else if (!heroTarget.isDead && Math.hypot(heroTarget.x - this.x, heroTarget.y - this.y) < heroTarget.radius + this.radius) {
+                heroTarget.hp = Math.min(heroTarget.maxHp, heroTarget.hp + 250);
+                effects.push(new Effect(heroTarget.x, heroTarget.y, 40, 30, 'rgba(0, 255, 0, 1)'));
+                this.active = false;
+            }
+        }
+        draw(ctx) {
+            if (!this.active) return;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f0';
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(this.x - 2, this.y - 6, 4, 12);
+            ctx.fillRect(this.x - 6, this.y - 2, 12, 4);
+        }
+    }
+
+    // 實體基礎類
+    class Entity {
+        constructor(x, y, hp, team, radius, expValue = 0) {
+            this.x = x;
+            this.y = y;
+            this.hp = hp;
+            this.maxHp = hp;
+            this.team = team; // 0: 玩家(藍), 1: 敵人(紅)
+            this.radius = radius;
+            this.expValue = expValue; // 擊殺掉落經驗
+            this.isDead = false;
+        }
+        takeDamage(amount, sourceTeam) {
+            this.hp -= amount;
+            if (this.hp <= 0) {
+                this.hp = 0;
+                this.isDead = true;
+                // 給予擊殺方經驗
+                if (sourceTeam === 0 && this.team === 1) {
+                    player.gainExp(this.expValue);
+                }
+            }
+        }
+        drawHpBar(ctx, yOffset) {
+            const barWidth = this.radius * 2;
+            const barHeight = 4;
+            const hpRatio = this.hp / this.maxHp;
+            ctx.fillStyle = 'red';
+            ctx.fillRect(this.x - barWidth/2, this.y - this.radius - yOffset, barWidth, barHeight);
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(this.x - barWidth/2, this.y - this.radius - yOffset, barWidth * hpRatio, barHeight);
+        }
+    }
+
+    // 英雄類 (玩家：亞瑟戰士, 敵人：安琪拉法師)
+    class Hero extends Entity {
+        constructor(x, y, team, isBot = false) {
+            super(x, y, isBot ? 450 : 650, team, 15, isBot ? 100 : 0);
+            this.isBot = isBot;
+            this.baseSpeed = isBot ? 2.8 : 3.2;
+            this.speed = this.baseSpeed;
+            this.attackDamage = isBot ? 30 : 40;
+            this.attackCooldown = 0;
+            this.attackRate = isBot ? 40 : 30; 
+            this.attackRange = isBot ? 250 : 60; // 玩家近戰，Bot遠程
+            this.isStealth = false; // 草叢隱身
+            
+            this.level = 1;
+            this.exp = 0;
+            this.maxExp = 100;
+            this.kills = 0;
+            
+            // 亞瑟技能 (玩家)
+            this.qCd = 0; this.qMaxCd = 360; // 6秒
+            this.qBuffTimer = 0; 
+            this.eCd = 0; this.eMaxCd = 480; // 8秒
+            this.eActiveTimer = 0; 
+            this.rCd = 0; this.rMaxCd = 1200; // 20秒大招
+            this.dCd = 0; this.dMaxCd = 3600; // 60秒恢復
+            this.bTimer = 0; // 回城引導
+            
+            // Bot技能
+            this.botSkillCd = 180;
+            
+            this.respawnTimer = 0;
+            this.passiveTimer = 0; // 被動回血
+        }
+
+        gainExp(amount) {
+            this.exp += amount;
+            while (this.exp >= this.maxExp) {
+                this.levelUp();
+            }
+        }
+
+        levelUp() {
+            this.exp -= this.maxExp;
+            this.level++;
+            this.maxExp = Math.floor(this.maxExp * 1.5);
+            this.maxHp += 120;
+            this.hp = this.maxHp; 
+            this.attackDamage += 8;
+            effects.push(new Effect(this.x, this.y, 50, 40, 'rgba(255, 255, 0, 0.8)'));
+        }
+
+        castQ() {
+            if (this.qCd > 0 || this.isBot) return;
+            this.qCd = this.qMaxCd;
+            this.qBuffTimer = 180;
+            effects.push(new Effect(this.x, this.y, 30, 15, 'rgba(255, 200, 0, 0.8)'));
+            this.bTimer = 0;
+        }
+
+        castE() {
+            if (this.eCd > 0 || this.isBot) return;
+            this.eCd = this.eMaxCd;
+            this.eActiveTimer = 180;
+            this.bTimer = 0;
+        }
+
+        castR(targetX, targetY) {
+            if (this.rCd > 0 || this.isBot) return;
+            const dist = Math.hypot(targetX - this.x, targetY - this.y);
+            let jumpX = targetX, jumpY = targetY;
+            if (dist > 300) {
+                const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                jumpX = this.x + Math.cos(angle) * 300;
+                jumpY = this.y + Math.sin(angle) * 300;
+            }
+            this.rCd = this.rMaxCd;
+            this.bTimer = 0;
+            this.x = jumpX; this.y = jumpY;
+            
+            const radius = 120;
+            const damage = 150 + (this.level * 40);
+            effects.push(new Effect(this.x, this.y, radius, 30, 'rgba(255, 50, 0, 0.8)'));
+            
+            [enemyBot, ...enemies].forEach(e => {
+                if (!e.isDead && Math.hypot(e.x - this.x, e.y - this.y) <= radius) {
+                    e.takeDamage(damage, this.team);
+                }
+            });
+        }
+
+        castD() {
+            if (this.dCd > 0 || this.isBot) return;
+            this.dCd = this.dMaxCd;
+            this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.15 + 100);
+            effects.push(new Effect(this.x, this.y, 40, 30, 'rgba(0, 255, 0, 0.6)'));
+        }
+
+        castB() {
+            if (this.bTimer > 0 || this.isBot) return;
+            this.bTimer = 240; 
+        }
+
+        takeDamage(amount, sourceTeam) {
+            super.takeDamage(amount, sourceTeam);
+            if (this.team === 0) this.bTimer = 0;
+            if (this.isDead) {
+                if (this.team === 1 && sourceTeam === 0) {
+                    player.kills++;
+                    showBroadcast(`擊殺！ (目前擊殺: ${player.kills})`);
+                } else if (this.team === 0) {
+                    showBroadcast("你被擊殺了...", '#aaa');
+                }
+            }
+        }
+
+        update() {
+            if (this.isDead) {
+                if (this.isBot) {
+                    this.respawnTimer++;
+                    if (this.respawnTimer > 300 + this.level * 60) {
+                        this.isDead = false;
+                        this.hp = this.maxHp;
+                        this.x = enemyTower.x - 50;
+                        this.y = enemyTower.y + 50;
+                        this.respawnTimer = 0;
+                    }
+                }
+                return;
+            }
+
+            this.passiveTimer++;
+            if (this.passiveTimer >= 120) {
+                this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.02);
+                this.passiveTimer = 0;
+            }
+
+            if (this.attackCooldown > 0) this.attackCooldown--;
+            if (this.qCd > 0) this.qCd--;
+            if (this.eCd > 0) this.eCd--;
+            if (this.rCd > 0) this.rCd--;
+            if (this.dCd > 0) this.dCd--;
+            if (this.botSkillCd > 0) this.botSkillCd--;
+
+            this.isStealth = false;
+            for (let bush of bushes) {
+                if (bush.contains(this.x, this.y)) {
+                    this.isStealth = true; break;
+                }
+            }
+
+            if (!this.isBot) {
+                if (this.bTimer > 0) {
+                    this.bTimer--;
+                    effects.push(new Effect(this.x, this.y + 10 - (240 - this.bTimer)/10, 15, 2, 'rgba(0, 255, 255, 0.5)'));
+                    if (this.bTimer <= 0) {
+                        this.x = 100; this.y = 500;
+                        this.hp = this.maxHp;
+                        showBroadcast("已回到泉水", '#0ff');
+                    }
+                    return;
+                }
+
+                this.speed = this.baseSpeed;
+                if (this.qBuffTimer > 0) {
+                    this.qBuffTimer--;
+                    this.speed += 1.5;
+                    if (this.qBuffTimer % 3 === 0) effects.push(new Effect(this.x, this.y, this.radius, 10, 'rgba(255, 200, 0, 0.3)'));
+                }
+
+                if (this.eActiveTimer > 0) {
+                    this.eActiveTimer--;
+                    if (this.eActiveTimer % 15 === 0) {
+                        [enemyBot, ...enemies].forEach(e => {
+                            if (!e.isDead && Math.hypot(e.x - this.x, e.y - this.y) <= 80) {
+                                e.takeDamage(15 + this.level * 5, this.team);
+                            }
+                        });
+                    }
+                }
+
+                let dx = 0, dy = 0;
+                if (keys.w) dy -= 1;
+                if (keys.s) dy += 1;
+                if (keys.a) dx -= 1;
+                if (keys.d) dx += 1; 
+
+                if (dx !== 0 || dy !== 0) {
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    this.x += (dx / len) * this.speed;
+                    this.y += (dy / len) * this.speed;
+                    this.bTimer = 0;
+                }
+
+                if (mouse.isDown && this.attackCooldown <= 0) {
+                    this.bTimer = 0;
+                    let attackTarget = null;
+                    let searchRange = this.qBuffTimer > 0 ? 200 : this.attackRange;
+                    const angleToMouse = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                    
+                    for (let e of [enemyBot, ...enemies, enemyTower]) {
+                        if (!e.isDead) {
+                            const dist = Math.hypot(e.x - this.x, e.y - this.y);
+                            if (dist <= searchRange) {
+                                const angleToEnemy = Math.atan2(e.y - this.y, e.x - this.x);
+                                if (Math.abs(angleToMouse - angleToEnemy) < 1.0 || dist < 40) {
+                                    attackTarget = e; break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (attackTarget) {
+                        if (this.qBuffTimer > 0) {
+                            this.x = attackTarget.x - Math.cos(angleToMouse) * 20;
+                            this.y = attackTarget.y - Math.sin(angleToMouse) * 20;
+                            attackTarget.takeDamage(this.attackDamage * 1.5 + 20, this.team);
+                            this.qBuffTimer = 0;
+                            effects.push(new Effect(attackTarget.x, attackTarget.y, 20, 10, '#fff'));
+                        } else {
+                            attackTarget.takeDamage(this.attackDamage, this.team);
+                            effects.push(new Effect(attackTarget.x, attackTarget.y, 10, 5, '#aaa'));
+                        }
+                        projectiles.push(new MeleeSlash(this.x, this.y, Math.atan2(attackTarget.y - this.y, attackTarget.x - this.x), this.team));
+                    } else if (this.qBuffTimer <= 0) {
+                        projectiles.push(new MeleeSlash(this.x, this.y, angleToMouse, this.team));
+                    }
+                    this.attackCooldown = this.attackRate;
+                }
+            } else {
+                let target = null;
+                let minDist = 350; 
+                for (let t of [player, ...allies]) {
+                    if (!t.isDead && !t.isStealth) {
+                        const dist = Math.hypot(t.x - this.x, t.y - this.y);
+                        if (dist < minDist) { minDist = dist; target = t; }
+                    }
+                }
+
+                if (target) {
+                    const dist = Math.hypot(target.x - this.x, target.y - this.y);
+                    const angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    
+                    if (this.hp < this.maxHp * 0.25) {
+                        const retreatAngle = Math.atan2(enemyTower.y - this.y, enemyTower.x - this.x);
+                        this.x += Math.cos(retreatAngle) * this.speed;
+                        this.y += Math.sin(retreatAngle) * this.speed;
+                    } else if (dist > this.attackRange - 20) {
+                        this.x += Math.cos(angle) * this.speed;
+                        this.y += Math.sin(angle) * this.speed;
+                    } else {
+                        if (this.botSkillCd <= 0) {
+                            projectiles.push(new Projectile(this.x, this.y, angle, this.team, this.attackDamage * 2.5, 8, false, true));
+                            this.botSkillCd = 180;
+                            effects.push(new Effect(this.x, this.y, 25, 10, '#f00'));
+                        } else if (this.attackCooldown <= 0) {
+                            projectiles.push(new Projectile(this.x, this.y, angle, this.team, this.attackDamage, 5));
+                            this.attackCooldown = this.attackRate;
+                        }
+                    }
+                } else {
+                    const angle = Math.atan2(enemyTower.y + 50 - this.y, enemyTower.x - 50 - this.x);
+                    if (Math.hypot(enemyTower.x - this.x, enemyTower.y - this.y) > 100) {
+                        this.x += Math.cos(angle) * (this.speed * 0.8);
+                        this.y += Math.sin(angle) * (this.speed * 0.8);
+                    }
+                }
+            }
+
+            this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+            this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+        }
+
+        draw(ctx) {
+            if (this.isDead) return;
+            
+            if (this.isBot && this.isStealth) {
+                let shareBush = false;
+                for (let b of bushes) {
+                    if (b.contains(this.x, this.y) && b.contains(player.x, player.y)) {
+                        shareBush = true; break;
+                    }
+                }
+                if (!shareBush) return;
+            }
+
+            ctx.save();
+            if (!this.isBot && this.isStealth) ctx.globalAlpha = 0.5;
+
+            if (!this.isBot && this.eActiveTimer > 0) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 80, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 150, 0, 0.2)';
+                ctx.fill();
+                
+                const angleOffset = (180 - this.eActiveTimer) * 0.1;
+                for(let i=0; i<3; i++) {
+                    const shieldAngle = angleOffset + (Math.PI * 2 / 3) * i;
+                    const sx = this.x + Math.cos(shieldAngle) * 70;
+                    const sy = this.y + Math.sin(shieldAngle) * 70;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ff9900';
+                    ctx.fill();
+                }
+            }
+
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.team === 0 ? (this.qBuffTimer > 0 ? '#ffcc00' : '#00aaff') : '#ff00aa';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.level, this.x, this.y + 4);
+
+            this.drawHpBar(ctx, 15);
+            ctx.restore();
+        }
+    }
+
+    // 近戰揮砍特效
+    class MeleeSlash {
+        constructor(x, y, angle, team) {
+            this.x = x + Math.cos(angle) * 15;
+            this.y = y + Math.sin(angle) * 15;
+            this.angle = angle;
+            this.team = team;
+            this.life = 10;
+            this.isDead = false;
+        }
+        update() {
+            this.life--;
+            if (this.life <= 0) this.isDead = true;
+        }
+        draw(ctx) {
+            if (this.isDead) return;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.beginPath();
+            ctx.arc(0, 0, 30, -Math.PI/4, Math.PI/4);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${this.life / 10})`;
+            ctx.lineWidth = 10;
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // 防禦塔與小兵 (繼承 Entity)
+    class Tower extends Entity {
+        constructor(x, y, team) {
+            super(x, y, 2000, team, 35);
+            this.attackCooldown = 0;
+            this.attackRate = 60; 
+            this.attackRange = 220;
+        }
+        update() {
+            if (this.isDead) return;
+            if (this.attackCooldown > 0) this.attackCooldown--;
+            if (this.attackCooldown <= 0) {
+                let target = null;
+                let minDist = this.attackRange;
+                const potentialTargets = this.team === 0 ? [enemyBot, ...enemies] : [player, ...allies];
+                for (let t of potentialTargets) {
+                    if (t && !t.isDead && !t.isStealth) {
+                        const dist = Math.hypot(t.x - this.x, t.y - this.y);
+                        if (dist < minDist) { minDist = dist; target = t; }
+                    }
+                }
+                if (target) {
+                    const angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    projectiles.push(new Projectile(this.x, this.y, angle, this.team, 80, 8, true));
+                    this.attackCooldown = this.attackRate;
+                }
+            }
+        }
+        draw(ctx) {
+            if (this.isDead) return;
+            ctx.beginPath();
+            ctx.rect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+            ctx.fillStyle = this.team === 0 ? '#005c99' : '#990000';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.attackRange, 0, Math.PI * 2);
+            ctx.strokeStyle = this.team === 0 ? 'rgba(0, 210, 255, 0.1)' : 'rgba(255, 75, 43, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            this.drawHpBar(ctx, 15);
+        }
+    }
+
+    class Minion extends Entity {
+        constructor(x, y, team) {
+            super(x, y, 150, team, 8, 25);
+            this.speed = 1.0;
+            this.attackCooldown = 0;
+            this.attackRate = 50;
+            this.attackRange = 100;
+            this.targetX = team === 0 ? enemyTower.x : playerTower.x;
+            this.targetY = team === 0 ? enemyTower.y : playerTower.y;
+        }
+        update() {
+            if (this.isDead) return;
+            let currentTarget = null;
+            let minDist = this.attackRange;
+            const potentialTargets = this.team === 0 ? [enemyTower, enemyBot, ...enemies] : [playerTower, player, ...allies];
+            
+            for (let t of potentialTargets) {
+                if (t && !t.isDead && !t.isStealth) {
+                    const dist = Math.hypot(t.x - this.x, t.y - this.y);
+                    if (dist < minDist) { minDist = dist; currentTarget = t; }
+                }
+            }
+
+            if (currentTarget) {
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                if (this.attackCooldown <= 0) {
+                    const angle = Math.atan2(currentTarget.y - this.y, currentTarget.x - this.x);
+                    projectiles.push(new Projectile(this.x, this.y, angle, this.team, 15, 4));
+                    this.attackCooldown = this.attackRate;
+                }
+            } else {
+                const angle = Math.atan2(this.targetY - this.y, this.targetX - this.x);
+                this.x += Math.cos(angle) * this.speed;
+                this.y += Math.sin(angle) * this.speed;
+            }
+        }
+        draw(ctx) {
+            if (this.isDead) return;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.team === 0 ? '#66ccff' : '#ff6666';
+            ctx.fill();
+            this.drawHpBar(ctx, 5);
+        }
+    }
+
+    class Projectile {
+        constructor(x, y, angle, team, damage, speed, isTower = false, isBig = false) {
+            this.x = x;
+            this.y = y;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.team = team;
+            this.damage = damage;
+            this.radius = isTower ? 6 : (isBig ? 12 : 4);
+            this.isTower = isTower;
+            this.isBig = isBig;
+            this.life = 100; 
+            this.isDead = false;
+        }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life--;
+            if (this.life <= 0) this.isDead = true;
+
+            const targets = this.team === 0 ? [enemyTower, enemyBot, ...enemies] : [playerTower, player, ...allies];
+            for (let t of targets) {
+                if (t && !t.isDead) {
+                    const hitRadius = t.radius + (t instanceof Tower ? 10 : 0);
+                    if (Math.hypot(t.x - this.x, t.y - this.y) < hitRadius + this.radius) {
+                        t.takeDamage(this.damage, this.team);
+                        this.isDead = true;
+                        
+                        // 命中特效
+                        effects.push(new Effect(this.x, this.y, this.isBig ? 30 : 10, 10, '#fff'));
+                        break;
+                    }
+                }
+            }
+        }
+        draw(ctx) {
+            if (this.isDead) return;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            if (this.isTower) {
+                ctx.fillStyle = this.team === 0 ? '#0ff' : '#f00';
+            } else if (this.isBig) {
+                ctx.fillStyle = '#ff5500';
+            } else {
+                ctx.fillStyle = this.team === 0 ? '#00aaff' : '#ff00aa';
+            }
+            ctx.fill();
+        }
+    }
+
+    // 初始化遊戲實體
+    const playerTower = new Tower(150, 450, 0); // 塔位置外推
+    const enemyTower = new Tower(650, 150, 1);
+    const player = new Hero(100, 500, 0, false);
+    const enemyBot = new Hero(700, 100, 1, true); 
+    
+    // 王者榮耀地圖元素
+    const bushes = [
+        new Bush(330, 180, 80, 70), // 上河道草
+        new Bush(390, 350, 80, 70)  // 下河道草
+    ];
+    const healPack = new HealPack(playerTower.x - 40, playerTower.y + 40);
+    const healPackEnemy = new HealPack(enemyTower.x + 40, enemyTower.y - 40);
+    
+    let allies = [];
+    let enemies = [];
+    let projectiles = [];
+    let effects = [];
+
+    let spawnTimer = 0;
+    const SPAWN_INTERVAL = 400;
+
+    function spawnMinions() {
+        allies.push(new Minion(playerTower.x + 40, playerTower.y - 40, 0));
+        allies.push(new Minion(playerTower.x + 70, playerTower.y - 10, 0));
+        enemies.push(new Minion(enemyTower.x - 40, enemyTower.y + 40, 1));
+        enemies.push(new Minion(enemyTower.x - 70, enemyTower.y + 10, 1));
+    }
+
+    // 獨立監聽技能按鍵，避免與移動衝突
+    window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'q') player.castQ();
+        if (key === 'e') player.castE();
+        if (key === 'r') player.castR(mouse.x, mouse.y);
+        if (key === 'd' || key === 'f') player.castD(); // 兼容 D 或 F
+        if (key === 'b') player.castB();
+    });
+
+    function updateUI() {
+        // 更新經驗條與等級
+        uiLv.innerText = player.level;
+        uiExp.style.width = `${(player.exp / player.maxExp) * 100}%`;
+        
+        // 統一更新冷卻 UI
+        const updateCdUI = (cd, maxCd, uiEl, boxEl) => {
+            if (cd > 0) {
+                uiEl.innerText = (cd / 60).toFixed(1) + 's';
+                boxEl.classList.remove('ready');
+            } else {
+                uiEl.innerText = '';
+                boxEl.classList.add('ready');
+            }
+        };
+
+        updateCdUI(player.qCd, player.qMaxCd, uiCdQ, boxQ);
+        updateCdUI(player.eCd, player.eMaxCd, uiCdE, boxE);
+        updateCdUI(player.rCd, player.rMaxCd, uiCdR, boxR);
+        updateCdUI(player.dCd, player.dMaxCd, uiCdD, boxD);
+        
+        if (player.bTimer > 0) {
+            uiCdB.innerText = (player.bTimer / 60).toFixed(1) + 's';
+            boxB.classList.remove('ready');
+        } else {
+            uiCdB.innerText = '';
+            boxB.classList.add('ready');
+        }
+    }
+
+    function checkWinCondition() {
+        if (enemyTower.isDead) {
+            isGameOver = true;
+            resultText.innerText = "勝利 (Victory)！";
+            resultText.style.color = "#ffaa00";
+            gameOverScreen.style.display = "block";
+        } else if (playerTower.isDead) {
+            isGameOver = true;
+            resultText.innerText = "失敗 (Defeat)";
+            resultText.style.color = "#555555";
+            gameOverScreen.style.display = "block";
+        }
+    }
+
+    function gameLoop() {
+        if (isGameOver) return;
+
+        // 畫布背景 (峽谷風格的泥土色與草地感)
+        ctx.fillStyle = '#2e3b32';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 畫河道
+        ctx.save();
+        ctx.translate(400, 300);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillStyle = 'rgba(0, 150, 255, 0.1)';
+        ctx.fillRect(-600, -60, 1200, 120);
+        ctx.restore();
+
+        spawnTimer++;
+        if (spawnTimer >= SPAWN_INTERVAL) {
+            spawnMinions();
+            spawnTimer = 0;
+        }
+
+        // 更新
+        healPack.update(player);
+        healPackEnemy.update(enemyBot);
+        playerTower.update();
+        enemyTower.update();
+        player.update();
+        enemyBot.update();
+
+        allies.forEach(a => a.update());
+        enemies.forEach(e => e.update());
+        projectiles.forEach(p => p.update());
+        effects.forEach(e => e.update());
+
+        // 清理
+        allies = allies.filter(a => !a.isDead);
+        enemies = enemies.filter(e => !e.isDead);
+        projectiles = projectiles.filter(p => !p.isDead);
+        effects = effects.filter(e => !e.isDead);
+
+        // 繪製順序
+        bushes.forEach(b => b.draw(ctx));
+        healPack.draw(ctx);
+        healPackEnemy.draw(ctx);
+
+        playerTower.draw(ctx);
+        enemyTower.draw(ctx);
+        
+        allies.forEach(a => a.draw(ctx));
+        enemies.forEach(e => e.draw(ctx));
+        
+        enemyBot.draw(ctx);
+        player.draw(ctx);
+        
+        projectiles.forEach(p => p.draw(ctx));
+        effects.forEach(e => e.draw(ctx));
+
+        updateUI();
+        checkWinCondition();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // 啟動
+    spawnMinions();
+    gameLoop();
+
+</script>
+</body>
+</html>

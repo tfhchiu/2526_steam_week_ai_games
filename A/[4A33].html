@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Computer Typing Game</title>
+    <style>
+        /* 遊戲方框外的背景 #B5D9DC */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #B5D9DC; 
+            color: white; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        #game-container {
+            width: 90%;
+            max-width: 500px;
+        }
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1); 
+        }
+        p, label {
+            font-size: 1.2rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .info-input {
+            width: 60%;
+            padding: 10px;
+            font-size: 1.2rem;
+            border-radius: 8px;
+            border: none;
+            text-align: center;
+            margin-top: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            color: #333;
+        }
+        
+        /* 重新調整狀態列，確保 Combo 完美居中 */
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .stats > div {
+            flex: 1; /* 讓三個元素平分空間 */
+        }
+        .stats-left {
+            text-align: left;
+        }
+        .stats-center {
+            text-align: center;
+        }
+        .stats-right {
+            text-align: right;
+        }
+        
+        /* Combo 文字設定為白色並保留跳動動畫 */
+        .combo-text {
+            display: inline-block;
+            color: white; 
+            transition: transform 0.1s;
+        }
+        
+        #drop-area {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        #falling-word-box {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0px;
+            width: 100%;
+        }
+        /* 單字維持櫻花柔粉色 */
+        #word-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #F9C0D0; 
+            letter-spacing: 2px;
+            margin: 0;
+            text-shadow: 1px 1px 1px rgba(249, 192, 208, 0.3); 
+        }
+        #zh-display {
+            font-size: 1.2rem;
+            color: #F9C0D0; 
+            margin-top: 5px;
+        }
+        #word-input {
+            width: 80%;
+            padding: 15px;
+            font-size: 1.5rem;
+            text-align: center;
+            background-color: white;
+            border: none;
+            border-radius: 10px;
+            outline: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            color: #333;
+        }
+        button {
+            background-color: white;
+            color: #7aadb2; 
+            border: none;
+            padding: 15px 35px;
+            font-size: 1.3rem;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            margin-top: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        button:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.05);
+        }
+        #game-area, #game-over {
+            display: none;
+        }
+        #player-info-display {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            font-style: italic;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    
+    <div id="login-screen">
+        <h1>Computer Typing Game</h1>
+        <div class="input-group">
+            <label for="player-name">Name</label><br>
+            <input type="text" id="player-name" class="info-input" placeholder="Enter your name" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <label for="player-class">Class</label><br>
+            <input type="text" id="player-class" class="info-input" placeholder="Enter your class" autocomplete="off">
+        </div>
+        <button id="start-btn">Start Game</button>
+    </div>
+
+    <div id="game-area">
+        <div id="player-info-display"></div>
+        
+        <div class="stats">
+            <div class="stats-left">Time: <span id="time">60</span>s</div>
+            <div class="stats-center">
+                <span class="combo-text">Combo: <span id="combo">0</span></span>
+            </div>
+            <div class="stats-right">Score: <span id="score">0</span></div>
+        </div>
+        
+        <div id="drop-area">
+            <div id="falling-word-box">
+                <div id="word-display">word</div>
+                <div id="zh-display">單字</div>
+            </div>
+        </div>
+
+        <input type="text" id="word-input" autocomplete="off" placeholder="Type here..." autofocus>
+    </div>
+
+    <div id="game-over">
+        <h2>Time's Up!</h2>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <p>Max Combo: <span id="final-combo">0</span></p>
+        <button id="restart-btn">Play Again</button>
+    </div>
+</div>
+
+<script>
+    // 50 個國中程度電腦相關單字庫
+    const words = [
+        { en: "keyboard", zh: "鍵盤" }, { en: "mouse", zh: "滑鼠" },
+        { en: "screen", zh: "螢幕" }, { en: "hardware", zh: "硬體" },
+        { en: "software", zh: "軟體" }, { en: "internet", zh: "網際網路" },
+        { en: "website", zh: "網站" }, { en: "browser", zh: "瀏覽器" },
+        { en: "password", zh: "密碼" }, { en: "download", zh: "下載" },
+        { en: "upload", zh: "上傳" }, { en: "folder", zh: "資料夾" },
+        { en: "printer", zh: "印表機" }, { en: "network", zh: "網路" },
+        { en: "memory", zh: "記憶體" }, { en: "delete", zh: "刪除" },
+        { en: "search", zh: "搜尋" }, { en: "update", zh: "更新" },
+        { en: "file", zh: "檔案" }, { en: "button", zh: "按鈕" },
+        { en: "email", zh: "電子郵件" }, { en: "virus", zh: "病毒" },
+        { en: "copy", zh: "複製" }, { en: "paste", zh: "貼上" },
+        { en: "save", zh: "儲存" }, { en: "link", zh: "連結" },
+        { en: "click", zh: "點擊" }, { en: "server", zh: "伺服器" },
+        { en: "data", zh: "資料" }, { en: "image", zh: "圖片" },
+        { en: "video", zh: "影片" }, { en: "audio", zh: "音訊" },
+        { en: "code", zh: "程式碼" }, { en: "program", zh: "程式" },
+        { en: "app", zh: "應用程式" }, { en: "chat", zh: "聊天" },
+        { en: "message", zh: "訊息" }, { en: "hacker", zh: "駭客" },
+        { en: "error", zh: "錯誤" }, { en: "device", zh: "裝置" },
+        { en: "tablet", zh: "平板電腦" }, { en: "laptop", zh: "筆記型電腦" },
+        { en: "desktop", zh: "桌上型電腦" }, { en: "speaker", zh: "喇叭" },
+        { en: "cable", zh: "連接線" }, { en: "wireless", zh: "無線" },
+        { en: "login", zh: "登入" }, { en: "logout", zh: "登出" },
+        { en: "settings", zh: "設定" }, { en: "system", zh: "系統" }
+    ];
+
+    let time = 60;
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let isPlaying = false;
+    let currentWord;
+    let timerInterval;
+    
+    let wordY = 0;
+    let fallSpeed = 1.2; 
+    let animationFrameId;
+
+    let shuffledWords = []; 
+
+    // 取得 HTML 元素
+    const playerNameInput = document.querySelector('#player-name');
+    const playerClassInput = document.querySelector('#player-class');
+    const playerInfoDisplay = document.querySelector('#player-info-display');
+    const wordInput = document.querySelector('#word-input');
+    const currentWordDisplay = document.querySelector('#word-display');
+    const zhDisplay = document.querySelector('#zh-display');
+    const scoreDisplay = document.querySelector('#score');
+    const comboDisplay = document.querySelector('#combo');
+    const timeDisplay = document.querySelector('#time');
+    const startBtn = document.querySelector('#start-btn');
+    const restartBtn = document.querySelector('#restart-btn');
+    const loginScreen = document.querySelector('#login-screen');
+    const gameArea = document.querySelector('#game-area');
+    const gameOverScreen = document.querySelector('#game-over');
+    const finalScoreDisplay = document.querySelector('#final-score');
+    const finalComboDisplay = document.querySelector('#final-combo');
+    const fallingWordBox = document.querySelector('#falling-word-box');
+    const dropArea = document.querySelector('#drop-area');
+
+    function getUniqueWord() {
+        if (shuffledWords.length === 0) {
+            shuffledWords = [...words].sort(() => Math.random() - 0.5);
+        }
+        return shuffledWords.pop();
+    }
+
+    function spawnWord() {
+        currentWord = getUniqueWord();
+        currentWordDisplay.innerHTML = currentWord.en;
+        zhDisplay.innerHTML = currentWord.zh;
+        
+        wordY = -50; 
+        fallingWordBox.style.top = wordY + 'px';
+        wordInput.value = ''; 
+    }
+
+    function animateFall() {
+        if (!isPlaying) return;
+
+        wordY += fallSpeed;
+        fallingWordBox.style.top = wordY + 'px';
+
+        if (wordY > dropArea.clientHeight) {
+            combo = 0; 
+            comboDisplay.innerHTML = combo;
+            spawnWord(); 
+        }
+
+        animationFrameId = requestAnimationFrame(animateFall);
+    }
+
+    wordInput.addEventListener('input', () => {
+        if (wordInput.value.toLowerCase() === currentWord.en.toLowerCase()) {
+            score++;
+            combo++;
+            if (combo > maxCombo) maxCombo = combo; 
+            
+            scoreDisplay.innerHTML = score;
+            comboDisplay.innerHTML = combo;
+            
+            // 保留原本的 Combo 跳動特效
+            comboDisplay.parentElement.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                comboDisplay.parentElement.style.transform = 'scale(1)';
+            }, 100);
+
+            spawnWord(); 
+        }
+    });
+
+    function countdown() {
+        if (time > 0) {
+            time--;
+            timeDisplay.innerHTML = time;
+        } else if (time === 0) {
+            endGame();
+        }
+    }
+
+    function startGame() {
+        const name = playerNameInput.value.trim();
+        const playerClass = playerClassInput.value.trim();
+        
+        if (name === "" || playerClass === "") {
+            alert("Please enter your Name and Class!");
+            return;
+        }
+
+        playerInfoDisplay.innerHTML = `Player: ${name} | Class: ${playerClass}`;
+
+        time = 60;
+        score = 0;
+        combo = 0;
+        maxCombo = 0;
+        isPlaying = true;
+        wordY = -50;
+        
+        shuffledWords = [...words].sort(() => Math.random() - 0.5);
+        
+        timeDisplay.innerHTML = time;
+        scoreDisplay.innerHTML = score;
+        comboDisplay.innerHTML = combo;
+        
+        loginScreen.style.display = 'none';
+        gameOverScreen.style.display = 'none';
+        gameArea.style.display = 'block';
+        
+        wordInput.focus();
+        spawnWord();
+        
+        timerInterval = setInterval(countdown, 1000);
+        cancelAnimationFrame(animationFrameId); 
+        animateFall();
+    }
+
+    function endGame() {
+        isPlaying = false;
+        clearInterval(timerInterval);
+        cancelAnimationFrame(animationFrameId); 
+        
+        gameArea.style.display = 'none';
+        gameOverScreen.style.display = 'block';
+        finalScoreDisplay.innerHTML = score;
+        finalComboDisplay.innerHTML = maxCombo; 
+    }
+
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    playerClassInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') startGame();
+    });
+</script>
+</body>
+</html>

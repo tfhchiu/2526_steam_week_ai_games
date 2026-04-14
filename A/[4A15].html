@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>瑪利歐風：電腦單字配對競技賽</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 引入像素字體 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'DotGothic16', sans-serif;
+            background-color: #5C94FC; /* 經典天空藍 */
+            min-height: 100vh;
+            position: relative;
+            padding-bottom: 60px; /* 留出底部地面的空間 */
+        }
+
+        .font-pixel {
+            font-family: 'Press Start 2P', cursive;
+        }
+
+        /* 底部磚塊地面 */
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            background-color: #c84c0c;
+            background-image: 
+                linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), 
+                linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+            border-top: 4px solid #000;
+            z-index: -1;
+        }
+
+        /* 滾動條像素化 */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #fff;
+            border-left: 4px solid #000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #E52521;
+            border: 4px solid #000;
+        }
+
+        /* 核心復古 UI 元件 */
+        .nes-container {
+            border: 4px solid #000;
+            background-color: #fff;
+            box-shadow: 6px 6px 0px 0px rgba(0,0,0,1);
+        }
+
+        .nes-btn {
+            border: 4px solid #000;
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+            transition: transform 0.1s, box-shadow 0.1s;
+            cursor: pointer;
+        }
+
+        .nes-btn:active, .nes-btn.is-selected {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px 0px rgba(0,0,0,1);
+        }
+
+        /* 特殊按鈕顏色 */
+        .btn-red { background-color: #E52521; color: white; }
+        .btn-blue { background-color: #049CD8; color: white; }
+        .btn-green { background-color: #43B047; color: white; }
+        .btn-yellow { background-color: #FBD000; color: black; }
+        
+        .fade-in {
+            animation: fadeIn 0.3s steps(4) forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .text-outline {
+            text-shadow: 
+                -2px -2px 0 #000,  
+                 2px -2px 0 #000,
+                -2px  2px 0 #000,
+                 2px  2px 0 #000;
+        }
+
+        /* 新增硬幣漂浮動畫 */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(1.5); }
+        }
+        .coin-float {
+            animation: floatUp 0.8s ease-out forwards;
+            position: absolute;
+            font-family: 'Press Start 2P', cursive;
+            color: #FBD000;
+            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+            font-size: 20px;
+            z-index: 50;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* Combo 字樣浮動動畫 */
+        @keyframes floatUpCombo {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(1); }
+        }
+        .combo-text {
+            animation: floatUpCombo 1s ease-out forwards;
+            position: absolute;
+            font-family: 'Press Start 2P', cursive;
+            color: #ff8c00;
+            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+            font-size: 14px;
+            z-index: 60;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* 暈眩旋轉動畫 */
+        @keyframes dizzy {
+            0% { transform: rotate(0deg); filter: grayscale(0%); }
+            100% { transform: rotate(360deg); filter: grayscale(100%); }
+        }
+        .dizzy {
+            animation: dizzy 0.5s infinite linear;
+        }
+
+        /* 新增答錯時的震動動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        .shake {
+            animation: shake 0.4s;
+        }
+    </style>
+</head>
+<body class="py-10 px-4 text-black">
+
+    <!-- 背景裝飾雲朵 -->
+    <i class="fa-solid fa-cloud text-white opacity-80 text-7xl fixed top-10 left-10 z-[-1]"></i>
+    <i class="fa-solid fa-cloud text-white opacity-70 text-8xl fixed top-32 right-12 z-[-1]"></i>
+    <i class="fa-solid fa-cloud text-white opacity-60 text-5xl fixed top-60 left-1/4 z-[-1]"></i>
+
+    <div class="max-w-7xl mx-auto nes-container p-6 md:p-10 fade-in">
+        
+        <!-- 標題區 -->
+        <div class="text-center mb-10">
+            <div class="inline-block mb-2 text-[#FBD000]">
+                <i class="fa-solid fa-star text-6xl drop-shadow-[4px_4px_0_rgba(0,0,0,1)]"></i>
+            </div>
+            <h1 class="text-3xl md:text-5xl font-black text-white text-outline tracking-wider font-pixel uppercase mt-2">
+                Super Match
+            </h1>
+            <h2 class="text-2xl mt-6 font-bold text-black bg-[#FBD000] inline-block px-6 py-2 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)]">
+                電腦單字配對競技賽
+            </h2>
+        </div>
+
+        <!-- 共用提示訊息 -->
+        <div id="messageBox" class="hidden mb-6 p-4 border-4 border-black text-center font-bold text-lg bg-white box-shadow-[4px_4px_0_rgba(0,0,0,1)]"></div>
+
+        <!-- 設定畫面 -->
+        <div id="setupScreen" class="fade-in max-w-3xl mx-auto">
+            
+            <!-- 新增：歷史最高分展示於大廳 -->
+            <div id="lobbyHighScore" class="text-center mb-8 hidden fade-in">
+                <div class="inline-block bg-black text-[#FBD000] border-4 border-[#FBD000] px-6 py-3 font-pixel text-sm md:text-base shadow-[6px_6px_0_#E52521] relative overflow-hidden">
+                    <i class="fa-solid fa-crown text-[#FBD000] text-2xl mr-2 animate-bounce inline-block"></i> 
+                    <span class="font-bold font-sans">伺服器最高紀錄保持人:</span> <span id="lobbyRecordName" class="text-white text-xl">---</span> 
+                    <span class="mx-2 text-white">|</span>
+                    <span id="lobbyRecordScore" class="text-[#E52521] text-2xl">0</span> <i class="fa-solid fa-coins text-[#FBD000]"></i>
+                </div>
+            </div>
+
+            <!-- 新增：遊戲規則與操作說明區塊 -->
+            <div class="bg-white nes-container mb-8 p-6 text-sm md:text-base text-left">
+                <h3 class="font-bold text-[#E52521] mb-3 text-xl border-b-4 border-black pb-2 inline-block">
+                    <i class="fa-solid fa-book text-black"></i> 遊戲規則與操作說明
+                </h3>
+                
+                <ul class="list-disc pl-5 space-y-2 mb-6 font-bold">
+                    <li><span class="text-[#E52521] text-lg">目標：</span>1分鐘內最快配對完所有單字，或時間到時金幣最多者獲勝！</li>
+                    <li><span class="text-[#FBD000] bg-black px-1 text-lg">連擊：</span><span class="text-gray-600">3秒內</span> 連續配對成功可獲得倍數金幣加成。</li>
+                    <li><span class="text-[#049CD8] text-lg">道具：</span>配對成功有 <span class="text-gray-600">25%機率</span> 觸發無敵星⭐、冰凍花❄️或搗蛋鬼👻！</li>
+                    <li><span class="text-gray-500 text-lg">懲罰：</span>答錯會中斷連擊，並暈眩鎖定 <span class="text-[#E52521]">2秒鐘</span> 無法操作。</li>
+                </ul>
+
+                <h4 class="font-bold mb-2 bg-black text-white inline-block px-2 font-pixel text-sm">KEYBOARD CONTROLS</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 bg-gray-100 p-3 border-4 border-black font-pixel text-[10px] md:text-xs">
+                    <div class="border-2 border-dashed border-gray-400 p-2">
+                        <span class="text-[#E52521] font-bold block mb-1">P1 (左側)</span>
+                        移動: W,A,S,D<br>
+                        選擇: 空白鍵
+                    </div>
+                    <div class="border-2 border-dashed border-gray-400 p-2">
+                        <span class="text-[#049CD8] font-bold block mb-1">P2 (右側)</span>
+                        移動: 方向鍵<br>
+                        選擇: Enter鍵
+                    </div>
+                    <div class="col-span-full text-center text-gray-500 mt-1 font-bold font-sans text-sm">
+                        * 當然，您也可以直接使用「滑鼠點擊」或「螢幕觸控」進行遊戲！
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="text-xl md:text-2xl font-bold text-center text-black mb-6 border-b-4 border-dashed border-black pb-4">SELECT PLAYERS (選擇遊玩人數)</h2>
+            <div class="flex justify-center gap-4 md:gap-6 mb-10">
+                <button onclick="setPlayerCount(1)" class="w-16 h-16 md:w-20 md:h-20 nes-btn btn-yellow font-pixel text-2xl">1</button>
+                <button onclick="setPlayerCount(2)" class="w-16 h-16 md:w-20 md:h-20 nes-btn btn-yellow font-pixel text-2xl">2</button>
+            </div>
+            
+            <div id="nameInputsContainer" class="flex flex-col gap-4 max-w-md mx-auto mb-8 hidden">
+                <!-- 姓名輸入框會由 JS 生成 -->
+            </div>
+            
+            <button id="startBtn" onclick="startGame()" class="hidden w-full max-w-md mx-auto nes-btn btn-green font-bold py-4 text-2xl mt-4">
+                <i class="fa-solid fa-play mr-2"></i> START GAME !
+            </button>
+        </div>
+
+        <!-- 遊戲主要畫面 -->
+        <div id="gameScreen" class="hidden fade-in">
+            
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-8 border-4 border-black p-4 bg-[#FBD000] shadow-[4px_4px_0_rgba(0,0,0,1)]">
+                <h2 class="text-xl font-bold text-black"><i class="fa-solid fa-gamepad mr-2"></i> GAME START!</h2>
+                <div class="px-4 py-2 bg-black text-white font-pixel text-lg mt-3 sm:mt-0 border-2 border-white">
+                    TIME LEFT: <span id="globalTimer" class="text-[#FBD000]">01:00</span>
+                </div>
+            </div>
+
+            <!-- 即時排行榜 -->
+            <div id="liveLeaderboard" class="hidden mb-8 nes-container bg-white p-5 fade-in">
+                <h3 class="text-xl font-bold text-black mb-4 flex items-center border-b-4 border-black pb-2">
+                    <i class="fa-solid fa-ranking-star text-[#E52521] mr-3 text-2xl"></i> 即時戰況
+                    <span class="text-sm font-normal text-white bg-black px-2 py-1 ml-4 border-2 border-black hidden sm:inline-block">優先比答對題數</span>
+                </h3>
+                <div id="liveLeaderboardList" class="flex flex-col sm:flex-row flex-wrap gap-4">
+                    <!-- 動態生成即時排名 -->
+                </div>
+            </div>
+
+            <!-- 同時競技的玩家網格區域 -->
+            <div id="gameBoard" class="w-full">
+                <!-- 玩家各自的版面會由 JS 動態生成在這裡 -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 結果彈出視窗 (Modal) -->
+    <div id="resultModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50 p-4">
+        <div class="nes-container bg-white max-w-lg w-full p-8 text-center" id="resultModalContent">
+            <div id="resultIcon" class="text-6xl mb-4"></div>
+            <h2 id="resultTitle" class="text-3xl font-black text-black mb-2"></h2>
+            
+            <!-- 新增：將原本遺漏的最高分顯示區塊加回結算視窗 -->
+            <div id="highScoreDisplay" class="mb-4 hidden">
+                <div class="inline-block bg-black text-[#FBD000] border-2 border-[#FBD000] px-4 py-2 font-pixel text-xs sm:text-sm shadow-[2px_2px_0_#E52521] transition-colors duration-300">
+                    <i class="fa-solid fa-crown text-[#FBD000]"></i> RECORD: <span id="recordHolderName" class="text-white">---</span> (<span id="recordScore">0</span> <i class="fa-solid fa-coins"></i>)
+                </div>
+            </div>
+
+            <!-- 排行榜容器 -->
+            <div id="leaderboardContainer" class="my-6">
+                <!-- 內容由 JS 生成 -->
+            </div>
+
+            <!-- 修改：讓重新開始按鈕更顯眼，並加上換人挑戰的提示 -->
+            <button onclick="backToSetup()" class="nes-btn btn-green w-full font-bold py-5 text-2xl mt-4 hover:bg-[#4dd052] transition-colors border-4 border-black shadow-[4px_4px_0_#000]">
+                <i class="fa-solid fa-rotate-right mr-2 fa-spin-hover"></i> 重新開始 / 換人挑戰
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 單字庫
+        const vocabulary = [
+            { id: 1, en: "Keyboard", zh: "鍵盤" },
+            { id: 2, en: "Mouse", zh: "滑鼠" },
+            { id: 3, en: "Monitor", zh: "螢幕" },
+            { id: 4, en: "Hardware", zh: "硬體" },
+            { id: 5, en: "Software", zh: "軟體" },
+            { id: 6, en: "Internet", zh: "網際網路" },
+            { id: 7, en: "Password", zh: "密碼" },
+            { id: 8, en: "Download", zh: "下載" },
+            { id: 9, en: "Browser", border: "瀏覽器" , zh: "瀏覽器"}, // 修正了原本拼字問題
+            { id: 10, en: "File", zh: "檔案" }
+        ];
+
+        // --- 遊戲音效與音軌 (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        const sounds = {
+            coin: () => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // B5 音高
+                osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.1); // E6 音高
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            },
+            bump: () => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }
+        };
+
+        // 遊戲狀態
+        let players = [];
+        let totalPlayers = 1;
+        let gameStartTime = 0;
+        let timerInterval = null;
+        const GAME_TIME_LIMIT = 60; // 1 分鐘時間限制
+
+        function initGame() {
+            document.getElementById('setupScreen').classList.remove('hidden');
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('liveLeaderboard').classList.add('hidden');
+            
+            // --- 新增：讀取並顯示大廳最高分 ---
+            const lobbyHighScoreEl = document.getElementById('lobbyHighScore');
+            const allTimeHighScore = parseInt(localStorage.getItem('superMatchHighScore')) || 0;
+            const allTimeHighScorer = localStorage.getItem('superMatchHighScorer') || '無';
+            
+            if (allTimeHighScore > 0) {
+                lobbyHighScoreEl.classList.remove('hidden');
+                document.getElementById('lobbyRecordName').textContent = allTimeHighScorer;
+                document.getElementById('lobbyRecordScore').textContent = allTimeHighScore;
+            } else {
+                lobbyHighScoreEl.classList.add('hidden');
+            }
+            // ---------------------------------
+
+            // 重置倒數計時器外觀
+            const globalEl = document.getElementById('globalTimer');
+            if (globalEl) {
+                globalEl.textContent = '01:00';
+                globalEl.classList.remove('text-[#E52521]', 'animate-pulse');
+                globalEl.classList.add('text-[#FBD000]');
+            }
+
+            if (timerInterval) clearInterval(timerInterval);
+            setPlayerCount(1);
+            hideMessage();
+        }
+
+        function setPlayerCount(count) {
+            totalPlayers = count;
+            const container = document.getElementById('nameInputsContainer');
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= count; i++) {
+                const inputDiv = document.createElement('div');
+                inputDiv.className = 'flex items-center gap-3 bg-[#e0f2fe] p-3 border-4 border-black box-shadow-[4px_4px_0_rgba(0,0,0,1)]';
+                inputDiv.innerHTML = `
+                    <span class="font-bold text-black w-16 text-right font-pixel text-xs">P${i}</span>
+                    <input type="text" id="playerName_${i}" placeholder="輸入名字..." class="w-full px-3 py-2 border-4 border-black focus:outline-none focus:bg-[#FBD000] font-bold text-lg" autocomplete="off">
+                `;
+                container.appendChild(inputDiv);
+            }
+            
+            container.classList.remove('hidden');
+            document.getElementById('startBtn').classList.remove('hidden');
+        }
+
+        function startGame() {
+            players = [];
+            for (let i = 1; i <= totalPlayers; i++) {
+                const nameInput = document.getElementById(`playerName_${i}`).value.trim();
+                if (!nameInput) {
+                    showMessage(`請輸入 P${i} 的名字！`, 'error');
+                    document.getElementById(`playerName_${i}`).focus();
+                    return;
+                }
+                players.push({
+                    index: i - 1,
+                    name: nameInput,
+                    unmatchedEn: shuffleArray([...vocabulary]),
+                    unmatchedZh: shuffleArray([...vocabulary]),
+                    selectedEnId: null,
+                    selectedZhId: null,
+                    timeElapsed: 0,
+                    isFinished: false,
+                    score: 0,
+                    correct: 0,
+                    coins: 0,
+                    combo: 0,
+                    lastMatchTime: 0,
+                    isStunned: false,
+                    // 新增：鍵盤游標狀態
+                    cursorSide: 'en',
+                    cursorIndex: 0
+                });
+            }
+            
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('liveLeaderboard').classList.add('hidden');
+            
+            gameStartTime = Date.now();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimers, 1000);
+            updateTimers(); // 立即更新一次初始畫面
+            
+            buildPlayerBoards();
+            players.forEach(p => renderPlayer(p.index));
+            hideMessage();
+        }
+
+        function updateTimers() {
+            const now = Date.now();
+            const globalElapsed = Math.floor((now - gameStartTime) / 1000);
+            const remaining = Math.max(0, GAME_TIME_LIMIT - globalElapsed);
+            
+            const globalEl = document.getElementById('globalTimer');
+            if (globalEl) {
+                globalEl.textContent = formatTime(remaining);
+                // 最後 10 秒閃爍紅字警告
+                if (remaining <= 10 && remaining > 0) {
+                    globalEl.classList.add('text-[#E52521]', 'animate-pulse');
+                    globalEl.classList.remove('text-[#FBD000]');
+                } else if (remaining > 10) {
+                    globalEl.classList.remove('text-[#E52521]', 'animate-pulse');
+                    globalEl.classList.add('text-[#FBD000]');
+                }
+            }
+
+            players.forEach(p => {
+                if (!p.isFinished) {
+                    p.timeElapsed = globalElapsed;
+                    const timeEl = document.getElementById(`timer-${p.index}`);
+                    if (timeEl) timeEl.textContent = formatTime(p.timeElapsed);
+                }
+            });
+
+            // 時間到，強制結束遊戲
+            if (remaining === 0) {
+                clearInterval(timerInterval);
+                players.forEach(p => {
+                    if (!p.isFinished) {
+                        p.isFinished = true;
+                        p.timeElapsed = GAME_TIME_LIMIT; // 記錄為最大時間
+                        renderPlayer(p.index);
+                    }
+                });
+                updateLiveLeaderboard();
+                setTimeout(() => {
+                    showResultModal();
+                }, 1000);
+            }
+        }
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = (sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        // 產生像素小人 SVG
+        function generatePixelAvatar(playerIndex) {
+            const palettes = [
+                { 1: '#E52521', 2: '#0043A6', 3: '#FFCC99', 4: '#3e2723', 5: '#FBD000' }, // 瑪利歐 (紅)
+                { 1: '#43B047', 2: '#0043A6', 3: '#FFCC99', 4: '#3e2723', 5: '#FBD000' }, // 路易吉 (綠)
+                { 1: '#FBD000', 2: '#6B21A8', 3: '#FFCC99', 4: '#3e2723', 5: '#FFFFFF' }, // 瓦利歐 (黃)
+                { 1: '#6B21A8', 2: '#111111', 3: '#FFCC99', 4: '#3e2723', 5: '#FBD000' }  // 瓦路易吉 (紫)
+            ];
+            const p = palettes[playerIndex % 4];
+            
+            // 12x16 經典像素矩陣 (1:帽子/衣服, 2:吊帶褲, 3:皮膚, 4:頭髮/鞋子, 5:鈕扣)
+            const sprite = [
+                "000111110000",
+                "001111111110",
+                "004443343000",
+                "043433433300",
+                "043443334440",
+                "044333300000",
+                "000333333300",
+                "001121110000",
+                "011121112111",
+                "111122221111",
+                "331252252133",
+                "333222222333",
+                "332222222233",
+                "002220022200",
+                "044400004440",
+                "444400004444"
+            ];
+
+            let svg = `<svg viewBox="0 0 12 16" class="w-full h-full" shape-rendering="crispEdges">`;
+            for(let y=0; y<16; y++) {
+                for(let x=0; x<12; x++) {
+                    const char = sprite[y][x];
+                    if (char !== '0') {
+                        svg += `<rect x="${x}" y="${y}" width="1" height="1" fill="${p[char]}" />`;
+                    }
+                }
+            }
+            svg += `</svg>`;
+            return svg;
+        }
+
+        function buildPlayerBoards() {
+            const gameBoard = document.getElementById('gameBoard');
+            let gridCols = 'grid-cols-1';
+            if (totalPlayers === 2) gridCols = 'grid-cols-1 md:grid-cols-2';
+            
+            gameBoard.className = `grid ${gridCols} gap-8 w-full`;
+            
+            gameBoard.innerHTML = players.map(p => {
+                return `
+                <div id="player-board-${p.index}" class="nes-container flex flex-col h-full fade-in p-4 bg-white relative">
+                    <!-- 玩家頭部資訊 (包含馬里奧小人與金幣數) -->
+                    <div class="flex justify-between items-center mb-4 border-b-4 border-black pb-3 bg-[#e0f2fe] p-2 -mx-4 -mt-4 mb-4">
+                        <div class="flex items-center gap-3 relative" id="mario-container-${p.index}">
+                            <!-- 馬里奧像素小人 -->
+                            <div class="w-10 h-12 drop-shadow-[2px_2px_0_rgba(0,0,0,1)] flex-shrink-0">
+                                ${generatePixelAvatar(p.index)}
+                            </div>
+                            <div class="flex flex-col">
+                                <h3 class="font-bold text-lg text-black truncate max-w-[100px]" title="${p.name}">${p.name}</h3>
+                                <div class="font-pixel text-[#E52521] text-sm mt-1">
+                                    <i class="fa-solid fa-coins text-[#FBD000] drop-shadow-[1px_1px_0_#000]"></i> 
+                                    x <span id="coin-count-${p.index}">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2 px-2">
+                            <button onclick="shufflePlayer(${p.index})" class="nes-btn bg-white px-2 py-1 text-sm hover:bg-gray-200" title="打亂單字">
+                                <i class="fa-solid fa-shuffle"></i>
+                            </button>
+                            <div id="timer-${p.index}" class="text-white bg-black font-pixel text-xs px-2 py-1 border-2 border-black">${formatTime(0)}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 內部遊戲區 -->
+                    <div id="player-content-${p.index}" class="flex-grow flex flex-col"></div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderPlayer(index) {
+            const p = players[index];
+            const container = document.getElementById(`player-content-${index}`);
+            const coinCountEl = document.getElementById(`coin-count-${index}`);
+            if (coinCountEl) coinCountEl.textContent = p.coins;
+
+            // 控制頭像是否暈眩
+            const avatarBox = document.querySelector(`#mario-container-${index} .flex-shrink-0`);
+            if (avatarBox) {
+                if (p.isStunned) avatarBox.classList.add('dizzy');
+                else avatarBox.classList.remove('dizzy');
+            }
+
+            if (!container) return;
+            
+            if (p.isFinished) {
+                // 判斷是提早過關還是被強制結束/時間到
+                const isClear = p.unmatchedEn.length === 0;
+                const finishTitle = isClear ? "STAGE CLEAR!" : "GAME OVER!";
+                const finishBg = isClear ? "bg-[#FBD000]" : "bg-gray-300";
+                const finishIcon = isClear ? "fa-flag-checkered" : "fa-gamepad";
+
+                container.innerHTML = `
+                    <div class="flex-grow flex flex-col items-center justify-center py-10 fade-in border-4 border-dashed border-black ${finishBg} mt-4 relative">
+                        <div class="mb-4 relative">
+                            <i class="fa-solid ${finishIcon} text-5xl text-black"></i>
+                        </div>
+                        <h4 class="text-2xl font-black text-black mb-2">${finishTitle}</h4>
+                        <div class="flex items-end gap-2 mb-4 font-pixel">
+                            <i class="fa-solid fa-coins text-[#E52521] text-3xl mr-2 drop-shadow-[2px_2px_0_#000]"></i>
+                            <span class="text-3xl text-[#E52521]">${p.coins}</span>
+                            <span class="text-black text-lg">COINS</span>
+                        </div>
+                        <p class="text-black font-bold text-lg"><i class="fa-regular fa-clock"></i> TIME: ${formatTime(p.timeElapsed)}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 若在暈眩狀態，顯示半透明遮罩
+            const stunOverlay = p.isStunned ? `
+                <div class="absolute inset-0 bg-black/60 z-20 flex flex-col items-center justify-center text-white backdrop-blur-sm -mx-4 -mb-4">
+                    <i class="fa-solid fa-certificate fa-spin text-5xl text-[#FBD000] mb-4"></i>
+                    <h4 class="font-pixel text-xl text-[#E52521] text-outline animate-pulse">STUNNED!</h4>
+                    <p class="font-bold mt-2">答錯懲罰：鎖定 2 秒</p>
+                </div>
+            ` : '';
+
+            // 確保游標不越界 (因陣列可能會縮短)
+            const maxEn = Math.max(0, p.unmatchedEn.length - 1);
+            const maxZh = Math.max(0, p.unmatchedZh.length - 1);
+            if (p.cursorSide === 'en' && p.cursorIndex > maxEn) p.cursorIndex = maxEn;
+            if (p.cursorSide === 'zh' && p.cursorIndex > maxZh) p.cursorIndex = maxZh;
+
+            const html = `
+                <!-- 中英文按鈕列表 -->
+                <div class="flex-grow relative overflow-hidden flex flex-col">
+                    ${stunOverlay}
+                    <div class="grid grid-cols-2 gap-4 flex-grow ${p.isStunned ? 'pointer-events-none opacity-50' : ''}">
+                        <!-- EN Column (紅色磚塊) -->
+                        <div class="flex flex-col gap-3">
+                            ${p.unmatchedEn.map((word, idx) => `
+                                <button onclick="handleEnClick(${index}, ${word.id})" 
+                                    class="text-center px-1 md:px-2 py-3 text-[14px] md:text-base font-bold nes-btn relative transition-transform
+                                    ${p.selectedEnId === word.id ? 'btn-yellow is-selected' : 'btn-red hover:bg-[#ff4b47]'}
+                                    ${p.cursorSide === 'en' && p.cursorIndex === idx ? 'ring-4 ring-black ring-inset scale-105 z-10 bg-[#ff4b47]' : ''}">
+                                    ${p.cursorSide === 'en' && p.cursorIndex === idx ? '<i class="fa-solid fa-hand-pointer text-[#FBD000] drop-shadow-[1px_1px_0_#000] animate-pulse mr-1"></i>' : ''}
+                                    ${word.en}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <!-- ZH Column (藍色水管色/磚塊) -->
+                        <div class="flex flex-col gap-3">
+                            ${p.unmatchedZh.map((word, idx) => `
+                                <button onclick="handleZhClick(${index}, ${word.id})" 
+                                    class="text-center px-1 md:px-2 py-3 text-[14px] md:text-base font-bold nes-btn relative transition-transform
+                                    ${p.selectedZhId === word.id ? 'btn-yellow is-selected' : 'btn-blue hover:bg-[#20b4ec]'}
+                                    ${p.cursorSide === 'zh' && p.cursorIndex === idx ? 'ring-4 ring-black ring-inset scale-105 z-10 bg-[#20b4ec]' : ''}">
+                                    ${p.cursorSide === 'zh' && p.cursorIndex === idx ? '<i class="fa-solid fa-hand-pointer text-[#FBD000] drop-shadow-[1px_1px_0_#000] animate-pulse mr-1"></i>' : ''}
+                                    ${word.zh}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function shufflePlayer(index) {
+            const p = players[index];
+            if (p.isFinished || p.isStunned) return; // 暈眩時禁止打亂
+            p.unmatchedEn = shuffleArray([...p.unmatchedEn]);
+            p.unmatchedZh = shuffleArray([...p.unmatchedZh]);
+            p.selectedEnId = null;
+            p.selectedZhId = null;
+            renderPlayer(index);
+        }
+
+        function handleEnClick(pIndex, id) {
+            hideMessage();
+            const p = players[pIndex];
+            if (p.isStunned || p.isFinished) return; // 暈眩時禁止點擊
+            if (p.selectedEnId === id) p.selectedEnId = null;
+            else {
+                p.selectedEnId = id;
+                if (p.selectedZhId !== null) createPair(pIndex);
+            }
+            renderPlayer(pIndex);
+        }
+
+        function handleZhClick(pIndex, id) {
+            hideMessage();
+            const p = players[pIndex];
+            if (p.isStunned || p.isFinished) return; // 暈眩時禁止點擊
+            if (p.selectedZhId === id) p.selectedZhId = null;
+            else {
+                p.selectedZhId = id;
+                if (p.selectedEnId !== null) createPair(pIndex);
+            }
+            renderPlayer(pIndex);
+        }
+
+        function createPair(pIndex, isAuto = false) {
+            const p = players[pIndex];
+            const enId = p.selectedEnId;
+            const zhId = p.selectedZhId;
+            const board = document.getElementById(`player-board-${pIndex}`);
+            
+            if (enId === zhId) {
+                // 配對成功！
+                sounds.coin(); // 播放金幣音效
+                
+                const now = Date.now();
+                // 檢查是否在 3 秒內達成連擊
+                if (p.lastMatchTime > 0 && (now - p.lastMatchTime) <= 3000) {
+                    p.combo++;
+                } else {
+                    p.combo = 1;
+                }
+                p.lastMatchTime = now;
+                
+                const earnedCoins = p.combo;
+                p.coins += earnedCoins; // 根據 Combo 數量獲得金幣
+                p.correct++;
+                
+                // 從未配對清單中移除
+                p.unmatchedEn = p.unmatchedEn.filter(w => w.id !== enId);
+                p.unmatchedZh = p.unmatchedZh.filter(w => w.id !== zhId);
+                
+                // 清除選取狀態
+                p.selectedEnId = null;
+                p.selectedZhId = null;
+                
+                // 觸發金幣特效與 Combo 特效
+                showCoinAnimation(pIndex, earnedCoins, p.combo);
+                
+                // 觸發隨機道具 (自動配對時不觸發，避免無限迴圈)
+                if (!isAuto) {
+                    triggerRandomItem(pIndex);
+                }
+                
+                // 檢查是否全部完成
+                if (p.unmatchedEn.length === 0) {
+                    p.isFinished = true;
+                    p.timeElapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+                }
+                
+                renderPlayer(pIndex);
+                updateLiveLeaderboard();
+                checkAllFinished();
+            } else {
+                // 配對失敗！震動 + 暈眩懲罰
+                sounds.bump(); // 播放撞牆音效
+                
+                if (p.combo > 1) {
+                    showComboBreak(pIndex);
+                }
+                p.combo = 0; // 重置連擊
+                
+                if (board) {
+                    board.classList.remove('shake');
+                    void board.offsetWidth; // 觸發重繪
+                    board.classList.add('shake');
+                }
+                
+                // 清除選取狀態
+                p.selectedEnId = null;
+                p.selectedZhId = null;
+
+                // 觸發 2 秒暈眩
+                p.isStunned = true;
+                renderPlayer(pIndex);
+                
+                setTimeout(() => {
+                    if (!p.isFinished) {
+                        p.isStunned = false;
+                        renderPlayer(pIndex);
+                    }
+                }, 2000);
+            }
+        }
+
+        function showCoinAnimation(pIndex, coinsEarned, currentCombo) {
+            const container = document.getElementById(`mario-container-${pIndex}`);
+            if (!container) return;
+            
+            const coin = document.createElement('div');
+            coin.className = 'coin-float';
+            coin.innerHTML = `+${coinsEarned} <i class="fa-solid fa-coins"></i>`;
+            coin.style.left = '40px';
+            coin.style.top = '-10px';
+            container.appendChild(coin);
+            setTimeout(() => coin.remove(), 800);
+
+            // 若有 Combo 則顯示額外提示
+            if (currentCombo > 1) {
+                const comboEl = document.createElement('div');
+                comboEl.className = 'combo-text';
+                comboEl.innerHTML = `COMBO x${currentCombo}!`;
+                comboEl.style.left = '60px';
+                comboEl.style.top = '10px';
+                container.appendChild(comboEl);
+                setTimeout(() => comboEl.remove(), 1000);
+            }
+        }
+
+        function showComboBreak(pIndex) {
+            const container = document.getElementById(`mario-container-${pIndex}`);
+            if (!container) return;
+            
+            const breakEl = document.createElement('div');
+            breakEl.className = 'combo-text';
+            breakEl.style.color = '#E52521'; // 變成紅色警告字
+            breakEl.innerHTML = `COMBO BREAK!`;
+            breakEl.style.left = '50px';
+            breakEl.style.top = '10px';
+            container.appendChild(breakEl);
+            setTimeout(() => breakEl.remove(), 1000);
+        }
+
+        // --- 新增：隨機道具觸發函式 ---
+        function triggerRandomItem(pIndex) {
+            // 25% 機率觸發
+            if (Math.random() > 0.25) return;
+            
+            const p = players[pIndex];
+            const items = ['star', 'ice', 'ghost'];
+            const item = items[Math.floor(Math.random() * items.length)];
+            
+            if (item === 'star') {
+                showMessage(`${p.name} 獲得無敵星⭐！金幣 +5！`, 'success');
+                p.coins += 5;
+            } else if (item === 'ice') {
+                showMessage(`${p.name} 觸發冰凍花❄️！(尚未實作對手冰凍)`, 'success');
+            } else if (item === 'ghost') {
+                showMessage(`${p.name} 遇到搗蛋鬼👻！(尚未實作畫面干擾)`, 'error');
+            }
+        }
+
+        function updateLiveLeaderboard() {
+            const container = document.getElementById('liveLeaderboard');
+            const listContainer = document.getElementById('liveLeaderboardList');
+            const finishedPlayers = players.filter(p => p.isFinished);
+
+            if (finishedPlayers.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            const sorted = [...finishedPlayers].sort((a, b) => {
+                // 改為比拚金幣數量
+                if (b.coins !== a.coins) return b.coins - a.coins;
+                return a.timeElapsed - b.timeElapsed;
+            });
+
+            let htmlStr = '';
+            sorted.forEach((p, idx) => {
+                let rankStyle = "bg-white text-black";
+                let icon = `<span class="font-pixel text-sm mr-2 w-6 inline-block">#${idx + 1}</span>`;
+                
+                if (idx === 0) {
+                    rankStyle = "bg-[#FBD000] text-black";
+                    icon = `<i class="fa-solid fa-crown text-black mr-2 text-xl"></i>`;
+                }
+
+                htmlStr += `
+                    <div class="flex items-center border-4 border-black px-4 py-2 ${rankStyle} shadow-[4px_4px_0_#000]">
+                        ${icon}
+                        <span class="font-bold text-lg mr-4">${p.name}</span>
+                        <span class="font-pixel text-[#E52521] text-lg mr-4">
+                            <i class="fa-solid fa-coins text-[#FBD000] drop-shadow-[1px_1px_0_#000]"></i> ${p.coins}
+                        </span>
+                        <span class="text-sm font-pixel text-black bg-white px-2 py-1 border-2 border-black">
+                            ${formatTime(p.timeElapsed)}
+                        </span>
+                    </div>
+                `;
+            });
+
+            listContainer.innerHTML = htmlStr;
+        }
+
+        function checkAllFinished() {
+            // 修改：只要有任何人率先完成所有配對，就立刻結束全局遊戲
+            if (players.some(p => p.unmatchedEn.length === 0)) {
+                clearInterval(timerInterval);
+                
+                const finalTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                
+                // 強制結束其他未完成玩家的遊戲狀態，並保留他們當前的金幣數
+                players.forEach(p => {
+                    if (!p.isFinished) {
+                        p.isFinished = true;
+                        p.timeElapsed = finalTime;
+                        renderPlayer(p.index);
+                    }
+                });
+                
+                // 確保所有人都在即時排行榜上更新
+                updateLiveLeaderboard();
+                
+                setTimeout(() => {
+                    showResultModal();
+                }, 800);
+            }
+        }
+
+        function showResultModal() {
+            const modal = document.getElementById('resultModal');
+            const iconEl = document.getElementById('resultIcon');
+            const titleEl = document.getElementById('resultTitle');
+            const leaderboardContainer = document.getElementById('leaderboardContainer');
+
+            // 結算一樣依據金幣數量多寡進行排名
+            players.sort((a, b) => {
+                if (b.coins !== a.coins) return b.coins - a.coins;
+                return a.timeElapsed - b.timeElapsed;
+            });
+
+            // --- 新增：歷史最高分 (All-Time High Score) 邏輯 ---
+            let allTimeHighScore = parseInt(localStorage.getItem('superMatchHighScore')) || 0;
+            let allTimeHighScorer = localStorage.getItem('superMatchHighScorer') || '無';
+            let isNewRecord = false;
+
+            // 檢查第一名是否有打破紀錄 (分數需大於 0)
+            if (players.length > 0 && players[0].coins > 0 && players[0].coins > allTimeHighScore) {
+                allTimeHighScore = players[0].coins;
+                allTimeHighScorer = players[0].name;
+                // 儲存至瀏覽器本地端
+                localStorage.setItem('superMatchHighScore', allTimeHighScore);
+                localStorage.setItem('superMatchHighScorer', allTimeHighScorer);
+                isNewRecord = true;
+            }
+
+            const highScoreDisplay = document.getElementById('highScoreDisplay');
+            const recordHolderName = document.getElementById('recordHolderName');
+            const recordScore = document.getElementById('recordScore');
+            const recordBadge = highScoreDisplay.querySelector('div');
+            
+            if (allTimeHighScore > 0) {
+                highScoreDisplay.classList.remove('hidden');
+                recordScore.textContent = allTimeHighScore;
+                
+                // 如果是新紀錄，給予紅色背景與 NEW! 動畫提示
+                if (isNewRecord) {
+                    recordBadge.classList.add('animate-pulse', 'bg-[#E52521]');
+                    recordBadge.classList.remove('bg-black');
+                    recordHolderName.innerHTML = `${allTimeHighScorer} <span class="text-[#FBD000] text-[10px] ml-1 inline-block animate-bounce">NEW!</span>`;
+                } else {
+                    recordBadge.classList.remove('animate-pulse', 'bg-[#E52521]');
+                    recordBadge.classList.add('bg-black');
+                    recordHolderName.textContent = allTimeHighScorer;
+                }
+            } else {
+                highScoreDisplay.classList.add('hidden');
+            }
+            // ------------------------------------------------
+
+            if (totalPlayers === 1) {
+                titleEl.innerHTML = '<span class="text-outline text-white font-pixel">STAGE CLEAR!</span>';
+                iconEl.innerHTML = '<i class="fa-solid fa-star text-[#FBD000] drop-shadow-[4px_4px_0_rgba(0,0,0,1)]"></i>';
+            } else {
+                titleEl.innerHTML = '<span class="text-outline text-white font-pixel">RANKING</span>';
+                iconEl.innerHTML = '<i class="fa-solid fa-trophy text-[#FBD000] drop-shadow-[4px_4px_0_rgba(0,0,0,1)]"></i>';
+            }
+
+            let htmlStr = '<div class="flex flex-col gap-4">';
+            players.forEach((p, idx) => {
+                let rankBg = "bg-white";
+                let rankNumClass = "bg-black text-white";
+                if (idx === 0) { rankBg = "bg-[#FBD000]"; rankNumClass = "bg-[#E52521] text-white"; }
+                else if (idx === 1 && totalPlayers > 1) { rankBg = "bg-gray-200"; }
+                
+                htmlStr += `
+                    <div class="flex items-center justify-between p-4 border-4 border-black shadow-[4px_4px_0_#000] ${rankBg}">
+                        <div class="flex items-center gap-4">
+                            ${totalPlayers > 1 ? `<div class="w-12 h-12 flex items-center justify-center font-pixel text-lg border-4 border-black ${rankNumClass}">${idx + 1}</div>` : ''}
+                            <div class="text-left">
+                                <div class="text-xl font-bold text-black">${p.name}</div>
+                                <div class="text-sm text-black mt-1 font-pixel text-xs">TIME ${formatTime(p.timeElapsed)}</div>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <div class="text-2xl font-pixel text-[#E52521]">
+                                <i class="fa-solid fa-coins text-[#FBD000] drop-shadow-[1px_1px_0_#000]"></i> ${p.coins}
+                            </div>
+                            <div class="text-xs text-black mt-1 font-bold">COINS</div>
+                        </div>
+                    </div>
+                `;
+            });
+            htmlStr += '</div>';
+
+            leaderboardContainer.innerHTML = htmlStr;
+            modal.classList.remove('hidden');
+        }
+
+        function backToSetup() {
+            const modal = document.getElementById('resultModal');
+            modal.classList.add('hidden');
+            initGame();
+        }
+
+        let messageTimeout;
+        function showMessage(text, type) {
+            const box = document.getElementById('messageBox');
+            box.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-2"></i> ${text}`;
+            
+            if (type === 'error') {
+                box.className = 'mb-6 p-4 border-4 border-black text-center font-bold text-lg bg-[#E52521] text-white shadow-[4px_4px_0_rgba(0,0,0,1)] fade-in block';
+            } else {
+                box.className = 'mb-6 p-4 border-4 border-black text-center font-bold text-lg bg-[#FBD000] text-black shadow-[4px_4px_0_rgba(0,0,0,1)] fade-in block';
+            }
+            
+            clearTimeout(messageTimeout);
+            messageTimeout = setTimeout(() => {
+                hideMessage();
+            }, 3000);
+        }
+
+        function hideMessage() {
+            const box = document.getElementById('messageBox');
+            box.classList.add('hidden');
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // --- 鍵盤操控系統 ---
+        document.addEventListener('keydown', (e) => {
+            // 如果不在遊戲畫面中，不處理鍵盤事件
+            if (document.getElementById('gameScreen').classList.contains('hidden')) return;
+            
+            const key = e.key.toLowerCase();
+            
+            // 按鍵對應表：設定玩家(p)與動作(act)
+            const mapping = {
+                'w': { p: 0, act: 'up' }, 's': { p: 0, act: 'down' }, 'a': { p: 0, act: 'left' }, 'd': { p: 0, act: 'right' }, ' ': { p: 0, act: 'sel' },
+                'arrowup': { p: 1, act: 'up' }, 'arrowdown': { p: 1, act: 'down' }, 'arrowleft': { p: 1, act: 'left' }, 'arrowright': { p: 1, act: 'right' }, 'enter': { p: 1, act: 'sel' },
+                'i': { p: 2, act: 'up' }, 'k': { p: 2, act: 'down' }, 'j': { p: 2, act: 'left' }, 'l': { p: 2, act: 'right' }, 'h': { p: 2, act: 'sel' },
+                '8': { p: 3, act: 'up' }, '5': { p: 3, act: 'down' }, '4': { p: 3, act: 'left' }, '6': { p: 3, act: 'right' }, '0': { p: 3, act: 'sel' }
+            };
+
+            const cmd = mapping[key];
+            if (!cmd) return;
+
+            // 阻止方向鍵與空白鍵的預設網頁捲動行為
+            if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                e.preventDefault();
+            }
+
+            if (cmd.p >= totalPlayers) return; // 該玩家未加入
+            
+            const p = players[cmd.p];
+            if (p.isStunned || p.isFinished) return; // 狀態鎖定時無效
+
+            const maxEn = Math.max(0, p.unmatchedEn.length - 1);
+            const maxZh = Math.max(0, p.unmatchedZh.length - 1);
+
+            // 執行游標移動與點擊
+            if (cmd.act === 'up') {
+                if (p.cursorIndex > 0) p.cursorIndex--;
+            } else if (cmd.act === 'down') {
+                const max = p.cursorSide === 'en' ? maxEn : maxZh;
+                if (p.cursorIndex < max) p.cursorIndex++;
+            } else if (cmd.act === 'left') {
+                if (p.cursorSide === 'zh') {
+                    p.cursorSide = 'en';
+                    if (p.cursorIndex > maxEn) p.cursorIndex = maxEn;
+                }
+            } else if (cmd.act === 'right') {
+                if (p.cursorSide === 'en') {
+                    p.cursorSide = 'zh';
+                    if (p.cursorIndex > maxZh) p.cursorIndex = maxZh;
+                }
+            } else if (cmd.act === 'sel') {
+                if (p.cursorSide === 'en' && p.unmatchedEn.length > 0) {
+                    handleEnClick(cmd.p, p.unmatchedEn[p.cursorIndex].id);
+                } else if (p.cursorSide === 'zh' && p.unmatchedZh.length > 0) {
+                    handleZhClick(cmd.p, p.unmatchedZh[p.cursorIndex].id);
+                }
+                return; // 點擊函式內已經包含了 renderPlayer
+            }
+            
+            renderPlayer(cmd.p); // 重新渲染游標位置
+        });
+
+        window.onload = initGame;
+
+    </script>
+</body>
+</html>

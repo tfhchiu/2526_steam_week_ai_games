@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AK47 靶场射击</title>
+    <!-- 引入 Three.js 及其 PointerLockControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* UI 遮罩层 */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 让鼠标事件穿透到 Canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        /* 准星 */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: #00ff00;
+        }
+        #crosshair::before {
+            top: 9px; left: 0; width: 20px; height: 2px;
+        }
+        #crosshair::after {
+            top: 0; left: 9px; width: 2px; height: 20px;
+        }
+        
+        /* 顶部信息栏 */
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .score-positive { color: #00ff00; }
+        .score-negative { color: #ff3333; }
+
+        /* 菜单面板 (开始/结束) */
+        #menu-panel {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto; /* 菜单需要拦截点击 */
+            color: white;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #ffaa00;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.5;
+        }
+        .controls-hint {
+            color: #aaa;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #d32f2f;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:hover { background-color: #f44336; transform: scale(1.05); }
+        button:active { transform: scale(0.95); }
+
+        /* 隐藏元素 */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="game-canvas"></div>
+
+<div id="ui-layer">
+    <div id="hud" class="hidden">
+        <div>得分: <span id="score-val">0</span> <br><span style="font-size:16px; color:#aaa;">最高: <span id="best-val">0</span></span></div>
+        <div id="crosshair"></div>
+        <div>時間: <span id="time-val">60</span>s</div>
+    </div>
+</div>
+
+<div id="menu-panel">
+    <h1 id="menu-title">AK-47 靶場模擬</h1>
+    <p id="menu-desc">限時 1 分鐘。擊中目標球最高加 200 分（球越小分數越高），未擊中（空槍）扣 20 分。看看你的槍法如何！</p>
+    
+    <!-- 新增靈敏度調節 -->
+    <div style="margin-bottom: 20px; font-size: 18px;">
+        <label for="sens-slider" style="cursor: pointer;">滑鼠靈敏度: <span id="sens-val">1.0000</span></label><br>
+        <input type="range" id="sens-slider" min="0.0001" max="3.0" step="0.0001" value="1.0" style="width: 200px; margin-top: 10px; cursor: pointer;">
+    </div>
+
+    <div id="final-score-display" class="hidden" style="font-size: 32px; margin-bottom: 20px;">
+        最終得分: <span id="end-score" style="color: #00ff00;">0</span>
+    </div>
+    <button id="start-btn">點擊開始 (鎖定滑鼠)</button>
+    <p class="controls-hint">操作說明：滑鼠移動瞄準 | 滑鼠左鍵射擊 | ESC 解除鎖定</p>
+</div>
+
+<script>
+    // --- 游戏核心变量 ---
+    let camera, scene, renderer, controls;
+    let targets = [];
+    let raycaster = new THREE.Raycaster();
+    
+    // 枪械相关
+    let gunGroup;
+    let isRecoiling = false;
+    let recoilProgress = 0;
+    
+    // 游戏状态
+    let score = 0;
+    let timeLeft = 60;
+    let bestScore = localStorage.getItem('ak47_highscore') || 0;
+    let gameInterval;
+    let isPlaying = false;
+    
+    // DOM 元素
+    const scoreEl = document.getElementById('score-val');
+    const bestEl = document.getElementById('best-val');
+    const timeEl = document.getElementById('time-val');
+    const menuPanel = document.getElementById('menu-panel');
+    const hud = document.getElementById('hud');
+    const startBtn = document.getElementById('start-btn');
+    const menuTitle = document.getElementById('menu-title');
+    const menuDesc = document.getElementById('menu-desc');
+    const finalScoreDisplay = document.getElementById('final-score-display');
+    const endScoreEl = document.getElementById('end-score');
+    
+    // 靈敏度控制元素
+    const sensSlider = document.getElementById('sens-slider');
+    const sensVal = document.getElementById('sens-val');
+
+    sensSlider.addEventListener('input', (e) => {
+        sensVal.innerText = e.target.value;
+        if (controls) {
+            controls.pointerSpeed = parseFloat(e.target.value);
+        }
+    });
+    
+    // 初始化最高分显示
+    bestEl.innerText = bestScore;
+
+    // --- 音效合成 (Web Audio API) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new AudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    // 合成开火音效 (白噪声衰减)
+    function playShootSound() {
+        if (!audioCtx) return;
+        const bufferSize = audioCtx.sampleRate * 0.2; // 0.2秒
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        const noiseSource = audioCtx.createBufferSource();
+        noiseSource.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3000, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        
+        noiseSource.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        noiseSource.start();
+    }
+
+    // 合成击中音效 (清脆的高频音)
+    function playHitSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1800, audioCtx.currentTime + 0.1);
+        
+        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    // --- Three.js 初始化 ---
+    function init() {
+        const container = document.getElementById('game-canvas');
+        
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x001133); // 深藍色
+        scene.fog = new THREE.Fog(0x001133, 10, 50);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // 灯光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 50, 20);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // 地面 (网格样式)
+    const gridHelper = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
+    scene.add(gridHelper);
+    
+    const floorGeo = new THREE.PlaneGeometry(100, 100);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    floor.position.y = -0.01; // 防止和网格深度冲突
+    scene.add(floor);
+
+    // 控制器
+    controls = new THREE.PointerLockControls(camera, document.body);
+    // 應用初始靈敏度
+    controls.pointerSpeed = parseFloat(sensSlider.value);
+    scene.add(controls.getObject());
+    // 设置玩家初始高度
+    controls.getObject().position.y = 1.6;
+
+    // 生成 AK47 武器模型
+        createAK47();
+
+        // 事件监听
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('mousedown', onMouseClick, false);
+        
+        controls.addEventListener('lock', function () {
+            menuPanel.classList.add('hidden');
+            hud.classList.remove('hidden');
+            if (!isPlaying) startGame();
+        });
+
+        controls.addEventListener('unlock', function () {
+            if (isPlaying) {
+                // 暂停游戏或者强制结束，这里做强制结束以便逻辑简单
+                endGame();
+            }
+        });
+
+        startBtn.addEventListener('click', function () {
+            initAudio(); // 初始化音频上下文必须在用户手势内
+            controls.lock();
+        });
+
+        animate();
+    }
+
+    // 使用基础几何体“搭建”一把 AK-47
+    function createAK47() {
+        gunGroup = new THREE.Group();
+        
+        // 材质
+        const darkMetal = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.8 });
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9, metalness: 0.1 });
+        
+        // 1. 机匣 (Body)
+        const bodyGeo = new THREE.BoxGeometry(0.04, 0.08, 0.3);
+        const body = new THREE.Mesh(bodyGeo, darkMetal);
+        gunGroup.add(body);
+
+        // 2. 枪管 (Barrel)
+        const barrelGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.4, 16);
+        const barrel = new THREE.Mesh(barrelGeo, darkMetal);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.01, -0.35);
+        gunGroup.add(barrel);
+
+        // 3. 导气管 (Gas tube - 枪管上方细管)
+        const gasTubeGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.2, 8);
+        const gasTube = new THREE.Mesh(gasTubeGeo, darkMetal);
+        gasTube.rotation.x = Math.PI / 2;
+        gasTube.position.set(0, 0.03, -0.25);
+        gunGroup.add(gasTube);
+
+        // 4. 护木 (Handguard - 枪管中段木质部分)
+        const handguardGeo = new THREE.BoxGeometry(0.05, 0.05, 0.15);
+        const handguard = new THREE.Mesh(handguardGeo, woodMat);
+        handguard.position.set(0, 0.01, -0.25);
+        gunGroup.add(handguard);
+
+        // 5. 枪托 (Stock - 后部木质部分)
+        const stockGeo = new THREE.BoxGeometry(0.04, 0.1, 0.25);
+        const stock = new THREE.Mesh(stockGeo, woodMat);
+        // 使枪托向下倾斜一点
+        stock.geometry.translate(0, -0.02, 0.125);
+        stock.rotation.x = -0.1;
+        stock.position.set(0, -0.01, 0.15);
+        gunGroup.add(stock);
+
+        // 6. 握把 (Grip)
+        const gripGeo = new THREE.BoxGeometry(0.03, 0.08, 0.04);
+        const grip = new THREE.Mesh(gripGeo, woodMat);
+        grip.rotation.x = -0.2;
+        grip.position.set(0, -0.06, 0.05);
+        gunGroup.add(grip);
+
+        // 7. 弹匣 (Magazine - 标志性的弯曲)
+        // 用一个简单的梯形盒子模拟弯曲
+        const magGeo = new THREE.BoxGeometry(0.03, 0.15, 0.08);
+        const mag = new THREE.Mesh(magGeo, darkMetal);
+        mag.geometry.translate(0, -0.075, 0);
+        mag.rotation.x = 0.3; // 向前倾斜
+        mag.position.set(0, -0.04, -0.05);
+        gunGroup.add(mag);
+
+        // 8. 准星和照门 (Sights)
+        const sightFrontGeo = new THREE.BoxGeometry(0.01, 0.03, 0.01);
+        const sightFront = new THREE.Mesh(sightFrontGeo, darkMetal);
+        sightFront.position.set(0, 0.03, -0.5);
+        gunGroup.add(sightFront);
+        
+        const sightBackGeo = new THREE.BoxGeometry(0.02, 0.02, 0.01);
+        const sightBack = new THREE.Mesh(sightBackGeo, darkMetal);
+        sightBack.position.set(0, 0.05, -0.1);
+        gunGroup.add(sightBack);
+
+        // 将组附加到相机，并调整位置到右下方
+        gunGroup.position.set(0.15, -0.15, -0.3);
+        camera.add(gunGroup);
+    }
+
+    // --- 游戏逻辑 ---
+    function spawnTarget() {
+        const radius = Math.random() * 0.4 + 0.2; // 半徑 0.2 到 0.6
+        const geometry = new THREE.SphereGeometry(radius, 32, 32);
+        
+        // 根據大小計算分數 (越小分數越高，最高 200，最低 50)
+        const targetScore = Math.round(200 - ((radius - 0.2) / 0.4) * 150);
+        
+        // 統一改為紅色材質並發光
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0xff0000, // 純紅色
+            emissive: 0x660000, // 暗紅色自發光
+            roughness: 0.2
+        });
+        
+        const sphere = new THREE.Mesh(geometry, material);
+        
+        let validPosition = false;
+        let attempts = 0;
+        
+        // 防止重疊的邏輯 (最多嘗試 50 次找空位)
+        while (!validPosition && attempts < 50) {
+            // 隨機生成在玩家前方一定範圍內 (距離拉近)
+            // X: -10 到 10, Y: 1 到 5, Z: -5 到 -15 (負Z是前方)
+            sphere.position.x = (Math.random() - 0.5) * 20;
+            sphere.position.y = Math.random() * 4 + 1;
+            sphere.position.z = -(Math.random() * 10 + 5);
+            
+            validPosition = true;
+            // 檢查新生成的位置是否與現有的目標重疊
+            for (let i = 0; i < targets.length; i++) {
+                const otherTarget = targets[i];
+                const distance = sphere.position.distanceTo(otherTarget.position);
+                const otherRadius = otherTarget.geometry.parameters.radius;
+                // 如果兩球距離小於它們的半徑之和加上安全距離(0.1)，則視為重疊
+                if (distance < (radius + otherRadius + 0.1)) {
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        // 記錄該目標的分數
+        sphere.userData = {
+            points: targetScore
+        };
+
+        scene.add(sphere);
+        targets.push(sphere);
+    }
+
+    function clearTargets() {
+        targets.forEach(t => scene.remove(t));
+        targets = [];
+    }
+
+    function updateScore(amount) {
+        score += amount;
+        scoreEl.innerText = score;
+        
+        // 简单的UI动效
+        scoreEl.className = amount > 0 ? 'score-positive' : 'score-negative';
+        scoreEl.style.transform = 'scale(1.5)';
+        setTimeout(() => {
+            scoreEl.style.transform = 'scale(1)';
+            scoreEl.className = '';
+        }, 200);
+    }
+
+    function onMouseClick() {
+        if (!controls.isLocked || !isPlaying) return;
+
+        // 播放开火音效和后坐力动画
+        playShootSound();
+        isRecoiling = true;
+        recoilProgress = 0;
+
+        // 射线检测射击
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); // 屏幕正中央
+        const intersects = raycaster.intersectObjects(targets);
+
+        if (intersects.length > 0) {
+            // 命中！
+            playHitSound();
+            const hitObj = intersects[0].object;
+            const pointsEarned = hitObj.userData.points || 100;
+            
+            // 生成命中粒子效果（简单的缩放爆炸动画处理，避免大量创建粒子）
+            let scale = 1;
+            const explode = setInterval(() => {
+                scale += 0.2;
+                hitObj.scale.set(scale, scale, scale);
+                hitObj.material.opacity -= 0.1;
+                hitObj.material.transparent = true;
+                if(scale > 2) {
+                    clearInterval(explode);
+                    scene.remove(hitObj);
+                }
+            }, 16);
+
+            // 从目标数组移除
+            targets.splice(targets.indexOf(hitObj), 1);
+            
+            updateScore(pointsEarned);
+            
+            // 补充新目标
+            spawnTarget();
+        } else {
+            // 放空枪
+            updateScore(-20);
+        }
+    }
+
+    function startGame() {
+        score = 0;
+        timeLeft = 60;
+        scoreEl.innerText = score;
+        timeEl.innerText = timeLeft;
+        scoreEl.style.color = 'white';
+        
+        clearTargets();
+        
+        // 初始生成 10 个目标
+        for(let i=0; i<10; i++){
+            spawnTarget();
+        }
+
+        isPlaying = true;
+        
+        // 倒计时器
+        clearInterval(gameInterval);
+        gameInterval = setInterval(() => {
+            timeLeft--;
+            timeEl.innerText = timeLeft;
+            if (timeLeft <= 5) timeEl.style.color = '#ff3333'; // 倒计时警告色
+            else timeEl.style.color = 'white';
+
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }, 1000);
+    }
+
+    function endGame() {
+        isPlaying = false;
+        clearInterval(gameInterval);
+        controls.unlock(); // 解锁鼠标，呼出菜单
+        
+        // 更新最高分
+        if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('ak47_highscore', bestScore);
+            bestEl.innerText = bestScore;
+        }
+
+        // 切换 UI
+        hud.classList.add('hidden');
+        menuPanel.classList.remove('hidden');
+        menuTitle.innerText = "時間到！";
+        menuDesc.innerText = "";
+        finalScoreDisplay.classList.remove('hidden');
+        endScoreEl.innerText = score;
+        
+        startBtn.innerText = "再次挑戰";
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // 靜止靶子：已移除目標球上下浮動動畫
+
+        // 枪支后坐力动画
+        if (isRecoiling) {
+            recoilProgress += 0.1; // 速度
+            if (recoilProgress <= 0.5) {
+                // 向后坐起
+                const p = recoilProgress * 2; // 0 -> 1
+                gunGroup.position.z = -0.3 + p * 0.05;  // 往后移
+                gunGroup.rotation.x = p * 0.08;         // 枪口上扬
+            } else if (recoilProgress <= 1.0) {
+                // 恢复
+                const p = (recoilProgress - 0.5) * 2; // 0 -> 1
+                gunGroup.position.z = -0.25 - p * 0.05; // 往前恢复
+                gunGroup.rotation.x = 0.08 - p * 0.08;  // 枪口下压
+            } else {
+                isRecoiling = false;
+                gunGroup.position.z = -0.3;
+                gunGroup.rotation.x = 0;
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    // 启动初始化
+    init();
+
+</script>
+</body>
+</html>

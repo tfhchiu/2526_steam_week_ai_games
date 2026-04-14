@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D 森林狩獵</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* 天空藍預設背景 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        /* 準心 */
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 0, 0, 0.8);
+        }
+        .crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        .crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+        
+        /* 開始與結束畫面 */
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            z-index: 50;
+        }
+        .hidden { display: none !important; }
+
+        /* 手機端射擊按鈕 */
+        #shootBtnMobile {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 60, 60, 0.5);
+            border: 4px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            pointer-events: auto;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            user-select: none;
+        }
+        .flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 0, 0.3);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 遊戲畫布 -->
+    <div id="canvas-container"></div>
+
+    <!-- 射擊閃爍特效 -->
+    <div id="screenFlash" class="flash"></div>
+
+    <!-- UI 介面層 -->
+    <div id="ui-layer">
+        <!-- 頂部資訊 -->
+        <div class="flex justify-between items-start p-4 md:p-6 w-full max-w-5xl mx-auto">
+            <div class="bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2 text-white font-bold text-xl border-l-4 border-orange-500">
+                分數: <span id="scoreDisplay" class="text-orange-400 text-2xl">0</span>
+            </div>
+            <div class="bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2 text-white font-bold text-xl border-l-4 border-blue-500">
+                時間: <span id="timeDisplay" class="text-blue-400 text-2xl">60</span>s
+            </div>
+        </div>
+
+        <!-- 準心 -->
+        <div class="crosshair"></div>
+    </div>
+
+    <!-- 手機端射擊按鈕 -->
+    <div id="shootBtnMobile">射擊</div>
+
+    <!-- 開始畫面 -->
+    <div id="startScreen">
+        <h1 class="text-5xl md:text-7xl font-black text-white mb-4 tracking-wider text-shadow-lg">荒野狩獵 3D</h1>
+        <p class="text-gray-300 text-lg md:text-xl mb-8 text-center max-w-md px-4">
+            電腦：點擊鎖定視角，滑鼠移動瞄準，左鍵射擊。<br>
+            手機：滑動螢幕瞄準，點擊右下角按鈕射擊。
+        </p>
+        <button id="startBtn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-[0_0_15px_rgba(34,197,94,0.6)] transform transition hover:scale-105 active:scale-95">
+            開始狩獵
+        </button>
+    </div>
+
+    <!-- 結束畫面 -->
+    <div id="gameOverScreen" class="hidden">
+        <h1 class="text-5xl md:text-7xl font-black text-red-500 mb-2">時間到！</h1>
+        <p class="text-white text-2xl mb-8">最終得分: <span id="finalScore" class="text-orange-400 font-bold text-4xl">0</span></p>
+        <button id="restartBtn" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg transform transition hover:scale-105 active:scale-95">
+            重新挑戰
+        </button>
+    </div>
+
+    <script>
+        // === 遊戲核心變數 ===
+        let scene, camera, renderer;
+        let targets = []; // 獵物陣列
+        let particles = []; // 粒子特效陣列
+        let tracers = []; // 彈道軌跡陣列
+        
+        let score = 0;
+        let timeLeft = 60;
+        let gameInterval;
+        let isPlaying = false;
+        
+        // 加特林機槍變數
+        let gunBarrels; // 用來旋轉槍管
+        let isFiring = false;
+        let lastFireTime = 0;
+        const FIRE_RATE = 80; // 射擊間隔 (毫秒)
+        
+        // 視角控制變數
+        let pitch = 0; // 上下旋轉 (X軸)
+        let yaw = 0;   // 左右旋轉 (Y軸)
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // UI 元素
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScore = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const screenFlash = document.getElementById('screenFlash');
+        const shootBtnMobile = document.getElementById('shootBtnMobile');
+
+        // === 初始化 Three.js ===
+        function init() {
+            // 1. 建立場景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // 天空藍
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 150); // 加上霧氣增加氛圍
+
+            // 2. 建立攝影機 (玩家眼睛)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 0); // 玩家高度
+            // 改變相機的旋轉順序，讓 FPS 視角更自然
+            camera.rotation.order = 'YXZ'; 
+
+            // 在攝影機上附加一把槍 (長方體)
+            createWeapon();
+
+            // 3. 建立渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // 4. 加入光線
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(50, 100, 50);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 50;
+            dirLight.shadow.camera.bottom = -50;
+            dirLight.shadow.camera.left = -50;
+            dirLight.shadow.camera.right = 50;
+            scene.add(dirLight);
+
+            // 5. 建立環境 (地板與樹木)
+            createEnvironment();
+
+            // 6. 註冊事件
+            window.addEventListener('resize', onWindowResize);
+            setupControls();
+
+            // 如果是手機，顯示射擊按鈕
+            if (isMobile) {
+                shootBtnMobile.style.display = 'flex';
+            }
+
+            // 開始動畫迴圈
+            animate();
+        }
+
+        // 建立環境
+        function createEnvironment() {
+            // 地板
+            const groundGeo = new THREE.PlaneGeometry(300, 300);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x3b5e2b }); // 深綠色草地
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // 隨機生成樹木
+            const treeMatTrunk = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
+            const treeMatLeaves = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 3, 8);
+            const leavesGeo = new THREE.ConeGeometry(2.5, 6, 8);
+
+            for (let i = 0; i < 80; i++) {
+                const x = (Math.random() - 0.5) * 200;
+                const z = (Math.random() - 0.5) * 200;
+                
+                // 不要在玩家重生點附近生成樹
+                if (Math.abs(x) < 10 && Math.abs(z) < 10) continue;
+
+                const treeGroup = new THREE.Group();
+
+                const trunk = new THREE.Mesh(trunkGeo, treeMatTrunk);
+                trunk.position.y = 1.5;
+                trunk.castShadow = true;
+                trunk.receiveShadow = true;
+                treeGroup.add(trunk);
+
+                const leaves = new THREE.Mesh(leavesGeo, treeMatLeaves);
+                leaves.position.y = 5;
+                leaves.castShadow = true;
+                leaves.receiveShadow = true;
+                treeGroup.add(leaves);
+
+                treeGroup.position.set(x, 0, z);
+                scene.add(treeGroup);
+            }
+        }
+
+        // 建立玩家的武器模型 (更換為加特林機槍)
+        function createWeapon() {
+            const gunGroup = new THREE.Group();
+            
+            // 槍身主體
+            const bodyGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.8, 16);
+            const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6, metalness: 0.5 });
+            const gunBody = new THREE.Mesh(bodyGeo, gunMat);
+            gunBody.rotation.x = Math.PI / 2;
+            gunBody.position.set(0, 0, -0.3);
+            gunGroup.add(gunBody);
+
+            // 旋轉槍管群組
+            gunBarrels = new THREE.Group();
+            const barrelGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.2, 8);
+            const barrelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.8 });
+            
+            // 建立 6 根槍管
+            for(let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+                // 環繞排列
+                barrel.position.set(Math.cos(angle)*0.07, Math.sin(angle)*0.07, 0);
+                barrel.rotation.x = Math.PI / 2;
+                gunBarrels.add(barrel);
+            }
+            // 將槍管群組移到槍身前方
+            gunBarrels.position.set(0, 0, -0.9);
+            gunGroup.add(gunBarrels);
+
+            // 將槍綁定到攝影機的右下角
+            gunGroup.position.set(0.4, -0.4, -0.5);
+            camera.add(gunGroup);
+            scene.add(camera); 
+        }
+
+        // === 控制與輸入 ===
+        function setupControls() {
+            if (!isMobile) {
+                // 電腦端：Pointer Lock API (隱藏滑鼠並鎖定)
+                document.addEventListener('mousemove', (e) => {
+                    if (document.pointerLockElement === document.body && isPlaying) {
+                        yaw -= e.movementX * 0.002;
+                        pitch -= e.movementY * 0.002;
+                        
+                        // 限制上下看角度 (-90度 到 90度)
+                        pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+                        
+                        camera.rotation.set(pitch, yaw, 0);
+                    }
+                });
+
+                // 點擊滑鼠左鍵開火 (連續)
+                document.addEventListener('mousedown', (e) => {
+                    if (document.pointerLockElement === document.body && isPlaying && e.button === 0) {
+                        isFiring = true;
+                    }
+                });
+                document.addEventListener('mouseup', (e) => {
+                    if (e.button === 0) isFiring = false;
+                });
+            } else {
+                // 手機端：觸控拖曳環顧
+                let lastTouchX = 0;
+                let lastTouchY = 0;
+
+                document.addEventListener('touchstart', (e) => {
+                    if (!isPlaying) return;
+                    // 如果點擊的是射擊按鈕，不處理旋轉
+                    if (e.target === shootBtnMobile) return;
+                    
+                    lastTouchX = e.touches[0].clientX;
+                    lastTouchY = e.touches[0].clientY;
+                }, {passive: false});
+
+                document.addEventListener('touchmove', (e) => {
+                    if (!isPlaying || e.target === shootBtnMobile) return;
+                    e.preventDefault(); // 防止滾動螢幕
+
+                    const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
+                    
+                    const movementX = touchX - lastTouchX;
+                    const movementY = touchY - lastTouchY;
+
+                    yaw -= movementX * 0.005;
+                    pitch -= movementY * 0.005;
+                    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+                    
+                    camera.rotation.set(pitch, yaw, 0);
+
+                    lastTouchX = touchX;
+                    lastTouchY = touchY;
+                }, {passive: false});
+
+                // 手機點擊射擊按鈕 (連續開火)
+                shootBtnMobile.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if(isPlaying) isFiring = true;
+                });
+                shootBtnMobile.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    isFiring = false;
+                });
+            }
+
+            // 按鈕事件
+            startBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', startGame);
+        }
+
+        // === 遊戲邏輯 ===
+
+        function startGame() {
+            if (!isMobile) {
+                document.body.requestPointerLock();
+            }
+
+            // 重置狀態
+            score = 0;
+            timeLeft = 60;
+            scoreDisplay.innerText = score;
+            timeDisplay.innerText = timeLeft;
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            // 清理舊的目標
+            targets.forEach(t => scene.remove(t.mesh));
+            targets = [];
+
+            isPlaying = true;
+            isFiring = false; // 重置開火狀態
+            camera.rotation.set(0, 0, 0);
+            yaw = 0; pitch = 0;
+
+            // 啟動計時器
+            clearInterval(gameInterval);
+            gameInterval = setInterval(() => {
+                timeLeft--;
+                timeDisplay.innerText = timeLeft;
+                
+                // 隨著時間減少，生成速度變快
+                if (Math.random() < 0.4 + (60 - timeLeft)*0.01) {
+                    spawnTarget();
+                }
+
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            // 初始生成幾隻
+            for(let i=0; i<3; i++) spawnTarget();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            isFiring = false;
+            clearInterval(gameInterval);
+            if (!isMobile && document.pointerLockElement === document.body) {
+                document.exitPointerLock();
+            }
+            finalScore.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // 生成具備四肢的動物 (鹿 或 熊)
+        function spawnTarget() {
+            const targetGroup = new THREE.Group();
+            
+            // 隨機決定生成鹿(70%)還是熊(30%)
+            const isBear = Math.random() > 0.7;
+            const animalColor = isBear ? 0x2C2C2C : 0x8B4513; // 熊為深灰黑，鹿為棕色
+            const mat = new THREE.MeshLambertMaterial({ color: animalColor });
+            
+            // 身體
+            const bodyGeo = isBear ? new THREE.BoxGeometry(1.4, 1.2, 2.4) : new THREE.BoxGeometry(0.8, 0.8, 1.8);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.y = isBear ? 1.4 : 1.6;
+            body.castShadow = true;
+            targetGroup.add(body);
+
+            // 頭部
+            const headGeo = isBear ? new THREE.BoxGeometry(0.9, 0.8, 1.0) : new THREE.BoxGeometry(0.5, 0.6, 0.8);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(0, isBear ? 1.8 : 2.2, isBear ? 1.2 : 1.0);
+            head.castShadow = true;
+            targetGroup.add(head);
+
+            // 如果是鹿，加上角
+            if (!isBear) {
+                const hornGeo = new THREE.BoxGeometry(0.1, 0.6, 0.1);
+                const hornMat = new THREE.MeshLambertMaterial({ color: 0xE8C396 });
+                const leftHorn = new THREE.Mesh(hornGeo, hornMat);
+                leftHorn.position.set(-0.2, 0.4, 0);
+                const rightHorn = new THREE.Mesh(hornGeo, hornMat);
+                rightHorn.position.set(0.2, 0.4, 0);
+                head.add(leftHorn);
+                head.add(rightHorn);
+            }
+
+            // 四肢腿部 (為了做走路動畫)
+            const legs = [];
+            const legGeo = isBear ? new THREE.BoxGeometry(0.4, 1.0, 0.4) : new THREE.BoxGeometry(0.2, 1.4, 0.2);
+            const legW = isBear ? 0.5 : 0.3;
+            const legZ = isBear ? 0.9 : 0.7;
+            const legPositions = [
+                [-legW, -legZ], [legW, -legZ], // 後腿
+                [-legW, legZ], [legW, legZ]    // 前腿
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const legGroup = new THREE.Group(); // 以頂部為軸心旋轉
+                const legMesh = new THREE.Mesh(legGeo, mat);
+                legMesh.position.y = isBear ? -0.5 : -0.7; // 網格往下移
+                legGroup.add(legMesh);
+                legGroup.position.set(legPositions[i][0], body.position.y, legPositions[i][1]);
+                targetGroup.add(legGroup);
+                legs.push(legGroup);
+            }
+
+            // 決定起始位置與方向 (在距離玩家 20~50 的圓圈上)
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 20 + Math.random() * 30;
+            const startX = Math.cos(angle) * distance;
+            const startZ = Math.sin(angle) * distance;
+
+            targetGroup.position.set(startX, 0, startZ);
+
+            // 朝向隨機方向奔跑 (或是朝向玩家附近)
+            const targetAngle = angle + Math.PI + (Math.random()-0.5) * 1.5; 
+            targetGroup.rotation.y = -targetAngle + Math.PI/2; // 調整面向
+
+            scene.add(targetGroup);
+
+            // 把所有的 mesh 加上標記，方便 raycaster 檢測
+            body.userData.isTarget = true;
+            body.userData.parentGroup = targetGroup;
+            head.userData.isTarget = true;
+            head.userData.parentGroup = targetGroup;
+
+            targets.push({
+                mesh: targetGroup,
+                legs: legs,
+                speed: isBear ? (0.05 + Math.random() * 0.05) : (0.1 + Math.random() * 0.1),
+                vx: Math.cos(targetAngle),
+                vz: Math.sin(targetAngle),
+                lifeTime: 0,
+                hp: isBear ? 100 : 40, // 機槍射速快，給予血量設定
+                isBear: isBear
+            });
+        }
+
+        // 射擊邏輯 (Raycaster + 連發)
+        function shoot() {
+            // 螢幕微小閃爍模擬火光
+            screenFlash.style.opacity = '0.3';
+            setTimeout(() => screenFlash.style.opacity = '0', 30);
+
+            // 產生彈道軌跡 (Tracer)
+            spawnTracer();
+
+            // 射線檢測
+            const raycaster = new THREE.Raycaster();
+            
+            // 模擬後座力散射 (增加微小隨機偏移)
+            const spreadX = (Math.random() - 0.5) * 0.05;
+            const spreadY = (Math.random() - 0.5) * 0.05;
+            raycaster.setFromCamera(new THREE.Vector2(spreadX, spreadY), camera);
+
+            // 檢測場景中所有物件
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            for (let i = 0; i < intersects.length; i++) {
+                const hitObj = intersects[i].object;
+                
+                // 確認擊中的是獵物
+                if (hitObj.userData.isTarget) {
+                    const group = hitObj.userData.parentGroup;
+                    
+                    // 找到對應的目標資料
+                    const targetData = targets.find(t => t.mesh === group);
+                    if (targetData) {
+                        // 扣血
+                        targetData.hp -= 10;
+                        
+                        // 噴出少量血液特效
+                        createExplosion(intersects[i].point, 3, 0x8A0303);
+
+                        // 死亡判定
+                        if (targetData.hp <= 0) {
+                            // 產生大量屍塊/血液特效
+                            createExplosion(group.position, 20, targetData.isBear ? 0x2C2C2C : 0x8B4513);
+                            
+                            scene.remove(group);
+                            targets = targets.filter(t => t !== targetData);
+                            
+                            score += targetData.isBear ? 50 : 20; // 熊分數較高
+                            scoreDisplay.innerText = score;
+                        }
+                    }
+                    break; // 擊中一個就跳出迴圈
+                }
+            }
+        }
+
+        // 產生子彈軌跡 (Tracer)
+        function spawnTracer() {
+            const geo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xFFD700 }); // 金黃色曳光彈
+            const tracer = new THREE.Mesh(geo, mat);
+            
+            // 將子彈起點設在槍口位置
+            const gunTip = new THREE.Vector3(0.4, -0.4, -1.5);
+            gunTip.applyMatrix4(camera.matrixWorld);
+            tracer.position.copy(gunTip);
+            
+            // 子彈朝向與攝影機一致
+            tracer.quaternion.copy(camera.quaternion);
+            // 由於圓柱體預設是沿著 Y 軸，我們將它旋轉 90 度與 Z 軸對齊
+            tracer.rotateX(Math.PI / 2);
+            
+            // 隨機微調子彈軌跡角度以模擬機槍散布
+            tracer.rotateX((Math.random() - 0.5) * 0.02);
+            tracer.rotateY((Math.random() - 0.5) * 0.02);
+
+            scene.add(tracer);
+            tracers.push({ mesh: tracer, life: 30 }); // 存活 30 幀
+        }
+
+        // 擊中時的粒子碎片特效 (可自訂數量與顏色)
+        function createExplosion(position, particleCount, color) {
+            const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+
+            for (let i = 0; i < particleCount; i++) {
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(position);
+                scene.add(mesh);
+                
+                particles.push({
+                    mesh: mesh,
+                    vx: (Math.random() - 0.5) * 0.8,
+                    vy: Math.random() * 0.8 + 0.2,
+                    vz: (Math.random() - 0.5) * 0.8,
+                    life: 1.0
+                });
+            }
+        }
+
+        // === 視窗重置 ===
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // === 主動畫迴圈 ===
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isPlaying) {
+                // --- 加特林機槍連發邏輯 ---
+                if (isFiring) {
+                    // 旋轉槍管
+                    if (gunBarrels) gunBarrels.rotation.z += 0.4;
+                    
+                    const now = Date.now();
+                    if (now - lastFireTime > FIRE_RATE) {
+                        shoot();
+                        lastFireTime = now;
+                        
+                        // 槍枝與攝影機震動 (後座力)
+                        const weapon = camera.children[0];
+                        weapon.position.z = -0.4 + (Math.random() * 0.05); // 槍枝後縮
+                        camera.position.y = 2 + (Math.random() - 0.5) * 0.02; // 畫面微震
+                    }
+                } else {
+                    // 停止開火時槍管慣性減速
+                    if (gunBarrels && gunBarrels.rotation.z % (Math.PI*2) !== 0) {
+                        gunBarrels.rotation.z += 0.05; 
+                    }
+                    // 恢復槍枝與相機位置
+                    const weapon = camera.children[0];
+                    if (weapon.position.z < -0.5) weapon.position.z += 0.02; 
+                    camera.position.y = 2;
+                }
+
+                // --- 更新彈道軌跡 ---
+                for (let i = tracers.length - 1; i >= 0; i--) {
+                    let t = tracers[i];
+                    // 子彈沿著自身的局部 Z 軸向前飛行 (因為前面我們用 rotateX 轉平了)
+                    t.mesh.translateY(-4); 
+                    t.life--;
+                    if (t.life <= 0) {
+                        scene.remove(t.mesh);
+                        tracers.splice(i, 1);
+                    }
+                }
+
+                // --- 更新獵物位置與動畫 ---
+                for (let i = targets.length - 1; i >= 0; i--) {
+                    let t = targets[i];
+                    t.mesh.position.x += t.vx * t.speed;
+                    t.mesh.position.z += t.vz * t.speed;
+                    
+                    t.lifeTime += t.speed * 2; // 根據速度決定動畫播放快慢
+                    
+                    // 身體上下晃動
+                    t.mesh.position.y = Math.abs(Math.sin(t.lifeTime * 2)) * 0.1;
+
+                    // 四肢擺動動畫 (前後交叉)
+                    if (t.legs && t.legs.length === 4) {
+                        const swing = Math.sin(t.lifeTime * 2) * 0.5;
+                        t.legs[0].rotation.x = swing;       // 左後
+                        t.legs[1].rotation.x = -swing;      // 右後
+                        t.legs[2].rotation.x = -swing;      // 左前
+                        t.legs[3].rotation.x = swing;       // 右前
+                    }
+
+                    // 跑太遠就移除
+                    if (t.mesh.position.length() > 80) {
+                        scene.remove(t.mesh);
+                        targets.splice(i, 1);
+                    }
+                }
+
+                // --- 更新粒子特效 ---
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.mesh.position.x += p.vx;
+                    p.mesh.position.y += p.vy;
+                    p.mesh.position.z += p.vz;
+                    p.vy -= 0.05; // 重力
+                    p.life -= 0.02;
+                    
+                    if (p.life <= 0 || p.mesh.position.y < 0) {
+                        scene.remove(p.mesh);
+                        particles.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // 啟動初始化
+        window.onload = init;
+
+    </script>
+</body>
+</html>

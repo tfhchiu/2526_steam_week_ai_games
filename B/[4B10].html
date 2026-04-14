@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>字母重組大挑戰 - 多人對戰版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --success: #22c55e;
+      --error: #ef4444;
+      --bg: #f8fafc;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 0; }
+    body { background: var(--bg); padding: 20px; color: #1e293b; }
+
+    .game-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 25px;
+    }
+
+    /* 計分板 */
+    .scoreboard {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+      height: fit-content;
+    }
+    .scoreboard h2 { text-align: center; margin-bottom: 20px; font-size: 22px; color: var(--primary); }
+    
+    .player-card {
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+      background: #f1f5f9;
+    }
+    .player1.active-player { border-color: #6366f1; background: #e0e7ff; transform: scale(1.05); }
+    .player2.active-player { border-color: #ec4899; background: #fdf2f8; transform: scale(1.05); }
+    .player3.active-player { border-color: #14b8a6; background: #f0fdfa; transform: scale(1.05); }
+    .player4.active-player { border-color: #f59e0b; background: #fffbeb; transform: scale(1.05); }
+    
+    .active-player { font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .score-val { font-size: 24px; font-weight: 800; }
+
+    /* 遊戲主區 */
+    .game-area {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    .game-header { text-align: center; margin-bottom: 30px; }
+    .progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; margin-top: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
+
+    .hint-box {
+      background: #fff7ed;
+      border: 1px solid #ffedd5;
+      padding: 20px;
+      border-radius: 16px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .hint-label { color: #9a3412; font-size: 14px; font-weight: bold; text-transform: uppercase; }
+    .hint-text { color: #7c2d12; font-size: 26px; font-weight: bold; margin-top: 5px; }
+
+    /* 字母按鈕與格子 */
+    .answer-area { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 40px 0; min-height: 70px; }
+    .answer-char {
+      width: 55px; height: 65px; border-radius: 12px; border: 2px dashed #cbd5e1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; font-weight: 800; color: var(--primary); cursor: pointer;
+      transition: all 0.2s; background: #fff; text-transform: uppercase;
+    }
+    .answer-char.filled { border-style: solid; border-color: var(--primary); background: #f8fafc; }
+    .answer-char.filled:hover { background: #fee2e2; border-color: var(--error); color: var(--error); } /* 提示可刪除 */
+
+    .letters-area { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 30px; }
+    .letter-tile {
+      width: 60px; height: 60px; background: white; border: 2px solid #e2e8f0;
+      border-radius: 12px; font-size: 26px; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 0 #e2e8f0; transition: all 0.1s; text-transform: uppercase;
+    }
+    .letter-tile:hover { transform: translateY(-2px); border-color: var(--primary); }
+    .letter-tile:active { transform: translateY(2px); box-shadow: none; }
+    .letter-tile:disabled { opacity: 0; cursor: default; pointer-events: none; }
+
+    /* 按鈕 */
+    .controls { display: flex; gap: 15px; justify-content: center; }
+    .btn {
+      padding: 12px 28px; border-radius: 12px; border: none; font-size: 16px; font-weight: bold;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-check { background: var(--success); color: white; }
+    .btn-check:hover { background: #16a34a; }
+    .btn-skip { background: #94a3b8; color: white; }
+    .btn-skip:hover { background: #64748b; }
+    .btn-reset { background: var(--error); color: white; width: 100%; margin-top: 10px; }
+    .btn-reset:hover { background: #dc2626; }
+    .btn-switch { background: var(--primary); color: white; width: 100%; margin-top: 20px; }
+    .btn-switch:hover { background: #4f46e5; }
+
+    /* 響應式 */
+    @media (max-width: 850px) {
+      .game-container { grid-template-columns: 1fr; }
+      .scoreboard { order: 2; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-container">
+    <div class="scoreboard">
+      <h2>🏆 競賽排名</h2>
+      <div id="playerList"></div>
+      
+      <button class="btn btn-switch" onclick="switchPlayer()">👋 換下一位同學</button>
+      <button class="btn btn-reset" onclick="confirmReset()">🔄 重置遊戲</button>
+      
+      <div style="margin-top: 25px; text-align: center;">
+        <p style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">選擇參賽人數</p>
+        <div style="display: flex; gap: 5px; justify-content: center;">
+          <button class="btn" style="padding: 8px 16px; font-size: 14px;" onclick="setPlayerCount(2)" id="pBtn2">2人</button>
+          <button class="btn" style="padding: 8px 16px; font-size: 14px;" onclick="setPlayerCount(3)" id="pBtn3">3人</button>
+          <button class="btn" style="padding: 8px 16px; font-size: 14px;" onclick="setPlayerCount(4)" id="pBtn4">4人</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-area">
+      <div class="game-header">
+        <h1 style="font-size: 28px; color: #1e293b;">字母重組大挑戰</h1>
+        <div style="display: flex; justify-content: space-between; margin-top: 15px; font-weight: bold; color: #475569;">
+          <span>當前：玩家 <span id="curPlayerNum" style="color: var(--primary); font-size: 1.2em;">1</span></span>
+          <span>第 <span id="curQNum">1</span> / 20 題</span>
+        </div>
+        <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+      </div>
+
+      <div class="hint-box">
+        <div class="hint-label">💡 提示內容</div>
+        <div id="hintText" class="hint-text">載入中...</div>
+      </div>
+
+      <div class="answer-area" id="answerArea"></div>
+      <div class="letters-area" id="lettersArea"></div>
+
+      <div class="controls">
+        <button class="btn btn-skip" onclick="skipQuestion()">跳過本題</button>
+        <button class="btn btn-check" onclick="checkAnswer()">確認答案</button>
+      </div>
+
+      <div id="feedback" style="text-align:center; margin-top:20px; font-weight:bold; height:24px; font-size: 18px;"></div>
+    </div>
+  </div>
+
+<script>
+  // 你自訂的 20 個單字庫 (已將簡體轉為繁體以統一風格)
+  const wordBank = [
+    { word: "information", hint: "資訊" },
+    { word: "basketball", hint: "籃球" },
+    { word: "chair", hint: "椅子" },
+    { word: "teeth", hint: "牙齒" },
+    { word: "table", hint: "桌子" },
+    { word: "water", hint: "水" },
+    { word: "bread", hint: "麵包" },
+    { word: "shoe", hint: "鞋子" },
+    { word: "sock", hint: "襪子" },
+    { word: "milk", hint: "牛奶" },
+    { word: "photo", hint: "照片" },
+    { word: "rice", hint: "米" },
+    { word: "fork", hint: "叉子" },
+    { word: "spoon", hint: "湯匙" },
+    { word: "bag", hint: "袋子" },
+    { word: "cake", hint: "蛋糕" },
+    { word: "pen", hint: "筆" },
+    { word: "record", hint: "記錄" },
+    { word: "car", hint: "汽車" },
+    { word: "hat", hint: "帽子" }
+  ];
+
+  let playerCount = 2;
+  let currentPlayer = 1;
+  let currentQuestion = 0;
+  let scores = [0, 0, 0, 0];
+  let userSelection = []; // 存儲格式: {char: 'a', originalIndex: 2}
+  let shuffledLetters = [];
+
+  // 初始化
+  function init() {
+    renderScoreboard();
+    loadQuestion();
+    updateUI();
+  }
+
+  function setPlayerCount(n) {
+    playerCount = n;
+    confirmReset();
+  }
+
+  function renderScoreboard() {
+    const list = document.getElementById('playerList');
+    list.innerHTML = '';
+    for (let i = 1; i <= playerCount; i++) {
+      const card = document.createElement('div');
+      card.className = `player-card player${i} ${currentPlayer === i ? 'active-player' : ''}`;
+      card.innerHTML = `<span>👤 玩家 ${i}</span><span class="score-val">${scores[i-1]}</span>`;
+      list.appendChild(card);
+    }
+    // 更新人數按鈕樣式
+    [2,3,4].forEach(n => {
+      const btn = document.getElementById(`pBtn${n}`);
+      btn.style.background = (n === playerCount) ? '#6366f1' : '#e2e8f0';
+      btn.style.color = (n === playerCount) ? 'white' : '#475569';
+    });
+  }
+
+  function loadQuestion() {
+    if (currentQuestion >= wordBank.length) {
+      setTimeout(showFinalResult, 500);
+      return;
+    }
+    
+    // 清除回饋訊息
+    document.getElementById('feedback').innerText = "";
+    
+    const target = wordBank[currentQuestion].word;
+    shuffledLetters = target.split('').sort(() => Math.random() - 0.5);
+    userSelection = [];
+    
+    document.getElementById('hintText').innerText = wordBank[currentQuestion].hint;
+    renderLetters();
+    renderAnswerSlots();
+  }
+
+  function renderLetters() {
+    const container = document.getElementById('lettersArea');
+    container.innerHTML = '';
+    shuffledLetters.forEach((char, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'letter-tile';
+      btn.innerText = char;
+      btn.id = `tile-${idx}`;
+      btn.onclick = () => selectLetter(char, idx);
+      container.appendChild(btn);
+    });
+  }
+
+  function renderAnswerSlots() {
+    const container = document.getElementById('answerArea');
+    container.innerHTML = '';
+    const word = wordBank[currentQuestion].word;
+    for (let i = 0; i < word.length; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'answer-char';
+      if (userSelection[i]) {
+        slot.innerText = userSelection[i].char;
+        slot.classList.add('filled');
+        slot.title = "點擊撤回此字母";
+        slot.onclick = () => removeLetter(i);
+      }
+      container.appendChild(slot);
+    }
+  }
+
+  function selectLetter(char, idx) {
+    if (userSelection.length < wordBank[currentQuestion].word.length) {
+      userSelection.push({ char, originalIndex: idx });
+      document.getElementById(`tile-${idx}`).disabled = true;
+      renderAnswerSlots();
+    }
+  }
+
+  function removeLetter(position) {
+    const removed = userSelection.splice(position, 1)[0];
+    document.getElementById(`tile-${removed.originalIndex}`).disabled = false;
+    renderAnswerSlots();
+  }
+
+  function checkAnswer() {
+    if (userSelection.length < wordBank[currentQuestion].word.length) {
+      const feedback = document.getElementById('feedback');
+      feedback.style.color = 'var(--error)';
+      feedback.innerText = "⚠️ 請把所有字母都填滿再送出喔！";
+      setTimeout(() => feedback.innerText = "", 2000);
+      return;
+    }
+
+    const answer = userSelection.map(s => s.char).join('');
+    const correct = wordBank[currentQuestion].word;
+    const feedback = document.getElementById('feedback');
+
+    if (answer === correct) {
+      scores[currentPlayer - 1]++;
+      feedback.style.color = 'var(--success)';
+      feedback.innerText = "✅ 太棒了！答對了！";
+      renderScoreboard();
+      
+      // 禁用按鈕防止重複點擊
+      document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+      
+      setTimeout(() => {
+        document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+        nextQuestion();
+      }, 1500);
+    } else {
+      feedback.style.color = 'var(--error)';
+      feedback.innerText = "❌ 拼法不對喔，點擊上方字母可以撤回！";
+      setTimeout(() => feedback.innerText = "", 3000);
+    }
+  }
+
+  function nextQuestion() {
+    currentQuestion++;
+    loadQuestion();
+    updateUI();
+  }
+
+  function skipQuestion() {
+    const correct = wordBank[currentQuestion].word;
+    const feedback = document.getElementById('feedback');
+    feedback.style.color = '#f59e0b';
+    feedback.innerText = `💡 正確答案是：${correct.toUpperCase()}`;
+    
+    document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+    
+    setTimeout(() => {
+      document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+      nextQuestion();
+    }, 2500);
+  }
+
+  function switchPlayer() {
+    currentPlayer = (currentPlayer % playerCount) + 1;
+    document.getElementById('curPlayerNum').innerText = currentPlayer;
+    renderScoreboard();
+  }
+
+  function updateUI() {
+    if (currentQuestion < wordBank.length) {
+      document.getElementById('curQNum').innerText = currentQuestion + 1;
+    }
+    const progress = (currentQuestion / wordBank.length) * 100;
+    document.getElementById('progressFill').style.width = `${progress}%`;
+  }
+
+  function confirmReset() {
+    if (confirm("確定要重新開始遊戲嗎？分數將會歸零。")) {
+      currentQuestion = 0;
+      scores = [0, 0, 0, 0];
+      currentPlayer = 1;
+      init();
+    }
+  }
+
+  function showFinalResult() {
+    let max = Math.max(...scores.slice(0, playerCount));
+    let winners = [];
+    for(let i=0; i<playerCount; i++) if(scores[i] === max) winners.push(i+1);
+    
+    // 使用預設 alert，也可以換成更漂亮的 Modal
+    alert(`🏆 遊戲結束！\n\n冠軍是：玩家 ${winners.join(', ')}\n最高分：${max} 分\n\n點擊確定重新開始。`);
+    
+    currentQuestion = 0;
+    scores = [0, 0, 0, 0];
+    currentPlayer = 1;
+    init();
+  }
+
+  // 啟動遊戲
+  init();
+</script>
+</body>
+</html>

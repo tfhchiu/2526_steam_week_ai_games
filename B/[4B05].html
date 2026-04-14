@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>網頁版斯諾克遊戲</title>
+    <style>
+        :root {
+            --table-wood: #4A2E15;
+            --table-cloth: #156C36;
+            --cushion: #0E4D25;
+        }
+        body {
+            margin: 0; padding: 0; background-color: #222; color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; touch-action: none;
+        }
+        .header { text-align: center; margin-bottom: 10px; }
+        h1 { margin: 0 0 5px 0; font-size: 24px; color: #E2C275; }
+        .subtitle {
+            font-size: 18px; color: #FFD700; font-weight: bold; margin: 0 0 10px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        .ui-panel {
+            display: flex; justify-content: space-between; align-items: center;
+            width: 100%; max-width: 840px; margin-bottom: 15px; padding: 0 10px; box-sizing: border-box;
+        }
+        .score-board {
+            font-size: 20px; font-weight: bold; background: #111; padding: 8px 16px;
+            border-radius: 8px; border: 2px solid #333;
+        }
+        .timer-board {
+            font-size: 20px; font-weight: bold; background: #111; padding: 8px 16px;
+            border-radius: 8px; border: 2px solid #333; color: #fff;
+        }
+        .timer-warning {
+            color: #ff4444; animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0.5; } }
+        .controls button {
+            background-color: #E2C275; color: #222; border: none; padding: 8px 16px;
+            font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s; margin-left: 5px;
+        }
+        .controls button:active { transform: scale(0.95); background-color: #c9a75a; }
+        
+        .game-container {
+            position: relative; background-color: var(--table-wood);
+            padding: 20px; border-radius: 15px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background-color: var(--table-cloth); border: 15px solid var(--cushion);
+            border-radius: 5px; display: block; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            max-width: 100%; height: auto; cursor: crosshair;
+        }
+        .instructions {
+            margin-top: 15px; color: #aaa; font-size: 14px; text-align: center;
+            max-width: 800px; line-height: 1.5; background: #111;
+            padding: 10px; border-radius: 8px; border: 1px solid #333;
+        }
+
+        /* 遊戲開始/輸入名稱彈窗 */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
+            z-index: 3000;
+        }
+        .modal-content {
+            background: #222; padding: 25px; border-radius: 10px;
+            border: 2px solid #E2C275; text-align: center; color: #fff;
+            box-shadow: 0 0 20px rgba(226, 194, 117, 0.3); max-width: 300px; width: 90%;
+        }
+        .modal-content input {
+            padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #777;
+            background: #111; color: #fff; margin-top: 10px; width: 80%; text-align: center;
+        }
+        .modal-content button {
+            background-color: #E2C275; color: #222; border: none; padding: 10px 20px;
+            font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            margin-top: 20px; width: 100%; transition: transform 0.1s;
+        }
+        .modal-content button:active { transform: scale(0.95); }
+
+        /* 解說大師樣式 */
+        .commentary-box {
+            margin-top: 15px; padding: 15px; background-color: #1a1a1a;
+            border: 1px solid #E2C275; border-radius: 8px; color: #E2C275;
+            width: 100%; max-width: 800px; text-align: center;
+            font-style: italic; min-height: 24px; transition: all 0.3s;
+        }
+
+        /* 龍虎榜樣式 */
+        .leaderboard-container {
+            margin-top: 15px; width: 100%; max-width: 800px;
+            background-color: #1a1a1a; border: 2px solid #E2C275;
+            border-radius: 8px; padding: 15px; box-sizing: border-box;
+        }
+        .leaderboard-container h3 { color: #E2C275; text-align: center; margin-top: 0; margin-bottom: 10px; }
+        .leaderboard-list { list-style: none; padding: 0; margin: 0; }
+        .leaderboard-list li {
+            display: flex; justify-content: space-between; padding: 8px 10px;
+            border-bottom: 1px solid #333; color: #ddd;
+        }
+        .rank-0 { color: #FFD700 !important; font-weight: bold; }
+        .rank-1 { color: #C0C0C0 !important; font-weight: bold; }
+        .rank-2 { color: #CD7F32 !important; font-weight: bold; }
+
+        /* 奧沙利文讚賞彈窗與單字 */
+        .cheer-popup {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+            background: rgba(20, 20, 20, 0.95); padding: 20px 40px; border-radius: 20px;
+            border: 3px solid #E2C275; text-align: center; z-index: 2000; opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(226, 194, 117, 0.5);
+        }
+        .cheer-popup.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        .cheer-popup img {
+            width: 180px; height: auto; border-radius: 10px; border: 3px solid #E2C275;
+            margin-bottom: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .cheer-text {
+            font-size: 32px; font-weight: bold; color: #FFD700;
+            text-shadow: 2px 2px 4px #000, 0 0 10px #FFD700; letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+        .english-word {
+            font-size: 24px; font-weight: bold; color: #fff;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            background: linear-gradient(45deg, #E2C275, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>經典斯諾克 (Snooker)</h1>
+        <div class="subtitle">放你3金3</div>
+    </div>
+
+    <div class="ui-panel">
+        <div class="score-board">分數: <span id="scoreDisplay">0</span></div>
+        <div class="timer-board">時間: <span id="timeDisplay">02:00</span></div>
+        <div class="controls">
+            <button onclick="askMaster()" id="masterBtn">請教大師</button>
+            <button onclick="showNameModal()">重新開局</button>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+
+    <div id="commentaryBox" class="commentary-box">大師解說：點擊上方的「請教大師」來聽聽專業 AI 解說！</div>
+
+    <div class="leaderboard-container">
+        <h3>🏆 龍虎榜 🏆</h3>
+        <ul class="leaderboard-list" id="leaderboardList">
+            <li style="justify-content: center; color: #777;">暫無紀錄，快來挑戰並提交分數！</li>
+        </ul>
+    </div>
+
+    <div class="instructions">
+        🎯 <b>操作說明：</b><br>
+        將滑鼠/手指移動到桌面的任意位置來進行瞄準，<b>直接點擊畫面</b>即可出杆！<br>
+        👉 點擊位置距離白球<b>越遠</b>，擊球的力道就<b>越大</b>。<br>
+        (紅球=1分，黃=2分，綠=3分，棕=4分，藍=5分，粉=6分，黑=7分)
+    </div>
+
+    <div id="cheerPopup" class="cheer-popup">
+        <!-- 由於無法確保外部圖片鏈接始終有效，若失敗會顯示預設樣式 -->
+        <img src="https://static.oneofone.vip/temp/osullivan_thumbsup.png" alt="奧沙利文" onerror="this.src='https://via.placeholder.com/180x135/222/E2C275?text=厉害'">
+        <div class="cheer-text">厲害！</div>
+        <div id="englishWord" class="english-word">Brilliant!</div>
+    </div>
+
+    <!-- 輸入名稱的彈窗 -->
+    <div id="nameModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>準備開局</h3>
+            <p style="color: #ccc; font-size: 14px;">請輸入武林名號，<br>分數將自動上傳至龍虎榜！</p>
+            <input type="text" id="playerNameInput" placeholder="輸入名號" maxlength="12">
+            <button onclick="confirmNameAndStart()">開始遊戲</button>
+        </div>
+    </div>
+
+    <!-- 遊戲結束/時間到彈窗 -->
+    <div id="gameOverModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3 style="color: #ff4444;">時間到！</h3>
+            <p style="font-size: 20px;">最終得分：<br><span id="finalScoreDisplay" style="font-size: 32px; color:#FFD700; font-weight:bold;">0</span></p>
+            <button onclick="closeGameOverAndRestart()">再來一局</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreDisplay = document.getElementById("scoreDisplay");
+    const timeDisplay = document.getElementById("timeDisplay"); // 新增計時器顯示
+
+    // 遊戲常數設定
+    const FRICTION = 0.988; 
+    const BOUNCE = 0.85;    
+    const RESTITUTION = 0.95; 
+    const BALL_RADIUS = 11.5;  
+    const POCKET_RADIUS = 16; 
+
+    const pockets = [
+        {x: 0, y: 0}, {x: 400, y: -5}, {x: 800, y: 0},
+        {x: 0, y: 400}, {x: 400, y: 405}, {x: 800, y: 400}
+    ];
+
+    // 英文讚美單字庫
+    const englishWordsList = [
+        "Brilliant", "Excellent", "Fantastic", "Superb", 
+        "Amazing", "Incredible", "Outstanding", "Marvelous", 
+        "Genius", "Spectacular", "Wonderful", "Magnificent",
+        "Perfect", "Awesome", "Unbelievable"
+    ];
+
+    // 遊戲狀態
+    let balls = [];
+    let cueBall = null;
+    let score = 0;
+    
+    // 互動與動畫狀態
+    let mousePos = {x: 0, y: 0};
+    let isStriking = false;
+    let cuePullback = 0;
+    let strikeAngle = 0;
+    let pendingVelocity = { x: 0, y: 0 };
+    let trackedBall = null;
+    let pocketedThisTurn = false;
+    let cheerTimeout = null;
+    let gameStarted = false; // 控制是否可以擊球
+
+    // 計時器狀態
+    const GAME_DURATION = 120; // 2分鐘 = 120秒
+    let timeLeft = GAME_DURATION;
+    let timerInterval = null;
+
+    // 玩家名稱與龍虎榜資料
+    let playerName = localStorage.getItem('snookerPlayerName') || "";
+    let leaderboard = [];
+
+    // 球的類別
+    class Ball {
+        constructor(x, y, color, value, type) {
+            this.startX = x; this.startY = y;
+            this.x = x; this.y = y;
+            this.vx = 0; this.vy = 0;
+            this.color = color; this.value = value;
+            this.type = type; // 'cue', 'red', 'color'
+            this.radius = BALL_RADIUS;
+            this.inPocket = false;
+        }
+
+        draw(ctx) {
+            if (this.inPocket) return;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            let gradient = ctx.createRadialGradient(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.1, this.x, this.y, this.radius);
+            gradient.addColorStop(0, '#fff'); gradient.addColorStop(0.2, this.color); gradient.addColorStop(1, shadeColor(this.color, -40));
+            ctx.fillStyle = gradient; ctx.shadowBlur = 4; ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+        }
+
+        update() {
+            if (this.inPocket) return;
+
+            // --- 魔法外掛：自動追踪進袋 ---
+            if (this.type !== 'cue' && !pocketedThisTurn) {
+                let speed = Math.hypot(this.vx, this.vy);
+                if (speed > 0.2) {
+                    if (trackedBall === null) trackedBall = this;
+                    if (trackedBall === this) {
+                        let nearestPocket = null; let minDist = Infinity;
+                        for (let p of pockets) {
+                            let dist = Math.hypot(this.x - p.x, this.y - p.y);
+                            if (dist < minDist) { minDist = dist; nearestPocket = p; }
+                        }
+                        if (nearestPocket) {
+                            let pullForce = 0.4; // 追蹤的轉向力度
+                            this.vx += ((nearestPocket.x - this.x) / minDist) * pullForce;
+                            this.vy += ((nearestPocket.y - this.y) / minDist) * pullForce;
+                        }
+                    }
+                } else if (trackedBall === this) { trackedBall = null; }
+            }
+
+            // 物理運動
+            this.vx *= FRICTION; this.vy *= FRICTION;
+            if (Math.abs(this.vx) < 0.01) this.vx = 0; if (Math.abs(this.vy) < 0.01) this.vy = 0;
+            this.x += this.vx; this.y += this.vy;
+
+            // 庫邊碰撞
+            if (this.x < this.radius) { this.x = this.radius; this.vx *= -BOUNCE; } else if (this.x > canvas.width - this.radius) { this.x = canvas.width - this.radius; this.vx *= -BOUNCE; }
+            if (this.y < this.radius) { this.y = this.radius; this.vy *= -BOUNCE; } else if (this.y > canvas.height - this.radius) { this.y = canvas.height - this.radius; this.vy *= -BOUNCE; }
+        }
+    }
+
+    // 輔助函數：光影
+    function shadeColor(color, percent) {
+        let R = parseInt(color.substring(1,3),16); let G = parseInt(color.substring(3,5),16); let B = parseInt(color.substring(5,7),16);
+        R = parseInt(R * (100 + percent) / 100); G = parseInt(G * (100 + percent) / 100); B = parseInt(B * (100 + percent) / 100);
+        R=(R<255)?R:255;G=(G<255)?G:255;B=(B<255)?B:255; R=(R>0)?R:0;G=(G>0)?G:0;B=(B>0)?B:0;
+        return "#"+((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16))+((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16))+((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
+    }
+
+    // 重置遊戲
+    function resetGame() {
+        balls = []; score = 0; updateScore(0);
+        isStriking = false; trackedBall = null; pocketedThisTurn = false;
+        const baulkLineX = 160; const centerY = 200;
+        cueBall = new Ball(baulkLineX - 30, centerY + 20, "#FFFFFF", 0, 'cue'); balls.push(cueBall);
+        balls.push(new Ball(baulkLineX, centerY + 53, "#FFD700", 2, 'color')); balls.push(new Ball(baulkLineX, centerY - 53, "#008000", 3, 'color')); balls.push(new Ball(baulkLineX, centerY, "#8B4513", 4, 'color')); balls.push(new Ball(400, centerY, "#0000FF", 5, 'color')); balls.push(new Ball(600, centerY, "#FFC0CB", 6, 'color')); balls.push(new Ball(724, centerY, "#111111", 7, 'color'));
+        const startX = 615; const rowSpacing = BALL_RADIUS * Math.sqrt(3) + 0.5; const colSpacing = BALL_RADIUS * 2 + 0.5;
+        for (let row = 0; row < 5; row++) { for (let col = 0; col <= row; col++) { balls.push(new Ball(startX + row * rowSpacing, centerY - (row * colSpacing) / 2 + col * colSpacing, "#CC0000", 1, 'red')); } }
+    }
+
+    // 更新分數與讚賞
+    function updateScore(points) {
+        if(points === 0) return;
+        score += points; if(score < 0) score = 0;
+        scoreDisplay.innerText = score;
+        autoSubmitScore(); // 自動上傳分數
+    }
+
+    function showCheer() {
+        const popup = document.getElementById('cheerPopup');
+        const wordDisplay = document.getElementById('englishWord');
+        
+        // 隨機挑選一個英文單字
+        const randomWord = englishWordsList[Math.floor(Math.random() * englishWordsList.length)];
+        wordDisplay.innerText = randomWord + "!";
+        
+        popup.classList.add('show');
+        if (cheerTimeout) clearTimeout(cheerTimeout);
+        cheerTimeout = setTimeout(() => { popup.classList.remove('show'); }, 1500);
+    }
+
+    // 球碰撞處理
+    function resolveCollision(b1, b2) {
+        const dx = b2.x - b1.x; const dy = b2.y - b1.y; const distance = Math.hypot(dx, dy);
+        if (distance < b1.radius + b2.radius) {
+            const overlap = (b1.radius + b2.radius - distance) / 2; const nx = dx / distance; const ny = dy / distance;
+            b1.x -= nx * overlap; b1.y -= ny * overlap; b2.x += nx * overlap; b2.y += ny * overlap;
+            const v1n = b1.vx * nx + b1.vy * ny; const v2n = b2.vx * nx + b2.vy * ny;
+            const v1nAfter = v2n * RESTITUTION; const v2nAfter = v1n * RESTITUTION;
+            b1.vx += (v1nAfter - v1n) * nx; b1.vy += (v1nAfter - v1n) * ny;
+            b2.vx += (v2nAfter - v2n) * nx; b2.vy += (v2nAfter - v2n) * ny;
+        }
+    }
+
+    // 檢查落袋
+    function checkPockets() {
+        balls.forEach(ball => {
+            if (ball.inPocket) return;
+            if (ball.type === 'cue') return; // 白球不落袋
+            for (let pocket of pockets) {
+                if (Math.hypot(ball.x - pocket.x, ball.y - pocket.y) < POCKET_RADIUS + ball.radius) {
+                    ball.inPocket = true; ball.vx = 0; ball.vy = 0;
+                    pocketedThisTurn = true; // 標記已進袋
+                    updateScore(ball.value); 
+                    showCheer(); // 顯示奧沙利文與英文單字
+                    
+                    if (ball.type === 'color') {
+                        setTimeout(() => { ball.x = ball.startX; ball.y = ball.startY; ball.inPocket = false; }, 500);
+                    }
+                    break;
+                }
+            }
+        });
+    }
+
+    // 遊戲主迴圈
+    function gameLoop() {
+        if (isStriking && cueBall) { 
+            cuePullback -= 25; 
+            if (cuePullback <= 0) { 
+                isStriking = false; 
+                cuePullback = 0; 
+                cueBall.vx = pendingVelocity.x; 
+                cueBall.vy = pendingVelocity.y; 
+            } 
+        }
+        balls.forEach(ball => ball.update());
+        for (let i = 0; i < balls.length; i++) { 
+            for (let j = i + 1; j < balls.length; j++) { 
+                if (!balls[i].inPocket && !balls[j].inPocket) resolveCollision(balls[i], balls[j]); 
+            } 
+        }
+        checkPockets(); 
+        draw(); 
+        requestAnimationFrame(gameLoop);
+    }
+
+    // 繪製球杆
+    function drawCue(ctx, x, y, angle, distance) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.translate(distance + BALL_RADIUS + 1, 0); ctx.shadowColor = "rgba(0,0,0,0.65)"; ctx.shadowBlur = 12; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 8;
+        let woodGradient = ctx.createLinearGradient(0, -5.5, 0, 5.5); woodGradient.addColorStop(0, "#C49A5A"); woodGradient.addColorStop(0.3, "#E8C88C"); woodGradient.addColorStop(1, "#5E3A18");
+        let gripGradient = ctx.createLinearGradient(0, -5.5, 0, 5.5); gripGradient.addColorStop(0, "#333"); gripGradient.addColorStop(0.3, "#666"); gripGradient.addColorStop(1, "#0a0a0a");
+        ctx.beginPath(); ctx.moveTo(0, -2.5); ctx.lineTo(182, -4.7); ctx.lineTo(182, 4.7); ctx.lineTo(0, 2.5); ctx.fillStyle = woodGradient; ctx.fill(); // Shaft
+        ctx.beginPath(); ctx.moveTo(182, -4.7); ctx.lineTo(280, -5.5); ctx.lineTo(280, 5.5); ctx.lineTo(182, 4.7); ctx.fillStyle = gripGradient; ctx.fill(); // Butt
+        ctx.beginPath(); ctx.moveTo(0, -2.5); ctx.lineTo(-3, -2.5); ctx.lineTo(-3, 2.5); ctx.lineTo(0, 2.5); ctx.fillStyle = "#DDDDDD"; ctx.fill(); // Tip metal
+        ctx.beginPath(); ctx.moveTo(-3, -2.5); ctx.lineTo(-6, -2.25); ctx.lineTo(-6, 2.25); ctx.lineTo(-3, 2.5); ctx.fillStyle = "#3399FF"; ctx.fill(); // Tip
+        ctx.restore();
+    }
+
+    // 繪製畫面
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 畫線條
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)"; ctx.lineWidth = 1; 
+        ctx.beginPath(); ctx.moveTo(160, 0); ctx.lineTo(160, 400); ctx.stroke(); 
+        ctx.beginPath(); ctx.arc(160, 200, 53, Math.PI / 2, Math.PI * 1.5); ctx.stroke(); 
+        
+        // 畫球洞
+        ctx.fillStyle = "#0a0a0a"; 
+        pockets.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_RADIUS + 2, 0, Math.PI * 2); ctx.fill(); }); 
+        
+        // 畫所有球
+        balls.forEach(ball => { if(!ball.inPocket && ball.type !== 'cue') ball.draw(ctx); }); 
+        
+        // 安全檢查並畫白球
+        if(cueBall && !cueBall.inPocket) cueBall.draw(ctx); 
+        
+        let isCueBallIdle = cueBall && Math.abs(cueBall.vx) < 0.1 && Math.abs(cueBall.vy) < 0.1;
+        
+        if (cueBall && !cueBall.inPocket && isCueBallIdle && !isStriking) { // 瞄準狀態
+            let dx = mousePos.x - cueBall.x; let dy = mousePos.y - cueBall.y; 
+            if (mousePos.x === 0 && mousePos.y === 0) { dx = 0; dy = -100; }
+            let force = Math.hypot(dx, dy);
+            
+            if (force > 5) { // 軌跡
+                let dirX = dx / force; let dirY = dy / force; let minT = Infinity;
+                let tX = dirX > 0 ? (canvas.width - BALL_RADIUS - cueBall.x) / dirX : (dirX < 0 ? (BALL_RADIUS - cueBall.x) / dirX : Infinity);
+                let tY = dirY > 0 ? (canvas.height - BALL_RADIUS - cueBall.y) / dirY : (dirY < 0 ? (BALL_RADIUS - cueBall.y) / dirY : Infinity);
+                if (tX > 0 && tX < minT) minT = tX; if (tY > 0 && tY < minT) minT = tY;
+                
+                let R = BALL_RADIUS * 2; 
+                balls.forEach(ball => { 
+                    if (ball === cueBall || ball.inPocket) return; 
+                    let ox = cueBall.x - ball.x; let oy = cueBall.y - ball.y; 
+                    let b = 2 * (ox * dirX + oy * dirY); let c = ox * ox + oy * oy - R * R; let disc = b * b - 4 * c; 
+                    if (disc >= 0) { let t1 = (-b - Math.sqrt(disc)) / 2; if (t1 > 0 && t1 < minT) minT = t1; } 
+                });
+                ctx.beginPath(); ctx.moveTo(cueBall.x, cueBall.y); ctx.lineTo(cueBall.x + dirX * minT, cueBall.y + dirY * minT); 
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
+            }
+            drawCue(ctx, cueBall.x, cueBall.y, Math.atan2(-dy, -dx), 20); // 畫球杆
+        } else if (isStriking && cueBall && !cueBall.inPocket) { 
+            drawCue(ctx, cueBall.x, cueBall.y, strikeAngle, Math.max(0, cuePullback)); 
+        }
+    }
+
+    // 互動處理
+    function getMousePos(evt) { 
+        const rect = canvas.getBoundingClientRect(); 
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX; 
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY; 
+        const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; 
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY }; 
+    }
+    
+    window.addEventListener('mousemove', e => { mousePos = getMousePos(e); });
+    window.addEventListener('touchmove', e => { mousePos = getMousePos(e); }, {passive: false});
+    
+    const handleStrike = e => { 
+        e.preventDefault(); 
+        if (!gameStarted || !cueBall) return; // 遊戲未開始或白球不存在前禁止擊球
+        if (cueBall.inPocket) return; 
+        if (Math.abs(cueBall.vx) < 0.1 && Math.abs(cueBall.vy) < 0.1 && !isStriking) { 
+            mousePos = getMousePos(e); 
+            let dx = mousePos.x - cueBall.x; let dy = mousePos.y - cueBall.y; 
+            let force = Math.hypot(dx, dy); 
+            if (force < 5) return; 
+            let vx = dx * 0.08; let vy = dy * 0.08; let speed = Math.hypot(vx, vy); 
+            if (speed > 25) { vx = (vx / speed) * 25; vy = (vy / speed) * 25; } 
+            trackedBall = null; pocketedThisTurn = false; isStriking = true; 
+            strikeAngle = Math.atan2(-dy, -dx); cuePullback = Math.min(force, 100); pendingVelocity = { x: vx, y: vy }; 
+        } 
+    };
+    canvas.addEventListener('mousedown', handleStrike); canvas.addEventListener('touchstart', handleStrike, {passive: false});
+
+    // 計時器邏輯
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timeLeft = GAME_DURATION;
+        timeDisplay.innerText = formatTime(timeLeft);
+        timeDisplay.classList.remove('timer-warning');
+        
+        timerInterval = setInterval(() => {
+            if (!gameStarted) return; // 遊戲未開始不計時
+            timeLeft--;
+            timeDisplay.innerText = formatTime(timeLeft);
+            
+            if (timeLeft <= 10) {
+                timeDisplay.classList.add('timer-warning'); // 最後10秒閃爍紅字警告
+            }
+            
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }, 1000);
+    }
+
+    function endGame() {
+        clearInterval(timerInterval);
+        gameStarted = false; // 停止操作
+        autoSubmitScore();
+        document.getElementById('finalScoreDisplay').innerText = score;
+        document.getElementById('gameOverModal').style.display = 'flex';
+    }
+
+    function closeGameOverAndRestart() {
+        document.getElementById('gameOverModal').style.display = 'none';
+        showNameModal();
+    }
+
+    // 名稱彈窗與開局邏輯
+    function showNameModal() {
+        gameStarted = false; // 暫停遊戲互動
+        if (timerInterval) clearInterval(timerInterval); // 停止舊計時器
+        timeDisplay.innerText = formatTime(GAME_DURATION);
+        timeDisplay.classList.remove('timer-warning');
+
+        const modal = document.getElementById('nameModal');
+        const input = document.getElementById('playerNameInput');
+        modal.style.display = 'flex';
+        input.value = playerName || "神秘高手" + Math.floor(Math.random() * 1000);
+        input.focus();
+    }
+
+    function confirmNameAndStart() {
+        const input = document.getElementById('playerNameInput');
+        let name = input.value.trim();
+        if (!name) name = "無名氏";
+        playerName = name;
+        localStorage.setItem('snookerPlayerName', playerName);
+        document.getElementById('nameModal').style.display = 'none';
+        
+        resetGame(); // 重置桌面和分數
+        gameStarted = true; // 開放擊球
+        startTimer(); // 啟動兩分鐘計時
+    }
+
+    // 龍虎榜自動上傳與渲染邏輯
+    function autoSubmitScore() {
+        if (score === 0) return;
+        let lb = JSON.parse(localStorage.getItem('snookerLeaderboard') || '[]');
+        
+        let existing = lb.find(entry => entry.name === playerName);
+        if (existing) {
+            // 只在破自己最高紀錄時更新分數
+            if (score > existing.score) existing.score = score;
+        } else {
+            lb.push({ name: playerName, score: score });
+        }
+        
+        lb.sort((a, b) => b.score - a.score);
+        lb = lb.slice(0, 5); // 永遠只保留前五名
+        localStorage.setItem('snookerLeaderboard', JSON.stringify(lb));
+        renderLeaderboard();
+    }
+
+    function renderLeaderboard() {
+        const list = document.getElementById('leaderboardList');
+        let lb = JSON.parse(localStorage.getItem('snookerLeaderboard') || '[]');
+        if (lb.length === 0) {
+            list.innerHTML = '<li style="justify-content: center; color: #777;">暫無紀錄，快來挑戰！</li>';
+            return;
+        }
+        list.innerHTML = '';
+        lb.forEach((entry, index) => {
+            let rankClass = index < 3 ? `rank-${index}` : '';
+            let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            list.innerHTML += `<li class="${rankClass}"><span>${medal} ${entry.name}</span><span>${entry.score} 分</span></li>`;
+        });
+    }
+
+    // 初始化與啟動
+    renderLeaderboard();
+    resetGame(); // 初始化桌面，確保 cueBall 在 gameLoop 開始前已被建立
+    showNameModal(); // 進入網頁時首先彈出名稱設定
+    gameLoop(); // 背景開始繪製
+</script>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火影忍者 1v1 對決 (Naruto vs Sasuke)</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0f172a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #game-wrapper {
+            position: relative;
+            width: 1024px;
+            height: 576px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+            border: 4px solid #1e293b;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+        }
+        .health-bg {
+            width: 40%;
+            height: 35px;
+            background-color: #7f1d1d; /* 深紅 */
+            border: 3px solid #cbd5e1;
+            position: relative;
+            display: flex;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        #p1-health-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #22c55e; /* 綠色 */
+            transition: width 0.2s ease-out;
+            display: flex;
+            align-items: center;
+            padding-left: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            box-sizing: border-box;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #p2-health-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #22c55e;
+            transition: width 0.2s ease-out;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            box-sizing: border-box;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #timer {
+            font-size: 48px;
+            color: white;
+            font-weight: 900;
+            text-shadow: 0 0 10px #f59e0b, 2px 2px 4px #000;
+            width: 10%;
+            text-align: center;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+        #winner-text {
+            font-size: 72px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #eab308;
+            margin-bottom: 30px;
+        }
+        .btn {
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            pointer-events: auto;
+        }
+        .btn:hover { background-color: #dc2626; transform: scale(1.05); }
+        .btn:active { transform: scale(0.95); }
+        #controls-hint {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px #000;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <!-- UI 介面 -->
+    <div id="ui-layer">
+        <div class="health-bg" style="justify-content: flex-end;">
+            <div id="p1-health-bar">漩渦鳴人</div>
+        </div>
+        <div id="timer">60</div>
+        <div class="health-bg" style="justify-content: flex-start;">
+            <div id="p2-health-bar">宇智波佐助</div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束畫面 -->
+    <div id="game-over-screen">
+        <div id="winner-text">鳴人 獲勝！</div>
+        <button class="btn" onclick="restartGame()">重新決戰</button>
+    </div>
+
+    <!-- 操作說明 -->
+    <div id="controls-hint">
+        [鳴人] 移動: A/D | 跳躍: W | 普攻: F | 螺旋丸: G (冷卻5秒) &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; 
+        [佐助] 移動: ←/→ | 跳躍: ↑ | 普攻: K | 千鳥: L (冷卻5秒)
+    </div>
+
+    <!-- 渲染畫布 -->
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const c = canvas.getContext('2d');
+    
+    // 設定內部解析度
+    canvas.width = 1024;
+    canvas.height = 576;
+
+    const gravity = 0.7;
+    const GROUND_HEIGHT = 50;
+
+    // --- 繪製背景 (終結之谷風格) ---
+    function drawBackground() {
+        // 天空漸層
+        let sky = c.createLinearGradient(0, 0, 0, canvas.height);
+        sky.addColorStop(0, '#1e3a8a');
+        sky.addColorStop(1, '#7dd3fc');
+        c.fillStyle = sky;
+        c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 瀑布
+        c.fillStyle = '#38bdf8';
+        c.fillRect(canvas.width / 2 - 90, 0, 180, canvas.height);
+        
+        // 瀑布動態水波紋
+        c.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        for(let i=0; i<6; i++) {
+            let y = (Date.now() / 8 + i * 120) % canvas.height;
+            c.fillRect(canvas.width / 2 - 90, y, 180, 20);
+        }
+
+        // 左側雕像 (斑)
+        c.fillStyle = '#334155';
+        c.beginPath();
+        c.moveTo(0, canvas.height - GROUND_HEIGHT);
+        c.lineTo(220, canvas.height - GROUND_HEIGHT);
+        c.lineTo(160, canvas.height - 350);
+        c.lineTo(0, canvas.height - 350);
+        c.fill();
+
+        // 右側雕像 (柱間)
+        c.fillStyle = '#475569';
+        c.beginPath();
+        c.moveTo(canvas.width, canvas.height - GROUND_HEIGHT);
+        c.lineTo(canvas.width - 220, canvas.height - GROUND_HEIGHT);
+        c.lineTo(canvas.width - 160, canvas.height - 350);
+        c.lineTo(canvas.width, canvas.height - 350);
+        c.fill();
+
+        // 地面水面
+        c.fillStyle = '#0f172a';
+        c.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+    }
+
+    // --- 角色類別定義 ---
+    class Fighter {
+        constructor({ position, color, name, facing }) {
+            this.position = position;
+            this.velocity = { x: 0, y: 0 };
+            this.width = 50;
+            this.height = 130;
+            this.color = color;
+            this.name = name;
+            this.facing = facing; // 'left' or 'right'
+            this.lastKey = '';
+            
+            // 狀態與屬性
+            this.health = 100;
+            this.isGrounded = false;
+            this.isHit = false;
+            
+            // 攻擊判定
+            this.attackBox = {
+                position: { x: this.position.x, y: this.position.y },
+                width: 80,
+                height: 50
+            };
+            this.isAttacking = false;
+            this.hasHit = false;
+            
+            // 特殊技能
+            this.isSpecial = false;
+            this.hasHitSpecial = false;
+            this.specialCooldown = 0;
+            this.MAX_COOLDOWN = 300; // 60fps 下約 5 秒
+        }
+
+        draw() {
+            // 受擊閃爍效果
+            c.fillStyle = this.isHit ? 'white' : this.color;
+            c.fillRect(this.position.x, this.position.y, this.width, this.height);
+
+            // 繪製頭帶/裝飾
+            c.fillStyle = this.name === '鳴人' ? '#1e3a8a' : '#7e22ce';
+            c.fillRect(this.position.x, this.position.y + 10, this.width, 15);
+
+            // 繪製技能冷卻條 (頭頂)
+            if (this.specialCooldown > 0) {
+                c.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                c.fillRect(this.position.x, this.position.y - 15, this.width, 6);
+                c.fillStyle = '#facc15';
+                const cdWidth = (this.specialCooldown / this.MAX_COOLDOWN) * this.width;
+                c.fillRect(this.position.x, this.position.y - 15, cdWidth, 6);
+            } else {
+                c.fillStyle = '#06b6d4';
+                c.fillRect(this.position.x, this.position.y - 15, this.width, 6);
+            }
+
+            // 繪製攻擊特效
+            if (this.isAttacking) {
+                c.fillStyle = 'rgba(255, 255, 255, 0.6)'; // 普攻白光
+                c.fillRect(this.attackBox.position.x, this.attackBox.position.y, this.attackBox.width, this.attackBox.height);
+            } else if (this.isSpecial) {
+                if (this.name === '鳴人') {
+                    // 螺旋丸特效 (藍色球體)
+                    c.beginPath();
+                    c.arc(this.attackBox.position.x + this.attackBox.width / 2, this.attackBox.position.y + this.attackBox.height / 2, 45, 0, Math.PI * 2);
+                    c.fillStyle = 'rgba(56, 189, 248, 0.8)';
+                    c.fill();
+                    c.lineWidth = 3;
+                    c.strokeStyle = '#fff';
+                    c.stroke();
+                } else {
+                    // 千鳥特效 (紫色閃電)
+                    c.fillStyle = 'rgba(168, 85, 247, 0.7)';
+                    c.fillRect(this.attackBox.position.x, this.attackBox.position.y, this.attackBox.width, this.attackBox.height);
+                    
+                    // 隨機閃電線條
+                    c.beginPath();
+                    c.moveTo(this.position.x + this.width/2, this.position.y + 30);
+                    c.lineTo(this.attackBox.position.x + (this.facing === 'right' ? this.attackBox.width : 0), this.attackBox.position.y + Math.random() * this.attackBox.height);
+                    c.strokeStyle = '#fff';
+                    c.lineWidth = 4;
+                    c.stroke();
+                }
+            }
+        }
+
+        update() {
+            this.draw();
+
+            // 更新冷卻時間
+            if (this.specialCooldown > 0) this.specialCooldown--;
+
+            // 更新攻擊判定框位置 (依據面朝方向)
+            if (this.isSpecial) {
+                // 大招範圍擴大
+                if (this.name === '鳴人') {
+                    this.attackBox.width = 120;
+                    this.attackBox.height = 90;
+                } else {
+                    this.attackBox.width = 160;
+                    this.attackBox.height = 60;
+                    // 佐助千鳥突進效果
+                    this.velocity.x = this.facing === 'right' ? 18 : -18;
+                }
+            } else {
+                // 普攻範圍
+                this.attackBox.width = 80;
+                this.attackBox.height = 50;
+            }
+
+            this.attackBox.position.x = this.facing === 'right' ? this.position.x + this.width : this.position.x - this.attackBox.width;
+            this.attackBox.position.y = this.position.y + 20;
+
+            // 邊界限制 (X軸)
+            if (this.position.x + this.velocity.x < 0) {
+                this.position.x = 0;
+                this.velocity.x = 0;
+            } else if (this.position.x + this.width + this.velocity.x > canvas.width) {
+                this.position.x = canvas.width - this.width;
+                this.velocity.x = 0;
+            } else {
+                this.position.x += this.velocity.x;
+            }
+
+            // 重力與地面碰撞 (Y軸)
+            this.position.y += this.velocity.y;
+            if (this.position.y + this.height + this.velocity.y >= canvas.height - GROUND_HEIGHT) {
+                this.velocity.y = 0;
+                this.position.y = canvas.height - GROUND_HEIGHT - this.height;
+                this.isGrounded = true;
+            } else {
+                this.velocity.y += gravity;
+                this.isGrounded = false;
+            }
+        }
+
+        attack() {
+            if (this.isAttacking || this.isSpecial) return;
+            this.isAttacking = true;
+            this.hasHit = false;
+            setTimeout(() => { this.isAttacking = false; }, 150);
+        }
+
+        special() {
+            if (this.isAttacking || this.isSpecial || this.specialCooldown > 0) return;
+            this.isSpecial = true;
+            this.hasHitSpecial = false;
+            this.specialCooldown = this.MAX_COOLDOWN;
+            setTimeout(() => { this.isSpecial = false; }, 400); // 大招持續時間
+        }
+
+        takeDamage(amount) {
+            this.health -= amount;
+            if (this.health < 0) this.health = 0;
+
+            // 受擊閃爍
+            this.isHit = true;
+            setTimeout(() => { this.isHit = false; }, 100);
+
+            // 更新 UI
+            if (this.name === '鳴人') {
+                document.getElementById('p1-health-bar').style.width = this.health + '%';
+            } else {
+                document.getElementById('p2-health-bar').style.width = this.health + '%';
+            }
+
+            // 檢查死亡
+            if (this.health <= 0) {
+                endGame();
+            }
+        }
+    }
+
+    // --- 初始化角色 ---
+    let player, enemy;
+    function initFighters() {
+        player = new Fighter({
+            position: { x: 150, y: 0 },
+            color: '#f97316', // 橘色 (鳴人)
+            name: '鳴人',
+            facing: 'right'
+        });
+
+        enemy = new Fighter({
+            position: { x: 800, y: 0 },
+            color: '#1d4ed8', // 藍色 (佐助)
+            name: '佐助',
+            facing: 'left'
+        });
+    }
+    initFighters();
+
+    // --- 輸入控制與按鍵狀態 ---
+    const keys = {
+        a: { pressed: false },
+        d: { pressed: false },
+        ArrowLeft: { pressed: false },
+        ArrowRight: { pressed: false }
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if (!gameActive) return;
+        switch (e.key) {
+            // Player 1
+            case 'd': keys.d.pressed = true; player.lastKey = 'd'; break;
+            case 'a': keys.a.pressed = true; player.lastKey = 'a'; break;
+            case 'w': if (player.isGrounded) player.velocity.y = -16; break;
+            case 'f': player.attack(); break;
+            case 'g': player.special(); break;
+            
+            // Player 2
+            case 'ArrowRight': keys.ArrowRight.pressed = true; enemy.lastKey = 'ArrowRight'; break;
+            case 'ArrowLeft': keys.ArrowLeft.pressed = true; enemy.lastKey = 'ArrowLeft'; break;
+            case 'ArrowUp': if (enemy.isGrounded) enemy.velocity.y = -16; break;
+            case 'k': enemy.attack(); break;
+            case 'l': enemy.special(); break;
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        switch (e.key) {
+            case 'd': keys.d.pressed = false; break;
+            case 'a': keys.a.pressed = false; break;
+            case 'ArrowRight': keys.ArrowRight.pressed = false; break;
+            case 'ArrowLeft': keys.ArrowLeft.pressed = false; break;
+        }
+    });
+
+    // --- 碰撞偵測 ---
+    function rectangularCollision({ rect1, rect2 }) {
+        return (
+            rect1.attackBox.position.x + rect1.attackBox.width >= rect2.position.x &&
+            rect1.attackBox.position.x <= rect2.position.x + rect2.width &&
+            rect1.attackBox.position.y + rect1.attackBox.height >= rect2.position.y &&
+            rect1.attackBox.position.y <= rect2.position.y + rect2.height
+        );
+    }
+
+    // --- 遊戲系統邏輯 ---
+    let gameActive = true;
+    let timer = 60;
+    let timerId;
+
+    function decreaseTimer() {
+        if (timer > 0 && gameActive) {
+            timerId = setTimeout(decreaseTimer, 1000);
+            timer--;
+            document.getElementById('timer').innerText = timer;
+        }
+        if (timer === 0) {
+            endGame();
+        }
+    }
+
+    function endGame() {
+        gameActive = false;
+        clearTimeout(timerId);
+        document.getElementById('game-over-screen').style.display = 'flex';
+        
+        let resultText = document.getElementById('winner-text');
+        if (player.health === enemy.health) {
+            resultText.innerText = '平手！(Tie)';
+            resultText.style.color = '#fff';
+        } else if (player.health > enemy.health) {
+            resultText.innerText = '鳴人 獲勝！';
+            resultText.style.color = '#f97316';
+        } else {
+            resultText.innerText = '佐助 獲勝！';
+            resultText.style.color = '#38bdf8';
+        }
+    }
+
+    function restartGame() {
+        initFighters();
+        document.getElementById('p1-health-bar').style.width = '100%';
+        document.getElementById('p2-health-bar').style.width = '100%';
+        document.getElementById('game-over-screen').style.display = 'none';
+        timer = 60;
+        document.getElementById('timer').innerText = timer;
+        gameActive = true;
+        clearTimeout(timerId);
+        decreaseTimer();
+    }
+
+    // --- 核心遊戲迴圈 ---
+    function animate() {
+        window.requestAnimationFrame(animate);
+        c.fillStyle = 'black';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        
+        drawBackground();
+        
+        // 渲染更新角色
+        player.update();
+        enemy.update();
+
+        // 停止水平移動摩擦力
+        player.velocity.x = 0;
+        enemy.velocity.x = 0;
+
+        // 處理移動邏輯 (若未施放不可移動之大絕)
+        if (gameActive) {
+            if (!player.isSpecial) {
+                if (keys.a.pressed && player.lastKey === 'a') {
+                    player.velocity.x = -6;
+                    player.facing = 'left';
+                } else if (keys.d.pressed && player.lastKey === 'd') {
+                    player.velocity.x = 6;
+                    player.facing = 'right';
+                }
+            }
+
+            if (!enemy.isSpecial || enemy.name !== '佐助') { // 佐助千鳥時自動衝刺，不可手動控向
+                if (keys.ArrowLeft.pressed && enemy.lastKey === 'ArrowLeft') {
+                    enemy.velocity.x = -6;
+                    enemy.facing = 'left';
+                } else if (keys.ArrowRight.pressed && enemy.lastKey === 'ArrowRight') {
+                    enemy.velocity.x = 6;
+                    enemy.facing = 'right';
+                }
+            }
+        }
+
+        // --- 傷害結算判定 ---
+        
+        // 鳴人攻擊判定
+        if (rectangularCollision({ rect1: player, rect2: enemy }) && player.isAttacking && !player.hasHit) {
+            player.hasHit = true;
+            enemy.takeDamage(5); // 普攻傷害
+        }
+        if (rectangularCollision({ rect1: player, rect2: enemy }) && player.isSpecial && !player.hasHitSpecial) {
+            player.hasHitSpecial = true;
+            enemy.takeDamage(20); // 螺旋丸傷害
+            enemy.velocity.x = player.facing === 'right' ? 12 : -12; // 擊退
+            enemy.velocity.y = -6; // 擊飛
+        }
+
+        // 佐助攻擊判定
+        if (rectangularCollision({ rect1: enemy, rect2: player }) && enemy.isAttacking && !enemy.hasHit) {
+            enemy.hasHit = true;
+            player.takeDamage(5);
+        }
+        if (rectangularCollision({ rect1: enemy, rect2: player }) && enemy.isSpecial && !enemy.hasHitSpecial) {
+            enemy.hasHitSpecial = true;
+            player.takeDamage(20); // 千鳥傷害
+            player.velocity.x = enemy.facing === 'right' ? 12 : -12; // 擊退
+            player.velocity.y = -6; // 擊飛
+        }
+    }
+
+    // 啟動遊戲
+    decreaseTimer();
+    animate();
+
+</script>
+</body>
+</html>

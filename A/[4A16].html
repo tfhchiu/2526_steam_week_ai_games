@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberType 賽博打字遊戲</title>
+  
+  <!-- 引入 Tailwind CSS 以快速排版 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 引入 Google 像素字體 -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            pixel: ['VT323', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #111827; /* gray-900 */
+    }
+
+    .crt-overlay {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      background-size: 100% 4px, 6px 100%;
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 50;
+      opacity: 0.6;
+    }
+    
+    .neon-text { text-shadow: 0 0 5px currentColor, 0 0 10px currentColor; }
+    .neon-box { box-shadow: 0 0 5px currentColor, inset 0 0 5px currentColor; }
+    
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100vh); }
+    }
+    
+    .scanline {
+      width: 100%;
+      height: 10px;
+      background: rgba(57, 255, 20, 0.3);
+      position: absolute;
+      top: 0;
+      left: 0;
+      animation: scanline 4s linear infinite;
+      pointer-events: none;
+      z-index: 49;
+    }
+
+    @keyframes glitch {
+      0% { transform: translate(0) }
+      20% { transform: translate(-2px, 2px) }
+      40% { transform: translate(-2px, -2px) }
+      60% { transform: translate(2px, 2px) }
+      80% { transform: translate(2px, -2px) }
+      100% { transform: translate(0) }
+    }
+    
+    .glitch-hover:hover {
+      animation: glitch 0.2s linear infinite;
+    }
+
+    .flash-damage {
+      background-color: rgba(127, 29, 29, 0.5) !important; /* red-900/50 */
+    }
+
+    /* 背景網格 */
+    .bg-grid {
+      background-image: linear-gradient(rgba(57, 255, 20, 0.1) 1px, transparent 1px), 
+                        linear-gradient(90deg, rgba(57, 255, 20, 0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 0;
+    }
+  </style>
+</head>
+<body class="font-pixel text-white select-none">
+
+  <!-- 主容器 -->
+  <div id="game-container" class="relative w-full h-screen bg-gray-900 overflow-hidden transition-colors duration-100">
+    <div class="crt-overlay"></div>
+    <div class="scanline"></div>
+    <div class="absolute inset-0 bg-grid"></div>
+
+    <div class="relative z-10 w-full h-full flex flex-col">
+      
+      <!-- 頂部狀態列 -->
+      <div id="status-bar" class="hidden justify-between items-center p-4 border-b-2 border-green-500/50 bg-black/50 text-green-400 neon-text text-2xl">
+        <div>
+          <span class="opacity-70 mr-2">SYS_INTEGRITY:</span>
+          <span id="lives-display" class="text-pink-500">♥♥♥♥♥</span>
+        </div>
+        <div>
+          <span class="opacity-70 mr-2">SCORE:</span>
+          <span id="score-display">00000</span>
+        </div>
+      </div>
+
+      <!-- 遊戲區域 -->
+      <div class="flex-1 relative overflow-hidden" id="play-area">
+        
+        <!-- 主選單 -->
+        <div id="menu-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-20">
+          <h1 class="text-7xl md:text-8xl text-green-400 neon-text mb-2 tracking-widest text-center">
+            CYBER<span class="text-pink-500">TYPE</span>
+          </h1>
+          <p class="text-2xl text-cyan-300 mb-12 tracking-widest">主 機 入 侵 協 議</p>
+          <div class="text-gray-400 text-xl mb-8 text-center max-w-md bg-gray-800/50 p-6 rounded border border-gray-700">
+            <p class="mb-2 text-green-300">任務目標：</p>
+            <p>攔截並輸入掉落的電腦單字來破解系統。</p>
+            <p class="mt-4 text-pink-400 text-sm">＊請直接使用實體鍵盤輸入英文</p>
+          </div>
+          <button onclick="startGame()" class="px-8 py-3 text-3xl text-black bg-green-500 hover:bg-green-400 hover:scale-105 transition-all glitch-hover neon-box uppercase font-bold tracking-widest cursor-pointer">
+            [ Start Connection ]
+          </button>
+        </div>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="gameover-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-red-950/80 backdrop-blur-md z-20">
+          <h1 class="text-7xl md:text-8xl text-red-500 neon-text mb-4 tracking-widest text-center animate-pulse">
+            SYSTEM CRASH
+          </h1>
+          <p class="text-3xl text-pink-400 mb-8 neon-text">連線中斷</p>
+          <div class="text-2xl text-green-400 mb-12">
+            最終得分: <span id="final-score" class="text-4xl text-white ml-2">0</span>
+          </div>
+          <button onclick="startGame()" class="px-8 py-3 text-3xl text-black bg-cyan-500 hover:bg-cyan-400 hover:scale-105 transition-all glitch-hover neon-box uppercase font-bold tracking-widest cursor-pointer">
+            [ Reboot System ]
+          </button>
+        </div>
+
+        <!-- 單字掉落容器 -->
+        <div id="words-container" class="absolute inset-0"></div>
+
+      </div>
+
+      <!-- 底部輸入終端機 -->
+      <div id="terminal-bar" class="hidden h-24 bg-black border-t-2 border-green-500 flex flex-col justify-center px-6 relative z-10">
+        <div class="text-green-500 text-2xl md:text-3xl flex items-center">
+          <span class="text-cyan-400 mr-4">root@mainframe:~$</span>
+          <span class="text-white tracking-widest uppercase">
+            <span id="input-display"></span><span class="inline-block w-4 h-8 bg-green-500 ml-1 animate-pulse"></span>
+          </span>
+        </div>
+        <div class="text-gray-500 text-sm mt-1">
+          * 打錯字母或單字掉落會自動清除輸入框 | 系統自動提取不重複單字
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- 詞彙庫 ---
+    const VOCABULARY = [
+      { word: 'computer', translation: '電腦' }, { word: 'keyboard', translation: '鍵盤' },
+      { word: 'mouse', translation: '滑鼠' }, { word: 'screen', translation: '螢幕' },
+      { word: 'monitor', translation: '顯示器' }, { word: 'internet', translation: '網際網路' },
+      { word: 'network', translation: '網路' }, { word: 'hardware', translation: '硬體' },
+      { word: 'software', translation: '軟體' }, { word: 'download', translation: '下載' },
+      { word: 'upload', translation: '上傳' }, { word: 'password', translation: '密碼' },
+      { word: 'virus', translation: '病毒' }, { word: 'hacker', translation: '駭客' },
+      { word: 'system', translation: '系統' }, { word: 'data', translation: '資料' },
+      { word: 'file', translation: '檔案' }, { word: 'folder', translation: '資料夾' },
+      { word: 'browser', translation: '瀏覽器' }, { word: 'website', translation: '網站' },
+      { word: 'memory', translation: '記憶體' }, { word: 'pixel', translation: '像素' },
+      { word: 'server', translation: '伺服器' }, { word: 'coding', translation: '寫程式' },
+      { word: 'update', translation: '更新' }, { word: 'delete', translation: '刪除' },
+      { word: 'search', translation: '搜尋' }, { word: 'button', translation: '按鈕' },
+      { word: 'click', translation: '點擊' }, { word: 'online', translation: '線上' }
+    ];
+
+    // --- 遊戲狀態 ---
+    let gameState = 'menu'; // menu, playing, gameover
+    let score = 0;
+    let lives = 5;
+    let activeWords = []; // 畫面上現有的單字
+    let usedWords = [];   // 這輪用過的單字
+    let inputText = '';
+    
+    // 時間與動畫
+    let animationFrameId;
+    let lastTime = performance.now();
+    let lastSpawnTime = performance.now();
+
+    // DOM 元素參考
+    const gameContainer = document.getElementById('game-container');
+    const menuScreen = document.getElementById('menu-screen');
+    const gameoverScreen = document.getElementById('gameover-screen');
+    const statusBar = document.getElementById('status-bar');
+    const terminalBar = document.getElementById('terminal-bar');
+    const wordsContainer = document.getElementById('words-container');
+    const livesDisplay = document.getElementById('lives-display');
+    const scoreDisplay = document.getElementById('score-display');
+    const finalScoreDisplay = document.getElementById('final-score');
+    const inputDisplay = document.getElementById('input-display');
+
+    // --- 視覺更新函數 ---
+    function updateUI() {
+      livesDisplay.textContent = '♥'.repeat(Math.max(0, lives));
+      scoreDisplay.textContent = score.toString().padStart(5, '0');
+      inputDisplay.textContent = inputText;
+    }
+
+    function triggerFlash() {
+      gameContainer.classList.add('flash-damage');
+      setTimeout(() => gameContainer.classList.remove('flash-damage'), 100);
+    }
+
+    function renderWordElements() {
+      wordsContainer.innerHTML = ''; // 清空容器
+      
+      activeWords.forEach(w => {
+        const isTarget = inputText.length > 0 && w.word.startsWith(inputText);
+        
+        const wordDiv = document.createElement('div');
+        wordDiv.className = 'absolute flex flex-col items-center justify-center transform -translate-x-1/2 transition-none';
+        wordDiv.style.left = `${w.x}%`;
+        wordDiv.style.top = `${w.y}%`;
+
+        // 英文單字部分
+        const engBox = document.createElement('div');
+        engBox.className = `text-3xl md:text-4xl px-3 py-1 bg-black/60 border rounded shadow-lg ${isTarget ? 'border-pink-500 text-pink-400 shadow-[0_0_15px_#ec4899]' : 'border-green-500/50 text-green-400'}`;
+        
+        if (isTarget) {
+          engBox.innerHTML = `<span class="text-white bg-pink-600/50">${w.word.substring(0, inputText.length)}</span><span class="opacity-70">${w.word.substring(inputText.length)}</span>`;
+        } else {
+          engBox.textContent = w.word;
+        }
+
+        // 中文翻譯部分
+        const twBox = document.createElement('div');
+        twBox.className = 'mt-1 text-xl text-cyan-300 bg-black/80 px-2 rounded neon-text';
+        twBox.textContent = w.translation;
+
+        wordDiv.appendChild(engBox);
+        wordDiv.appendChild(twBox);
+        wordsContainer.appendChild(wordDiv);
+      });
+    }
+
+    function setGameOver() {
+      gameState = 'gameover';
+      cancelAnimationFrame(animationFrameId);
+      statusBar.classList.add('hidden');
+      terminalBar.classList.add('hidden');
+      gameoverScreen.classList.remove('hidden');
+      finalScoreDisplay.textContent = score;
+      wordsContainer.innerHTML = '';
+      document.removeEventListener('keydown', handleInput);
+    }
+
+    // --- 遊戲主邏輯 ---
+    function startGame() {
+      score = 0;
+      lives = 5;
+      activeWords = [];
+      usedWords = [];
+      inputText = '';
+      
+      menuScreen.classList.add('hidden');
+      gameoverScreen.classList.add('hidden');
+      statusBar.classList.remove('hidden');
+      statusBar.classList.add('flex');
+      terminalBar.classList.remove('hidden');
+      terminalBar.classList.add('flex');
+      
+      updateUI();
+      gameState = 'playing';
+      lastTime = performance.now();
+      lastSpawnTime = performance.now();
+      
+      document.addEventListener('keydown', handleInput);
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function gameLoop(time) {
+      if (gameState !== 'playing') return;
+      
+      const deltaTime = time - lastTime;
+      lastTime = time;
+
+      const baseFallSpeed = 0.004; 
+      const speedMultiplier = 1 + (score / 800); 
+      const fallSpeed = baseFallSpeed * speedMultiplier;
+      
+      const maxActiveWords = Math.min(5, 2 + Math.floor(score / 300));
+      const spawnInterval = Math.max(1500, 3500 - (score * 2));
+
+      // 1. 生成新單字
+      if (time - lastSpawnTime > spawnInterval && activeWords.length < maxActiveWords) {
+        lastSpawnTime = time;
+        
+        let availableVocab = VOCABULARY.filter(v => 
+          !activeWords.some(aw => aw.word === v.word) && 
+          !usedWords.includes(v.word)
+        );
+
+        if (availableVocab.length === 0) {
+          usedWords = []; // 重置已使用字庫
+          availableVocab = VOCABULARY.filter(v => !activeWords.some(aw => aw.word === v.word));
+        }
+
+        if (availableVocab.length > 0) {
+          const randomVocab = availableVocab[Math.floor(Math.random() * availableVocab.length)];
+          usedWords.push(randomVocab.word);
+          
+          activeWords.push({
+            ...randomVocab,
+            x: Math.floor(Math.random() * 70) + 10,
+            y: -10
+          });
+        }
+      }
+
+      // 2. 更新位置與檢查掉落
+      let lifeLost = 0;
+      let missedTarget = false;
+
+      for (let i = activeWords.length - 1; i >= 0; i--) {
+        activeWords[i].y += (fallSpeed * deltaTime);
+
+        if (activeWords[i].y > 90) { // 掉到底部
+          lifeLost++;
+          if (inputText && activeWords[i].word.startsWith(inputText)) {
+            missedTarget = true;
+          }
+          activeWords.splice(i, 1); // 移除單字
+        }
+      }
+
+      // 3. 處理扣血
+      if (lifeLost > 0) {
+        lives -= lifeLost;
+        updateUI();
+        triggerFlash();
+        
+        if (missedTarget) {
+          inputText = '';
+          updateUI();
+        }
+
+        if (lives <= 0) {
+          setGameOver();
+          return; // 終止這幀
+        }
+      }
+
+      // 4. 重新渲染畫面
+      renderWordElements();
+
+      if (gameState === 'playing') {
+        animationFrameId = requestAnimationFrame(gameLoop);
+      }
+    }
+
+    // --- 輸入處理 ---
+    function handleInput(e) {
+      if (gameState !== 'playing') return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      if (e.key === 'Backspace') {
+        inputText = inputText.slice(0, -1);
+      } else if (e.key === 'Escape') {
+        inputText = '';
+      } else if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+        const nextInput = inputText + e.key.toLowerCase();
+        
+        // 檢查是否符合任何畫面上的單字
+        const isValid = activeWords.some(w => w.word.startsWith(nextInput));
+        
+        if (!isValid) {
+          triggerFlash();
+          inputText = ''; // 打錯直接清空
+        } else {
+          inputText = nextInput;
+          
+          // 檢查是否完整打完一個字
+          const matchIndex = activeWords.findIndex(w => w.word === inputText);
+          if (matchIndex !== -1) {
+            score += activeWords[matchIndex].word.length * 10;
+            activeWords.splice(matchIndex, 1); // 消除該單字
+            inputText = ''; // 清空輸入框
+          }
+        }
+      }
+      updateUI();
+    }
+  </script>
+</body>
+</html>

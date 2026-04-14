@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>聖騎士：無盡深淵</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap');
+
+        :root {
+            --stone-gray: #232733;
+            --paladin-gold: #e6c27a;
+            --acid-red: #d93838;
+            --bg-dark: #0b0d17;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(circle at 50% 50%, #1c2135 0%, #050608 100%);
+            font-family: 'MedievalSharp', 'Courier New', serif;
+            color: #eaeaea;
+            user-select: none;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 100vh;
+            max-height: 800px;
+            background: linear-gradient(180deg, #0f141e 0%, #05080c 100%);
+            border: 8px solid var(--stone-gray);
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.9), inset 0 0 50px rgba(0,0,0,0.8);
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI 覆蓋層 */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 10;
+        }
+
+        .hud-text {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--paladin-gold);
+            letter-spacing: 2px;
+        }
+
+        #health-container {
+            width: 150px;
+            height: 20px;
+            background: #111;
+            border: 2px solid var(--stone-gray);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff4e4e 0%, #e6c27a 100%);
+            transition: width 0.2s ease-out;
+        }
+
+        /* 觸控控制區 (移動端) */
+        #touch-controls {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 50%;
+            display: flex;
+            z-index: 5;
+        }
+        .touch-zone { flex: 1; }
+
+        /* 彈窗 UI */
+        .modal-overlay {
+            display: flex;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .modal-box {
+            background: linear-gradient(135deg, var(--stone-gray) 0%, #11141c 100%);
+            border: 3px solid var(--paladin-gold);
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 20px rgba(230, 194, 122, 0.5);
+            pointer-events: auto;
+        }
+
+        .modal-title { 
+            font-size: 36px; 
+            color: var(--paladin-gold); 
+            margin-bottom: 20px; 
+            text-shadow: 0 0 10px rgba(230, 194, 122, 0.5), 2px 2px 4px #000;
+        }
+
+        /* 新增：玩家名稱輸入框樣式 */
+        #player-name {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0 15px 0;
+            background: #1a1e29;
+            border: 2px solid var(--stone-gray);
+            color: var(--paladin-gold);
+            font-family: inherit;
+            font-size: 18px;
+            text-align: center;
+            border-radius: 4px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        #player-name:focus {
+            border-color: var(--paladin-gold);
+            box-shadow: 0 0 10px rgba(230, 194, 122, 0.3);
+        }
+
+        .action-btn {
+            background: linear-gradient(180deg, #1f1f1f 0%, #0a0a0a 100%);
+            color: var(--paladin-gold); 
+            border: 2px solid var(--paladin-gold);
+            border-radius: 4px;
+            padding: 12px 30px; 
+            font-size: 22px; 
+            cursor: pointer; 
+            font-family: inherit; 
+            margin-top: 20px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .action-btn:hover { 
+            background: linear-gradient(180deg, var(--paladin-gold) 0%, #b89326 100%);
+            color: #111; 
+            box-shadow: 0 0 20px rgba(230, 194, 122, 0.5);
+            transform: scale(1.05);
+        }
+
+        .instructions {
+            font-size: 18px;
+            color: #ccc;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        #time-display {
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            text-shadow: 2px 2px 4px #000;
+        }
+        
+        .leaderboard-container {
+            margin-top: 15px;
+            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--stone-gray);
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .leaderboard-title {
+            color: var(--paladin-gold);
+            font-size: 20px;
+            margin-bottom: 10px;
+            border-bottom: 1px dashed rgba(230, 194, 122, 0.3);
+            padding-bottom: 5px;
+        }
+
+        #leaderboard-list {
+            list-style: none;
+            padding: 0; margin: 0;
+            text-align: left;
+            font-size: 18px; color: #eaeaea;
+        }
+
+        /* 更新排行榜排版，以容納玩家名稱 */
+        #leaderboard-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 16px; }
+        #leaderboard-list li .rank { color: #888; width: 30px; }
+        #leaderboard-list li .name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 10px; color: #fff; }
+        #leaderboard-list li:nth-child(1) .rank, #leaderboard-list li:nth-child(1) .name { color: #ffd700; font-weight: bold; }
+        #leaderboard-list li:nth-child(2) .rank, #leaderboard-list li:nth-child(2) .name { color: #c0c0c0; }
+        #leaderboard-list li:nth-child(3) .rank, #leaderboard-list li:nth-child(3) .name { color: #cd7f32; }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <canvas id="game-canvas" width="600" height="800"></canvas>
+        
+        <div id="ui-layer">
+            <div>
+                <div class="hud-text" style="color: #ff4e4e;">LIFE</div>
+                <div id="health-container"><div id="health-bar"></div></div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <div class="hud-text" style="color: #ccc; font-size: 16px; margin-bottom: 2px;">TIME</div>
+                <div class="hud-text" id="time-display" style="color: #fff;">00:00</div>
+            </div>
+            <div style="text-align: right;">
+                <div class="hud-text" id="depth-display">B0000F</div>
+                <div class="hud-text" id="revive-display" style="font-size: 18px; color: #ffeb3b; margin-top: 5px; text-shadow: 0 0 5px #ffeb3b;">🪙 x 1</div>
+            </div>
+        </div>
+
+        <div id="touch-controls">
+            <div class="touch-zone" id="touch-left"></div>
+            <div class="touch-zone" id="touch-right"></div>
+        </div>
+
+        <div class="modal-overlay" id="menu-modal">
+            <div class="modal-box">
+                <div class="modal-title" id="menu-title">聖騎士：深淵下落</div>
+                <div class="instructions" id="menu-desc">
+                    ➤ [←] [→] 或 點擊螢幕左右側移動<br>
+                    ➤ 注意新增的<b>冰面</b>與<b>移動踏板</b><br>
+                    ➤ 當心混在其中的<b>幻影陷阱</b>！<br>
+                    ➤ 撐過 20 秒，深淵即將覺醒...
+                </div>
+                
+                <!-- 新增玩家名稱輸入框 -->
+                <input type="text" id="player-name" placeholder="輸入英雄尊姓大名..." maxlength="10">
+                
+                <div class="hud-text" id="final-score" style="display: none; margin-bottom: 15px;"></div>
+                
+                <div class="leaderboard-container">
+                    <div class="leaderboard-title">🏆 殿堂英雄榜 (Top 5)</div>
+                    <ul id="leaderboard-list"></ul>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                    <button class="action-btn" id="btn-start" style="margin-top: 0;">開始探索</button>
+                    <button class="action-btn" id="btn-home" style="margin-top: 0; display: none; background: transparent; border-color: #888; color: #ccc;">返回主頁</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const healthBar = document.getElementById('health-bar');
+        const depthDisplay = document.getElementById('depth-display');
+        const menuModal = document.getElementById('menu-modal');
+        const menuTitle = document.getElementById('menu-title');
+        const menuDesc = document.getElementById('menu-desc');
+        const finalScore = document.getElementById('final-score');
+        const btnStart = document.getElementById('btn-start');
+        const btnHome = document.getElementById('btn-home');
+        const playerNameInput = document.getElementById('player-name');
+        const timeDisplay = document.getElementById('time-display');
+        const leaderboardList = document.getElementById('leaderboard-list');
+
+        // --- 遊戲常數 ---
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+        const GRAVITY = 0.6;
+        const FRICTION = 0.8;
+        const ICE_FRICTION = 0.98; // 冰面專用摩擦力
+        const MAX_FALL_SPEED = 12;
+        const PLAYER_SPEED = 6;
+        const MAX_HP = 10;
+        const PLATFORM_HEIGHT = 20;
+        const PLATFORM_WIDTH = 120;
+        
+        // --- 狀態變數 ---
+        let gameState = 'START';
+        let animationId;
+        let depth = 0;
+        let globalSpeed = 3;
+        let platforms = [];
+        let wallTraps = []; // 新增：牆壁陷阱陣列
+        let difficultyTimer = 0;
+        let startTime = 0;
+        let survivalTime = 0;
+        let hasTriggeredCollapse = false;
+        let hasTriggered45s = false; // 新增：45秒增量觸發標記
+        let hasTriggered60s = false; // 修改：將 50 秒改為 60 秒
+        let hasTriggered120s = false; // 新增：120秒惡龍觸發標記
+        let warningTimer = 0;
+        let warningText = ''; // 新增：動態警告文字
+        let reviveCoins = 1; // 新增：復活幣數量
+        let reviveMessageTimer = 0; // 新增：復活提示訊息計時器
+        let currentPlayerName = ''; // 新增：記錄當前玩家名稱
+        let leaderboard = JSON.parse(localStorage.getItem('paladin_leaderboard')) || [];
+        
+        // 新增：惡龍實體與圖片資源載入
+        const dragonImg = new Image();
+        dragonImg.src = 'image_d7f8b5.png';
+        let dragonImgLoaded = false;
+        dragonImg.onload = () => dragonImgLoaded = true;
+        
+        let dragon = { active: false, x: 0, y: 1000, width: 600, height: 200 };
+
+        // --- 玩家物件 ---
+        let player = {
+            x: GAME_WIDTH / 2, y: 100, width: 30, height: 30,
+            vx: 0, vy: 0, hp: MAX_HP, color: '#e6c27a',
+            isInvincible: false, invincibleTimer: 0, onPlatform: null,
+            trail: [] // 新增：拖尾效果記錄陣列
+        };
+
+        let keys = { left: false, right: false };
+
+        // --- 踏板系統 (優化設計：將資料與繪製邏輯解耦) ---
+        const PLATFORM_TYPES = {
+            NORMAL: { id: 0, color: '#5a637a', chance: 54 },      // 調整機率
+            SPIKE: { id: 1, color: '#3a4052', chance: 10 },
+            SPRING: { id: 2, color: '#4caf50', chance: 8 },
+            CONVEYOR_LEFT: { id: 3, color: '#888', chance: 6 },
+            CONVEYOR_RIGHT: { id: 4, color: '#888', chance: 6 },
+            FRAGILE: { id: 5, color: '#8b5a2b', chance: 5 },
+            ICE: { id: 6, color: '#a0e6ff', chance: 4 },
+            MOVING: { id: 7, color: '#6a4c93', chance: 4 },
+            HOLY: { id: 8, color: '#ffd700', chance: 1 },
+            ILLUSION: { id: 9, color: '#5a637a', chance: 1 },
+            REVIVE: { id: 10, color: '#ffeb3b', chance: 1 } // 新增：復活幣踏板
+        };
+
+        class Platform {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.width = PLATFORM_WIDTH;
+                // 20秒後普通踏板變寬 (增加碰撞體積)
+                if (survivalTime >= 20 && type.id === PLATFORM_TYPES.NORMAL.id) {
+                    this.width = PLATFORM_WIDTH * 1.5;
+                    // 確保生成時不超出邊界，並預留給牆壁陷阱一點空間
+                    if (this.x + this.width > GAME_WIDTH - 20) {
+                        this.x = GAME_WIDTH - 20 - this.width;
+                    }
+                }
+                this.height = PLATFORM_HEIGHT;
+                this.isStepped = false;
+                this.fragileTimer = 0;
+                this.markedForDeletion = false;
+                // 針對移動踏板初始化速度
+                this.vx = type.id === PLATFORM_TYPES.MOVING.id ? (Math.random() > 0.5 ? 2 : -2) : 0;
+            }
+
+            update(speed) {
+                this.y -= speed;
+                
+                // 移動踏板邏輯
+                if (this.type.id === PLATFORM_TYPES.MOVING.id) {
+                    this.x += this.vx;
+                    if (this.x <= 0 || this.x + this.width >= GAME_WIDTH) {
+                        this.vx *= -1; // 碰壁反彈
+                    }
+                }
+                
+                // 崩塌邏輯 (幻影不適用此邏輯，因為它一踩就碎)
+                if (this.isStepped && this.type.id !== PLATFORM_TYPES.ILLUSION.id) {
+                    if (this.type.id === PLATFORM_TYPES.FRAGILE.id) { // 取消 20 秒全域碎裂
+                        this.fragileTimer++;
+                        
+                        // 20秒後增加玩家在踏板上可以持續時間 (從 3 秒延長至 5 秒)
+                        let limit = survivalTime >= 20 ? 300 : 180;
+                        if (this.fragileTimer > limit) this.markedForDeletion = true; 
+                    }
+                }
+            }
+
+            draw(ctx) {
+                if (this.markedForDeletion) return;
+
+                // 基礎繪製
+                ctx.fillStyle = this.type.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+                // 特殊裝飾渲染 (優化：使用獨立方法取代巨大 if-else)
+                switch(this.type.id) {
+                    case PLATFORM_TYPES.SPIKE.id: this._drawSpike(ctx); break;
+                    case PLATFORM_TYPES.SPRING.id: this._drawSpring(ctx); break;
+                    case PLATFORM_TYPES.CONVEYOR_LEFT.id: this._drawConveyor(ctx, 'left'); break;
+                    case PLATFORM_TYPES.CONVEYOR_RIGHT.id: this._drawConveyor(ctx, 'right'); break;
+                    case PLATFORM_TYPES.ICE.id: this._drawIce(ctx); break;
+                    case PLATFORM_TYPES.HOLY.id: this._drawHoly(ctx); break;
+                    case PLATFORM_TYPES.MOVING.id: this._drawMoving(ctx); break;
+                    case PLATFORM_TYPES.REVIVE.id: this._drawRevive(ctx); break;
+                }
+                
+                // 裂痕繪製 (不包含幻影)
+                if (this.fragileTimer > 0 && this.type.id !== PLATFORM_TYPES.ILLUSION.id) {
+                    this._drawCracks(ctx);
+                }
+            }
+
+            // --- 繪圖輔助方法 ---
+            _drawSpike(ctx) {
+                ctx.fillStyle = '#d93838';
+                for (let i = 0; i < this.width; i += 15) {
+                    ctx.beginPath(); ctx.moveTo(this.x + i, this.y);
+                    ctx.lineTo(this.x + i + 7.5, this.y - 15);
+                    ctx.lineTo(this.x + i + 15, this.y); ctx.fill();
+                }
+            }
+            _drawSpring(ctx) {
+                ctx.fillStyle = '#2e7d32';
+                ctx.fillRect(this.x + 10, this.y - 5, this.width - 20, 5);
+            }
+            _drawConveyor(ctx, dir) {
+                ctx.fillStyle = '#e6c27a';
+                let offset = dir === 'left' ? 0 : 10;
+                for (let i = 10; i < this.width - 15; i += 20) {
+                    ctx.beginPath();
+                    if(dir === 'left') {
+                        ctx.moveTo(this.x + i + 10, this.y + 5);
+                        ctx.lineTo(this.x + i, this.y + 10);
+                        ctx.lineTo(this.x + i + 10, this.y + 15);
+                    } else {
+                        ctx.moveTo(this.x + i, this.y + 5);
+                        ctx.lineTo(this.x + i + 10, this.y + 10);
+                        ctx.lineTo(this.x + i, this.y + 15);
+                    }
+                    ctx.fill();
+                }
+            }
+            _drawIce(ctx) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(this.x + 20, this.y + 5); ctx.lineTo(this.x + 40, this.y + 15);
+                ctx.moveTo(this.x + 80, this.y + 5); ctx.lineTo(this.x + 100, this.y + 15);
+                ctx.stroke();
+            }
+            _drawHoly(ctx) {
+                ctx.fillStyle = '#fff';
+                ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10;
+                ctx.fillRect(this.x + this.width/2 - 4, this.y + 4, 8, 12);
+                ctx.fillRect(this.x + this.width/2 - 8, this.y + 8, 16, 4);
+                ctx.shadowBlur = 0;
+            }
+            _drawMoving(ctx) {
+                ctx.fillStyle = '#111'; // 齒輪象徵
+                ctx.beginPath(); ctx.arc(this.x + 10, this.y + 10, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(this.x + this.width - 10, this.y + 10, 4, 0, Math.PI*2); ctx.fill();
+            }
+            _drawRevive(ctx) {
+                // 繪製復活幣圖示
+                ctx.fillStyle = '#ffeb3b';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y + this.height / 2, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#cddc39';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            _drawCracks(ctx) {
+                ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.x + 15, this.y); ctx.lineTo(this.x + 35, this.y + 10);
+                ctx.lineTo(this.x + 55, this.y); ctx.lineTo(this.x + 75, this.y + 15);
+                ctx.stroke();
+            }
+        }
+
+        // --- 牆壁陷阱 (20秒後出現) ---
+        class WallTrap {
+            constructor(y) {
+                this.y = y;
+                this.height = 30;
+                this.side = Math.random() > 0.5 ? 'left' : 'right';
+                this.maxWidth = 80 + Math.random() * 40; // 伸出長度 80~120
+                this.cycle = Math.random() * Math.PI * 2; // 隨機初始相位
+                this.speed = 0.04 + Math.random() * 0.04; // 伸縮速度
+                this.markedForDeletion = false;
+            }
+            update(speed) {
+                this.y -= speed;
+                this.cycle += this.speed;
+                if (this.y < -100) this.markedForDeletion = true;
+            }
+            getCurrentWidth() {
+                // 利用 sin 函數製作平滑伸縮，小於 0 時表示縮在牆內
+                let val = Math.sin(this.cycle);
+                return val > 0 ? val * this.maxWidth : 0; 
+            }
+            draw(ctx) {
+                let w = this.getCurrentWidth();
+                if (w <= 0) return;
+                
+                ctx.fillStyle = '#9e9e9e';
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                let baseX = this.side === 'left' ? 20 : GAME_WIDTH - 20;
+                
+                if (this.side === 'left') {
+                    ctx.moveTo(baseX, this.y);
+                    ctx.lineTo(baseX + w, this.y + this.height / 2);
+                    ctx.lineTo(baseX, this.y + this.height);
+                } else {
+                    ctx.moveTo(baseX, this.y);
+                    ctx.lineTo(baseX - w, this.y + this.height / 2);
+                    ctx.lineTo(baseX, this.y + this.height);
+                }
+                ctx.fill(); ctx.stroke();
+            }
+        }
+
+        // --- 控制輸入 ---
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowLeft') keys.left = true;
+            if (e.code === 'ArrowRight') keys.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft') keys.left = false;
+            if (e.code === 'ArrowRight') keys.right = false;
+        });
+
+        document.getElementById('touch-left').addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; });
+        document.getElementById('touch-left').addEventListener('touchend', (e) => { e.preventDefault(); keys.left = false; });
+        document.getElementById('touch-right').addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; });
+        document.getElementById('touch-right').addEventListener('touchend', (e) => { e.preventDefault(); keys.right = false; });
+
+        // --- 核心流程 ---
+        function initGame() {
+            // 讀取玩家名稱
+            currentPlayerName = document.getElementById('player-name').value.trim() || '無名騎士';
+
+            player = {
+                x: GAME_WIDTH / 2 - 15, y: 100, width: 30, height: 30,
+                vx: 0, vy: 0, hp: MAX_HP, color: '#e6c27a',
+                isInvincible: false, invincibleTimer: 0, onPlatform: null,
+                trail: []
+            };
+            
+            platforms = []; wallTraps = []; depth = 0; globalSpeed = 2.5; difficultyTimer = 0;
+            keys.left = false; keys.right = false;
+            startTime = Date.now(); survivalTime = 0;
+            hasTriggeredCollapse = false; hasTriggered45s = false; hasTriggered60s = false; hasTriggered120s = false; warningTimer = 0; warningText = '';
+            reviveCoins = 1; reviveMessageTimer = 0;
+            dragon = { active: false, x: 0, y: GAME_HEIGHT + 100, width: GAME_WIDTH, height: 200 }; // 初始化惡龍位置
+            updateTimer();
+
+            // 增加初始踏板數量與密度
+            platforms.push(new Platform(GAME_WIDTH / 2 - PLATFORM_WIDTH / 2, 300, PLATFORM_TYPES.NORMAL));
+            for (let i = 1; i < 9; i++) spawnPlatform(300 + i * 80);
+
+            gameState = 'PLAYING';
+            menuModal.style.display = 'none';
+            updateUI();
+            
+            if (animationId) cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+
+        function spawnPlatform(yPos, specificX) {
+            const x = specificX !== undefined ? specificX : Math.random() * (GAME_WIDTH - PLATFORM_WIDTH);
+            let rand = Math.random() * 100;
+            let selectedType = PLATFORM_TYPES.NORMAL;
+            
+            if (depth > 10) {
+                let cumulative = 0;
+                for (let key in PLATFORM_TYPES) {
+                    cumulative += PLATFORM_TYPES[key].chance;
+                    if (rand <= cumulative) {
+                        selectedType = PLATFORM_TYPES[key]; break;
+                    }
+                }
+            }
+            platforms.push(new Platform(x, yPos || GAME_HEIGHT + 50, selectedType));
+        }
+
+        function damagePlayer(amount) {
+            if (player.isInvincible) return;
+            player.hp -= amount;
+            player.isInvincible = true; player.invincibleTimer = 30;
+            
+            ctx.fillStyle = 'rgba(217, 56, 56, 0.3)';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            if (player.hp <= 0) checkReviveOrGameOver();
+            else updateUI();
+        }
+
+        function checkReviveOrGameOver() {
+            if (reviveCoins > 0) {
+                reviveCoins--;
+                player.hp = MAX_HP;
+                player.y = 100; // 傳送回上方安全區
+                player.x = GAME_WIDTH / 2 - player.width / 2;
+                player.vy = 0;
+                player.isInvincible = true;
+                player.invincibleTimer = 180; // 復活後無敵 3 秒
+                reviveMessageTimer = 120; // 顯示復活訊息
+                
+                // 生成一個安全踏板接住玩家
+                platforms.push(new Platform(GAME_WIDTH / 2 - PLATFORM_WIDTH / 2, 200, PLATFORM_TYPES.NORMAL));
+                updateUI();
+            } else {
+                gameOver();
+            }
+        }
+
+        function healPlayer(amount) {
+            if (player.hp < MAX_HP) {
+                player.hp = Math.min(MAX_HP, player.hp + amount);
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            const hpPercent = (player.hp / MAX_HP) * 100;
+            healthBar.style.width = `${Math.max(0, hpPercent)}%`;
+            healthBar.style.background = hpPercent < 30 ? '#d93838' : 'linear-gradient(90deg, #ff4e4e 0%, #e6c27a 100%)';
+            depthDisplay.textContent = 'B' + String(Math.floor(depth)).padStart(4, '0') + 'F';
+            document.getElementById('revive-display').textContent = `🪙 x ${reviveCoins}`;
+        }
+
+        function updateTimer() {
+            if (gameState === 'PLAYING') {
+                survivalTime = Math.floor((Date.now() - startTime) / 1000);
+                if (survivalTime >= 20 && !hasTriggeredCollapse) {
+                    hasTriggeredCollapse = true; warningTimer = 180;
+                    warningText = '⚠️ 警告：深淵深處，牆壁機關已啟動！';
+                }
+                if (survivalTime >= 45 && !hasTriggered45s) {
+                    hasTriggered45s = true; warningTimer = 180;
+                    warningText = '🌀 異變：深淵躁動，踏板大量湧現！';
+                }
+                if (survivalTime >= 60 && !hasTriggered60s) { // 修改為 60 秒觸發
+                    hasTriggered60s = true; warningTimer = 180;
+                    warningText = '🚨 危機：深淵暴走，下墜速度驟升！';
+                    globalSpeed += 1.5; // 瞬間提速
+                }
+                if (survivalTime >= 120 && !hasTriggered120s) {
+                    hasTriggered120s = true; warningTimer = 240;
+                    warningText = '🐉 警告：深淵之主已在虛空覺醒！';
+                }
+            }
+            const mins = String(Math.floor(survivalTime / 60)).padStart(2, '0');
+            const secs = String(survivalTime % 60).padStart(2, '0');
+            timeDisplay.textContent = `${mins}:${secs}`;
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            menuTitle.textContent = "🛡️ 騎士殞落 🛡️";
+            menuTitle.style.color = "var(--acid-red)";
+            menuDesc.style.display = 'none';
+            finalScore.style.display = 'block';
+            
+            const mins = String(Math.floor(survivalTime / 60)).padStart(2, '0');
+            const secs = String(survivalTime % 60).padStart(2, '0');
+            finalScore.innerHTML = `抵達深度：<br><span style="font-size: 48px; color: var(--paladin-gold)">B${Math.floor(depth)}F</span><br><span style="font-size: 24px; color: #ccc; margin-top: 10px; display: inline-block;">存活時間: ${mins}:${secs}</span>`;
+            
+            // 將玩家名稱一同寫入排行榜資料中
+            leaderboard.push({ name: currentPlayerName, depth: Math.floor(depth), time: survivalTime });
+            leaderboard.sort((a, b) => b.depth - a.depth || b.time - a.time);
+            leaderboard = leaderboard.slice(0, 5);
+            localStorage.setItem('paladin_leaderboard', JSON.stringify(leaderboard));
+            renderLeaderboard();
+
+            btnStart.textContent = "重新挑戰";
+            btnHome.style.display = 'block'; // 顯示返回主頁按鈕
+            playerNameInput.style.display = 'none'; // 隱藏名稱輸入框
+            menuModal.style.display = 'flex';
+        }
+
+        // 新增：通關結算畫面
+        function gameWin() {
+            gameState = 'VICTORY';
+            menuTitle.textContent = "👑 深淵征服者 👑";
+            menuTitle.style.color = "var(--paladin-gold)";
+            menuDesc.style.display = 'none';
+            finalScore.style.display = 'block';
+            
+            const mins = String(Math.floor(survivalTime / 60)).padStart(2, '0');
+            const secs = String(survivalTime % 60).padStart(2, '0');
+            finalScore.innerHTML = `<span style="font-size: 32px; color: #4caf50;">🎉 恭喜通關 🎉</span><br><br>抵達深度：<br><span style="font-size: 48px; color: var(--paladin-gold)">B${Math.floor(depth)}F</span><br><span style="font-size: 24px; color: #ccc; margin-top: 10px; display: inline-block;">通關時間: ${mins}:${secs}</span>`;
+            
+            // 將玩家名稱一同寫入排行榜資料中，並加上皇冠通關標記
+            leaderboard.push({ name: currentPlayerName + " 👑", depth: Math.floor(depth), time: survivalTime });
+            leaderboard.sort((a, b) => b.depth - a.depth || b.time - a.time);
+            leaderboard = leaderboard.slice(0, 5);
+            localStorage.setItem('paladin_leaderboard', JSON.stringify(leaderboard));
+            renderLeaderboard();
+
+            btnStart.textContent = "再次挑戰";
+            btnHome.style.display = 'block';
+            playerNameInput.style.display = 'none';
+            menuModal.style.display = 'flex';
+        }
+
+        function renderLeaderboard() {
+            leaderboardList.innerHTML = '';
+            if (leaderboard.length === 0) {
+                leaderboardList.innerHTML = '<li style="justify-content:center; color:#888;">尚無探索紀錄</li>'; return;
+            }
+            leaderboard.forEach((entry, index) => {
+                const mins = String(Math.floor(entry.time / 60)).padStart(2, '0');
+                const secs = String(entry.time % 60).padStart(2, '0');
+                const pName = entry.name || '無名騎士'; // 兼容舊版沒名字的紀錄
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="rank">#${index + 1}</span> <span class="name">${pName}</span> <span>B${entry.depth}F</span> <span style="margin-left:8px;">⏱️${mins}:${secs}</span>`;
+                leaderboardList.appendChild(li);
+            });
+        }
+
+        // --- 優化：分離玩家物理與輸入處理 ---
+        function handlePlayerInputAndPhysics() {
+            // 判斷是否在冰面上 (降低摩擦力、改變加速度)
+            let isOnIce = player.onPlatform && player.onPlatform.type.id === PLATFORM_TYPES.ICE.id;
+
+            if (isOnIce) {
+                // 冰面滑行機制：加減速較慢
+                if (keys.left) player.vx -= 0.6;
+                else if (keys.right) player.vx += 0.6;
+                else player.vx *= ICE_FRICTION;
+                
+                // 冰面最大速度限制稍微高一點點
+                if (player.vx > PLAYER_SPEED + 2) player.vx = PLAYER_SPEED + 2;
+                if (player.vx < -(PLAYER_SPEED + 2)) player.vx = -(PLAYER_SPEED + 2);
+            } else {
+                // 普通地面機制
+                if (keys.left) player.vx = -PLAYER_SPEED;
+                else if (keys.right) player.vx = PLAYER_SPEED;
+                else player.vx *= FRICTION; // 瞬間停止感
+            }
+
+            player.x += player.vx;
+
+            // 邊界阻擋
+            if (player.x < 0) { player.x = 0; player.vx = 0; }
+            if (player.x + player.width > GAME_WIDTH) { player.x = GAME_WIDTH - player.width; player.vx = 0; }
+
+            // 垂直物理
+            player.vy += GRAVITY;
+            if (player.vy > MAX_FALL_SPEED) player.vy = MAX_FALL_SPEED;
+            player.y += player.vy;
+        }
+
+        // --- 優化：分離碰撞與踏板效果處理 ---
+        function handleCollisions() {
+            player.onPlatform = null;
+
+            // 牆壁陷阱碰撞判定
+            for (let wt of wallTraps) {
+                let w = wt.getCurrentWidth();
+                if (w > 0) {
+                    let hit = false;
+                    if (player.y < wt.y + wt.height && player.y + player.height > wt.y) {
+                        if (wt.side === 'left' && player.x < 20 + w) hit = true;
+                        if (wt.side === 'right' && player.x + player.width > GAME_WIDTH - 20 - w) hit = true;
+                    }
+                    if (hit && !player.isInvincible) {
+                        damagePlayer(3);
+                        player.vx = wt.side === 'left' ? 12 : -12; // 擊退效果
+                    }
+                }
+            }
+
+            for (let i = 0; i < platforms.length; i++) {
+                let p = platforms[i];
+                p.update(globalSpeed);
+
+                if (p.markedForDeletion) continue;
+
+                // 判斷玩家是否落在踏板上
+                if (player.vy >= 0 && 
+                    player.y + player.height - player.vy <= p.y + 10 &&
+                    player.y + player.height >= p.y &&
+                    player.x + player.width > p.x && 
+                    player.x < p.x + p.width) {
+                    
+                    // 執行初次踩踏的瞬間效果 (幻影陷阱會直接碎裂)
+                    if (p.type.id === PLATFORM_TYPES.ILLUSION.id) {
+                        p.markedForDeletion = true;
+                        continue; // 不會給予站立判定，直接穿過
+                    }
+
+                    // 站立狀態設定
+                    player.y = p.y - player.height;
+                    player.vy = -globalSpeed;
+                    player.onPlatform = p;
+
+                    // 初次踩踏判定 (計分與單次效果)
+                    if (!p.isStepped) {
+                        p.isStepped = true;
+                        depth += 1;
+                        updateUI();
+                        
+                        // 初步效果分離
+                        if (p.type.id === PLATFORM_TYPES.NORMAL || p.type.id === PLATFORM_TYPES.MOVING || p.type.id === PLATFORM_TYPES.ICE) {
+                            healPlayer(1);
+                        } else if (p.type.id === PLATFORM_TYPES.HOLY.id) {
+                            healPlayer(3); // 神聖大補血
+                        } else if (p.type.id === PLATFORM_TYPES.SPIKE.id) {
+                            damagePlayer(4);
+                        } else if (p.type.id === PLATFORM_TYPES.REVIVE.id) {
+                            reviveCoins++;
+                            healPlayer(MAX_HP); // 獲取復活幣時順便補滿血
+                            updateUI();
+                            p.type = PLATFORM_TYPES.NORMAL; // 轉為普通踏板，防止重複獲取
+                        }
+                    }
+
+                    // 持續效果分離
+                    if (p.type.id === PLATFORM_TYPES.SPRING.id) {
+                        player.vy = -16;
+                        p.isStepped = true;
+                    } else if (survivalTime >= 20) {
+                        // 20秒後所有其他踏板增加輕微彈跳
+                        player.vy = -9;
+                        player.onPlatform = null; // 解除站立狀態，處於彈起狀態
+                        
+                        // 即使彈跳，瞬間仍給予輸送帶與移動踏板的推力
+                        if (p.type.id === PLATFORM_TYPES.CONVEYOR_LEFT.id) player.x -= 3;
+                        if (p.type.id === PLATFORM_TYPES.CONVEYOR_RIGHT.id) player.x += 3;
+                        if (p.type.id === PLATFORM_TYPES.MOVING.id) player.x += p.vx;
+                    } else if (p.type.id === PLATFORM_TYPES.CONVEYOR_LEFT.id) {
+                        player.x -= 3;
+                    } else if (p.type.id === PLATFORM_TYPES.CONVEYOR_RIGHT.id) {
+                        player.x += 3;
+                    } else if (p.type.id === PLATFORM_TYPES.MOVING.id) {
+                        player.x += p.vx; // 玩家跟隨踏板移動
+                    }
+                }
+            }
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            difficultyTimer++;
+            if (difficultyTimer % 600 === 0) {
+                let maxSpeed = survivalTime >= 60 ? 7.5 : 6; // 60秒後開放更高的速度上限
+                globalSpeed = Math.min(globalSpeed + 0.3, maxSpeed);
+            }
+
+            handlePlayerInputAndPhysics();
+            handleCollisions();
+
+            // 更新玩家拖尾
+            player.trail.push({x: player.x, y: player.y});
+            if (player.trail.length > 10) player.trail.shift();
+
+            // 移除出界踏板
+            if (platforms.length > 0 && platforms[0].y < -50) {
+                platforms.shift();
+            }
+
+            // 改變生成機制：基於最後一個踏板的垂直距離，確保不聚集且留有下落空隙
+            let lastP = platforms[platforms.length - 1];
+            let spacing = 90 + (globalSpeed * 6); // 速度越快，踏板垂直間距越大，給予下落空間
+            
+            // 45秒後，縮短垂直間隔，增加踏板密度
+            if (survivalTime >= 45) {
+                spacing *= 0.65;
+            }
+            
+            if (lastP && GAME_HEIGHT - lastP.y >= spacing) {
+                let newX;
+                // 嘗試生成不與上一個踏板完全重疊的X座標，確保有水平空隙
+                for (let i = 0; i < 5; i++) {
+                    newX = 20 + Math.random() * (GAME_WIDTH - PLATFORM_WIDTH - 40); // 避開緊貼牆壁
+                    if (Math.abs(newX - lastP.x) > 70) break; // 確保有錯開
+                }
+                spawnPlatform(GAME_HEIGHT + 30, newX);
+                
+                // 45秒後，有高機率在同一水平線生成第二個踏板
+                if (survivalTime >= 45 && Math.random() > 0.3) {
+                    let newX2;
+                    let foundSpace = false;
+                    for (let i = 0; i < 5; i++) {
+                        newX2 = 20 + Math.random() * (GAME_WIDTH - PLATFORM_WIDTH - 40);
+                        if (Math.abs(newX2 - newX) > PLATFORM_WIDTH + 20) {
+                            foundSpace = true; break; // 確保兩個踏板水平不重疊
+                        }
+                    }
+                    if (foundSpace) spawnPlatform(GAME_HEIGHT + 30, newX2);
+                }
+            }
+
+            // 20秒後牆壁陷阱生成邏輯
+            if (survivalTime >= 20) {
+                if (Math.random() < 0.015) { // 約每秒生成一點點
+                    wallTraps.push(new WallTrap(GAME_HEIGHT + 50));
+                }
+            }
+            wallTraps.forEach(wt => wt.update(globalSpeed));
+            wallTraps = wallTraps.filter(wt => !wt.markedForDeletion);
+
+            // 天花板尖刺
+            if (player.y <= 20) {
+                player.y = 20; player.vy = 2; damagePlayer(3);
+            }
+
+            // 惡龍邏輯 (120秒後出現)
+            if (survivalTime >= 120) {
+                dragon.active = true;
+                if (dragon.y > GAME_HEIGHT - 120) {
+                    dragon.y -= 0.5; // 惡龍緩緩從虛空底部升起
+                }
+                
+                // 碰到惡龍即觸發通關
+                if (player.y + player.height >= dragon.y) {
+                    gameWin();
+                    return;
+                }
+            }
+
+            // 跌入深淵
+            if (player.y > GAME_HEIGHT) {
+                if (dragon.active) gameWin(); // 如果惡龍存在，跌落直接判定為觸碰通關
+                else checkReviveOrGameOver();
+            }
+
+            // 無敵計時
+            if (player.isInvincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) player.isInvincible = false;
+            }
+        }
+
+        // --- 優化：渲染層整理 ---
+        function draw() {
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // 背景與牆壁
+            ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.fillStyle = '#1c2230'; ctx.fillRect(0, 0, 20, GAME_HEIGHT); ctx.fillRect(GAME_WIDTH - 20, 0, 20, GAME_HEIGHT);
+            ctx.strokeStyle = '#05080c';
+            for (let i = 0; i < GAME_HEIGHT; i += 40) {
+                ctx.strokeRect(0, i, 20, 40); ctx.strokeRect(GAME_WIDTH - 20, i, 20, 40);
+            }
+
+            // 頂部尖刺
+            ctx.fillStyle = 'var(--stone-gray)'; ctx.fillRect(0, 0, GAME_WIDTH, 20);
+            ctx.fillStyle = 'var(--acid-red)';
+            for (let i = 0; i < GAME_WIDTH; i += 20) {
+                ctx.beginPath(); ctx.moveTo(i, 20); ctx.lineTo(i + 10, 40); ctx.lineTo(i + 20, 20); ctx.fill();
+            }
+
+            // 繪製所有踏板
+            platforms.forEach(p => p.draw(ctx));
+
+            // 繪製牆壁陷阱
+            wallTraps.forEach(wt => wt.draw(ctx));
+
+            // 繪製惡龍
+            if (dragon.active) {
+                if (dragonImgLoaded) {
+                    ctx.drawImage(dragonImg, dragon.x, dragon.y, dragon.width, dragon.height);
+                } else {
+                    // 若圖片加載失敗的備用繪製 (深色方塊與文字)
+                    ctx.fillStyle = '#110000';
+                    ctx.fillRect(dragon.x, dragon.y, dragon.width, dragon.height);
+                    ctx.fillStyle = '#ff4e4e';
+                    ctx.font = 'bold 36px "MedievalSharp", "Courier New"';
+                    ctx.textAlign = 'center'; ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 10;
+                    ctx.fillText('🐉 深淵惡龍 🐉', GAME_WIDTH / 2, dragon.y + 60);
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            // 繪製玩家拖尾效果
+            player.trail.forEach((pos, index) => {
+                const alpha = (index + 1) / player.trail.length * 0.4;
+                ctx.fillStyle = `rgba(230, 194, 122, ${alpha})`;
+                ctx.fillRect(pos.x, pos.y, player.width, player.height);
+            });
+
+            // 繪製玩家
+            if (!player.isInvincible || Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.shadowColor = 'var(--paladin-gold)'; ctx.shadowBlur = 10;
+                ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+                
+                ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
+                ctx.fillRect(player.x + 12, player.y + 5, 6, 20); ctx.fillRect(player.x + 5, player.y + 10, 20, 6);
+                
+                if (player.isInvincible) {
+                    ctx.fillStyle = 'rgba(217, 56, 56, 0.5)';
+                    ctx.fillRect(player.x, player.y, player.width, player.height);
+                }
+            }
+            
+            // 警告文字更新
+            if (warningTimer > 0) {
+                ctx.fillStyle = `rgba(217, 56, 56, ${Math.min(1, warningTimer / 30)})`;
+                ctx.font = 'bold 26px "MedievalSharp", "Courier New"';
+                ctx.textAlign = 'center'; ctx.shadowColor = '#000'; ctx.shadowBlur = 8;
+                ctx.fillText(warningText, GAME_WIDTH / 2, GAME_HEIGHT / 2);
+                ctx.shadowBlur = 0; warningTimer--;
+            }
+            
+            // 復活訊息
+            if (reviveMessageTimer > 0) {
+                ctx.fillStyle = `rgba(255, 235, 59, ${Math.min(1, reviveMessageTimer / 30)})`;
+                ctx.font = 'bold 32px "MedievalSharp", "Courier New"';
+                ctx.textAlign = 'center'; ctx.shadowColor = '#000'; ctx.shadowBlur = 10;
+                ctx.fillText('✨ 聖光庇佑！英雄重生 ✨', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60);
+                ctx.shadowBlur = 0; reviveMessageTimer--;
+            }
+        }
+
+        function gameLoop() {
+            update();
+            updateTimer();
+            draw();
+            if (gameState === 'PLAYING') animationId = requestAnimationFrame(gameLoop);
+        }
+
+        btnStart.addEventListener('click', initGame);
+        
+        // 返回主頁按鈕邏輯：重置UI讓下一位玩家輸入名稱
+        btnHome.addEventListener('click', () => {
+            menuTitle.textContent = "聖騎士：深淵下落";
+            menuTitle.style.color = "var(--paladin-gold)";
+            menuDesc.style.display = 'block';
+            finalScore.style.display = 'none';
+            playerNameInput.style.display = 'inline-block';
+            playerNameInput.value = ''; // 清空上一位玩家的名稱
+            btnStart.textContent = "開始探索";
+            btnHome.style.display = 'none';
+        });
+
+        renderLeaderboard(); draw();
+
+    </script>
+</body>
+</html>

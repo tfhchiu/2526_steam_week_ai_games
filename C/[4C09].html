@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>電腦單字防衛戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* 防止手機瀏覽器滑動 */
+        }
+        canvas {
+            display: block;
+        }
+        .text-glow {
+            text-shadow: 0 0 10px currentColor;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen">
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 遊戲內 UI -->
+    <div id="ui-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none hidden flex-col justify-between">
+        <!-- 頂部資訊列 -->
+        <div class="flex justify-between items-start p-4 md:p-6 w-full max-w-4xl mx-auto">
+            <div class="flex flex-col">
+                <span class="text-xl md:text-2xl font-bold text-blue-400">分數: <span id="scoreEl">0</span></span>
+                <span class="text-lg md:text-xl font-bold text-red-400 mt-1">生命: <span id="healthEl">100</span></span>
+            </div>
+            
+            <!-- 當前題目 -->
+            <div class="text-center bg-slate-800/90 p-4 rounded-xl border-2 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.6)]">
+                <p class="text-sm md:text-base text-gray-300 mb-2">射擊對應這個中文意思的怪獸：</p>
+                <h1 id="questionEl" class="text-3xl md:text-5xl font-black text-cyan-400 text-glow tracking-wider">中央處理器</h1>
+            </div>
+
+            <div class="w-24"></div> <!-- 平衡版面用 -->
+        </div>
+    </div>
+
+    <!-- 開始畫面 -->
+    <div id="startScreen" class="absolute inset-0 flex items-center justify-center bg-slate-900/95 backdrop-blur-md z-50">
+        <div class="bg-slate-800 p-8 rounded-2xl border-2 border-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.4)] text-center max-w-md w-11/12">
+            <h1 class="text-4xl font-black text-cyan-400 mb-2 text-glow">電腦單字防衛戰</h1>
+            <p class="text-gray-400 mb-6 font-medium">初中資訊科技詞彙特訓</p>
+            
+            <div class="text-left bg-slate-900/80 p-5 rounded-xl border border-slate-700 mb-6 text-sm text-gray-200 leading-relaxed">
+                <p class="mb-3"><strong class="text-yellow-400 text-base">任務目標：</strong> 畫面中央是你扮演的戰士。畫面上方會顯示題目的中文解釋，請找出頭頂著 <span class="text-cyan-300">正確英文單字</span> 的怪獸，並開槍將其擊落！</p>
+                <p class="mb-3"><strong class="text-yellow-400 text-base">操作方式：</strong> 滑鼠移動瞄準，點擊滑鼠左鍵（或手機觸控點擊）發射子彈。</p>
+                <div class="grid grid-cols-2 gap-2 mt-4">
+                    <div class="bg-green-900/30 p-2 rounded border border-green-800">
+                        <span class="text-green-400 font-bold block">✓ 正確擊殺</span>
+                        <span class="text-green-200">+10 分，換下一題</span>
+                    </div>
+                    <div class="bg-red-900/30 p-2 rounded border border-red-800">
+                        <span class="text-red-400 font-bold block">✗ 錯誤擊殺</span>
+                        <span class="text-red-200">-5 生命值</span>
+                    </div>
+                </div>
+                <div class="bg-red-950/40 p-2 rounded border border-red-900 mt-2 text-center">
+                    <span class="text-red-500 font-bold block">⚠️ 怪獸襲擊</span>
+                    <span class="text-red-300">被怪獸碰到 -15 生命值</span>
+                </div>
+            </div>
+
+            <button id="startBtn" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.6)] border border-cyan-400">
+                開始戰鬥
+            </button>
+        </div>
+    </div>
+
+    <!-- 結束畫面 -->
+    <div id="gameOverScreen" class="absolute inset-0 flex items-center justify-center bg-red-950/95 backdrop-blur-md z-50 hidden">
+        <div class="bg-slate-900 p-8 rounded-2xl border-2 border-red-600 shadow-[0_0_50px_rgba(239,68,68,0.5)] text-center max-w-md w-11/12">
+            <h1 class="text-5xl font-black text-red-500 mb-4 text-glow tracking-widest">防線崩潰</h1>
+            <p class="text-xl text-gray-400 mb-2 font-medium">本次測驗得分</p>
+            <div class="bg-slate-800 rounded-xl p-6 mb-8 border border-slate-700">
+                <p id="finalScoreEl" class="text-7xl font-black text-yellow-400 text-glow">0</p>
+            </div>
+            
+            <button id="restartBtn" class="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(239,68,68,0.6)] border border-red-400">
+                重新挑戰
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 詞彙庫 (初中程度電腦單字) ---
+        const vocabList = [
+            { word: "CPU", meaning: "中央處理器" },
+            { word: "Monitor", meaning: "顯示器 / 螢幕" },
+            { word: "Keyboard", meaning: "鍵盤" },
+            { word: "Mouse", meaning: "滑鼠" },
+            { word: "Hardware", meaning: "硬體" },
+            { word: "Software", meaning: "軟體" },
+            { word: "Network", meaning: "網路" },
+            { word: "Memory", meaning: "記憶體" },
+            { word: "Database", meaning: "資料庫" },
+            { word: "Browser", meaning: "瀏覽器" },
+            { word: "Server", meaning: "伺服器" },
+            { word: "Pixel", meaning: "像素" },
+            { word: "Router", meaning: "路由器" },
+            { word: "Program", meaning: "程式" },
+            { word: "Virus", meaning: "病毒" },
+            { word: "Internet", meaning: "網際網路" },
+            { word: "Download", meaning: "下載" },
+            { word: "Upload", meaning: "上傳" },
+            { word: "Password", meaning: "密碼" },
+            { word: "Hacker", meaning: "駭客" },
+            { word: "Algorithm", meaning: "演算法" },
+            { word: "Cloud", meaning: "雲端" }
+        ];
+
+        // --- 遊戲引擎設定 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI 元素
+        const scoreEl = document.getElementById('scoreEl');
+        const healthEl = document.getElementById('healthEl');
+        const questionEl = document.getElementById('questionEl');
+        const uiLayer = document.getElementById('ui-layer');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreEl = document.getElementById('finalScoreEl');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // 遊戲狀態變數與實體陣列 (將 player 宣告移至最前面，避免 ReferenceError)
+        let score = 0;
+        let health = 100;
+        let isGameRunning = false;
+        let animationId;
+        let currentTarget = null;
+        let spawnInterval;
+        let baseSpawnRate = 2500; // 初始怪物生成間隔 (毫秒)
+        let player = null; 
+
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // 調整畫布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (player) {
+                player.x = canvas.width / 2;
+                player.y = canvas.height / 2;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- 類別定義 ---
+
+        // 玩家 (拿槍的戰士)
+        class Player {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = 25; // 碰撞半徑
+                this.color = color;
+                this.angle = 0;
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                // --- 繪製拿槍的人物 (俯視角) ---
+
+                // 1. 畫槍 (指向右側，即 0 度方向)
+                // 槍管
+                ctx.fillStyle = '#64748b'; // 金屬灰
+                ctx.fillRect(15, -4, 35, 8); 
+                // 槍身
+                ctx.fillStyle = '#1e293b'; // 深灰
+                ctx.fillRect(10, -8, 20, 16);
+                // 槍托
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, -6, 10, 12);
+                
+                // 2. 畫身體 (肩膀與軀幹)
+                ctx.fillStyle = this.color; // 衣服顏色
+                ctx.beginPath();
+                ctx.roundRect(-18, -20, 30, 40, 10);
+                ctx.fill();
+
+                // 3. 畫手 (膚色)
+                ctx.fillStyle = '#fcd34d'; 
+                // 左手持槍前段
+                ctx.beginPath();
+                ctx.arc(22, -12, 6, 0, Math.PI * 2); 
+                ctx.fill();
+                // 右手持槍後段
+                ctx.beginPath();
+                ctx.arc(12, 12, 6, 0, Math.PI * 2); 
+                ctx.fill();
+
+                // 4. 畫頭部
+                // 頭盔
+                ctx.fillStyle = '#334155';
+                ctx.beginPath();
+                ctx.arc(0, 0, 14, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 護目鏡 (藍色發光)
+                ctx.fillStyle = '#38bdf8';
+                ctx.shadowColor = '#38bdf8';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                // 畫一個類似 V 字或一字型的護目鏡
+                ctx.arc(3, 0, 10, -Math.PI/2.5, Math.PI/2.5);
+                ctx.lineTo(-2, 8);
+                ctx.lineTo(-2, -8);
+                ctx.fill();
+                ctx.shadowBlur = 0; // 重置陰影
+
+                ctx.restore();
+            }
+        }
+
+        // 子彈
+        class Bullet {
+            constructor(x, y, velocity) {
+                this.x = x;
+                this.y = y;
+                this.radius = 5;
+                this.color = '#fef08a'; // 黃色子彈
+                this.velocity = velocity;
+                this.alpha = 1;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                // 畫長條形的子彈更有動感
+                ctx.translate(this.x, this.y);
+                ctx.rotate(Math.atan2(this.velocity.y, this.velocity.x));
+                ctx.rect(-10, -2, 20, 4);
+                
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = '#eab308';
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.restore();
+            }
+            update() {
+                this.draw();
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+            }
+        }
+
+        // 敵人 (怪獸)
+        class Enemy {
+            constructor(x, y, radius, color, velocity, wordData, isTarget) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius; // 碰撞半徑與基礎大小
+                this.color = color;
+                this.velocity = velocity;
+                this.wordData = wordData; // { word: '...', meaning: '...' }
+                this.isTarget = isTarget; // 布林值，是否為正確答案
+                
+                // 怪獸個體差異
+                this.hornSize = Math.random() * 8 + 12; // 犄角大小
+                this.eyeSpacing = Math.random() * 5 + 8; // 雙眼間距
+                this.wobblePhase = Math.random() * Math.PI * 2; // 走路搖擺的相位
+                this.wobbleSpeed = Math.random() * 0.05 + 0.05; // 走路搖擺的速度
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // --- 走路搖擺動畫效果 ---
+                const wobble = Math.sin(Date.now() * this.wobbleSpeed + this.wobblePhase) * 0.1;
+                ctx.rotate(wobble);
+
+                const r = this.radius;
+
+                // --- 繪製怪獸身體 ---
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                
+                // 底部波浪 (觸手感)
+                ctx.moveTo(-r, r);
+                ctx.lineTo(-r*0.6, r*0.8);
+                ctx.lineTo(-r*0.2, r*1.1);
+                ctx.lineTo(r*0.2, r*0.8);
+                ctx.lineTo(r*0.6, r*1.1);
+                ctx.lineTo(r, r);
+                
+                // 右側身體
+                ctx.lineTo(r, -r*0.2);
+                
+                // 右犄角
+                ctx.lineTo(r + this.hornSize*0.6, -r - this.hornSize);
+                ctx.lineTo(r*0.3, -r*0.8);
+                
+                // 頭頂圓弧
+                ctx.quadraticCurveTo(0, -r*1.3, -r*0.3, -r*0.8);
+                
+                // 左犄角
+                ctx.lineTo(-r - this.hornSize*0.6, -r - this.hornSize);
+                ctx.lineTo(-r, -r*0.2);
+                
+                ctx.closePath();
+                ctx.shadowColor = '#000';
+                ctx.shadowBlur = 10;
+                ctx.fill();
+
+                // --- 繪製眼睛 (盯著玩家看) ---
+                ctx.shadowBlur = 0; 
+                
+                // 計算瞳孔偏移 (朝向中央玩家)
+                let pupilOffsetX = 0;
+                let pupilOffsetY = 0;
+                if (player) {
+                    const angleToPlayer = Math.atan2(player.y - this.y, player.x - this.x);
+                    // 限制瞳孔移動範圍
+                    pupilOffsetX = Math.cos(angleToPlayer) * 4;
+                    pupilOffsetY = Math.sin(angleToPlayer) * 4;
+                }
+
+                // 眼白
+                ctx.fillStyle = '#f8fafc';
+                ctx.beginPath();
+                ctx.arc(-this.eyeSpacing, -r*0.2, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(this.eyeSpacing, -r*0.2, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 瞳孔 (紅色或深色)
+                ctx.fillStyle = '#450a0a'; // 深紅棕色
+                ctx.beginPath();
+                ctx.arc(-this.eyeSpacing + pupilOffsetX, -r*0.2 + pupilOffsetY, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(this.eyeSpacing + pupilOffsetX, -r*0.2 + pupilOffsetY, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // --- 繪製生氣的眉毛 ---
+                ctx.strokeStyle = '#270303'; 
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(-this.eyeSpacing - 10, -r*0.2 - 12);
+                ctx.lineTo(-this.eyeSpacing + 6, -r*0.2 - 6);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(this.eyeSpacing + 10, -r*0.2 - 12);
+                ctx.lineTo(this.eyeSpacing - 6, -r*0.2 - 6);
+                ctx.stroke();
+
+                // --- 繪製恐怖的鋸齒嘴巴 ---
+                ctx.fillStyle = '#020617';
+                ctx.beginPath();
+                ctx.ellipse(0, r*0.4, 12, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#f8fafc'; // 牙齒顏色
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                // 上排牙齒
+                ctx.moveTo(-10, r*0.4 - 2);
+                ctx.lineTo(-5, r*0.4 + 3);
+                ctx.lineTo(0, r*0.4 - 2);
+                ctx.lineTo(5, r*0.4 + 3);
+                ctx.lineTo(10, r*0.4 - 2);
+                // 下排牙齒
+                ctx.moveTo(-8, r*0.4 + 5);
+                ctx.lineTo(-4, r*0.4);
+                ctx.lineTo(0, r*0.4 + 5);
+                ctx.lineTo(4, r*0.4);
+                ctx.lineTo(8, r*0.4 + 5);
+                ctx.stroke();
+
+                ctx.restore();
+                
+                // --- 繪製頭頂的英文單字標籤 (不跟著身體搖擺，保持水平) ---
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                const labelWidth = ctx.measureText(this.wordData.word).width + 30; // 根據字數動態調整寬度
+                const labelY = -r - this.hornSize - 20; // 在犄角上方
+                
+                // 標籤背景
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                ctx.strokeStyle = '#38bdf8'; // 藍色邊框
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(-labelWidth/2, labelY - 14, labelWidth, 28, 8);
+                ctx.fill();
+                ctx.stroke();
+                
+                // 英文單字文字
+                ctx.fillStyle = '#bae6fd'; // 亮藍色文字
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = '#0284c7';
+                ctx.shadowBlur = 5;
+                ctx.fillText(this.wordData.word, 0, labelY);
+                
+                ctx.restore();
+            }
+            update() {
+                this.draw();
+                // 朝著玩家移動
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+            }
+        }
+
+        // 爆炸粒子效果
+        class Particle {
+            constructor(x, y, radius, color, velocity) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.velocity = velocity;
+                this.alpha = 1;
+                this.friction = 0.96; // 摩擦力，讓粒子快速慢下來
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+            update() {
+                this.draw();
+                this.velocity.x *= this.friction;
+                this.velocity.y *= this.friction;
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.alpha -= 0.02; // 逐漸淡出
+            }
+        }
+
+        // 漂浮文字效果 (+10, -5)
+        class FloatingText {
+            constructor(x, y, text, color, isBig = false) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.alpha = 1;
+                this.velocity = { x: (Math.random() - 0.5) * 1.5, y: -1.5 }; // 緩慢向上漂浮
+                this.isBig = isBig;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.font = this.isBig ? 'black 32px "Segoe UI"' : 'bold 22px "Segoe UI"';
+                ctx.textAlign = 'center';
+                // 粗黑邊框讓文字在任何背景都清楚
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 4;
+                ctx.strokeText(this.text, this.x, this.y);
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+            update() {
+                this.draw();
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.alpha -= 0.015;
+            }
+        }
+
+        // --- 遊戲邏輯函數 ---
+
+        function init() {
+            score = 0;
+            health = 100;
+            baseSpawnRate = 2500;
+            updateUI();
+            
+            bullets = [];
+            enemies = [];
+            particles = [];
+            floatingTexts = [];
+            
+            player = new Player(canvas.width / 2, canvas.height / 2, '#0284c7'); // 藍色系戰衣
+            
+            pickNewQuestion();
+            isGameRunning = true;
+            
+            uiLayer.classList.remove('hidden');
+            uiLayer.style.display = 'flex';
+            
+            // 開始生成怪物
+            startSpawning();
+            
+            animate();
+        }
+
+        function updateUI() {
+            scoreEl.innerText = score;
+            healthEl.innerText = health;
+            
+            // 根據血量改變顏色警告
+            if (health <= 30) {
+                healthEl.className = "text-red-500 animate-pulse";
+            } else {
+                healthEl.className = "text-red-400";
+            }
+
+            if (health <= 0) {
+                gameOver();
+            }
+        }
+
+        // 管理怪物生成頻率 (隨分數增加變難)
+        function startSpawning() {
+            if (spawnInterval) clearInterval(spawnInterval);
+            
+            spawnEnemyWave(); // 立即生成一波
+            
+            spawnInterval = setInterval(() => {
+                spawnEnemyWave();
+                
+                // 每得 50 分，生成速度變快，最低不小於 800 毫秒
+                const currentExpectedRate = Math.max(800, 2500 - Math.floor(score / 50) * 200);
+                if (currentExpectedRate !== baseSpawnRate) {
+                    baseSpawnRate = currentExpectedRate;
+                    startSpawning(); // 重置計時器以套用新頻率
+                }
+            }, baseSpawnRate);
+        }
+
+        // 選擇新題目
+        function pickNewQuestion() {
+            const randomIndex = Math.floor(Math.random() * vocabList.length);
+            currentTarget = vocabList[randomIndex];
+            
+            // 添加動畫效果讓換題更明顯
+            questionEl.style.transform = 'scale(1.2)';
+            questionEl.style.color = '#fff';
+            setTimeout(() => {
+                questionEl.style.transform = 'scale(1)';
+                questionEl.style.color = '#22d3ee'; // cyan-400
+                questionEl.innerText = currentTarget.meaning;
+            }, 150);
+            
+            // 出新題時，強制生成一波包含正確答案的怪獸
+            spawnEnemyWave(true);
+        }
+
+        // 生成怪獸波
+        function spawnEnemyWave(forceIncludeTarget = false) {
+            if (!isGameRunning) return;
+
+            // 一次產生 1~3 隻怪獸
+            const numEnemies = Math.floor(Math.random() * 3) + 1; 
+            let hasTargetInThisWave = false;
+
+            for (let i = 0; i < numEnemies; i++) {
+                const radius = 30 + Math.random() * 10; // 怪獸大小 30~40
+                let x, y;
+                
+                // 隨機從畫布外圍四個邊生成
+                const spawnSide = Math.random();
+                if (spawnSide < 0.25) {
+                    // 左
+                    x = -radius - 50;
+                    y = Math.random() * canvas.height;
+                } else if (spawnSide < 0.5) {
+                    // 右
+                    x = canvas.width + radius + 50;
+                    y = Math.random() * canvas.height;
+                } else if (spawnSide < 0.75) {
+                    // 上
+                    x = Math.random() * canvas.width;
+                    y = -radius - 50;
+                } else {
+                    // 下
+                    x = Math.random() * canvas.width;
+                    y = canvas.height + radius + 50;
+                }
+
+                // 決定單字
+                let enemyVocab;
+                let isTarget = false;
+
+                if (forceIncludeTarget && !hasTargetInThisWave) {
+                    // 保證這波有一個是正確答案
+                    enemyVocab = currentTarget;
+                    isTarget = true;
+                    hasTargetInThisWave = true;
+                } else {
+                    // 隨機選一個「不是」當前答案的單字
+                    let rand;
+                    do {
+                        rand = vocabList[Math.floor(Math.random() * vocabList.length)];
+                    } while (rand.word === currentTarget.word);
+                    enemyVocab = rand;
+                }
+
+                // 計算移動向量 (朝向中央的玩家)
+                const angle = Math.atan2(canvas.height / 2 - y, canvas.width / 2 - x);
+                
+                // 速度根據分數逐漸增加
+                const speedMultipler = 1 + (score / 150); 
+                const speed = (Math.random() * 0.6 + 0.4) * speedMultipler; // 0.4 ~ 1.0 的基礎速度
+                
+                const velocity = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+
+                // 怪獸顏色統一為危險的紅色調，玩家必須看頭上的字
+                const color = '#b91c1c'; // red-700
+
+                enemies.push(new Enemy(x, y, radius, color, velocity, enemyVocab, isTarget));
+            }
+        }
+
+        // 產生爆炸特效 (血肉橫飛的感覺)
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                const velocity = {
+                    x: (Math.random() - 0.5) * (Math.random() * 10),
+                    y: (Math.random() - 0.5) * (Math.random() * 10)
+                };
+                // 粒子大小不一
+                const size = Math.random() * 4 + 1;
+                particles.push(new Particle(x, y, size, color, velocity));
+            }
+        }
+
+        // 遊戲主迴圈
+        function animate() {
+            if (!isGameRunning) return;
+            animationId = requestAnimationFrame(animate);
+
+            // 繪製背景 (帶有輕微拖影效果)
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)'; // slate-900
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 畫玩家
+            if (player) {
+                player.draw();
+            }
+
+            // 更新與繪製粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    p.update();
+                }
+            }
+
+            // 更新與繪製子彈
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.update();
+
+                // 移除飛出畫面的子彈
+                if (b.x < -100 || b.x > canvas.width + 100 || b.y < -100 || b.y > canvas.height + 100) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 更新與繪製怪獸
+            for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+                const enemy = enemies[eIndex];
+                enemy.update();
+
+                // 1. 檢查怪獸是否撞到玩家
+                if (player) {
+                    // 計算圓心距離
+                    const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                    // 碰撞判定 (考量半徑)
+                    if (distToPlayer < enemy.radius + player.radius) {
+                        // 撞到了！
+                        createExplosion(enemy.x, enemy.y, enemy.color);
+                        floatingTexts.push(new FloatingText(player.x, player.y - 40, "受傷! -15", "#ef4444", true)); // red-500
+                        
+                        health -= 15;
+                        updateUI();
+                        
+                        // 如果被撞到的是目標單字，代表錯失機會，重新出題
+                        if (enemy.isTarget) {
+                            pickNewQuestion();
+                        }
+
+                        // 移除該怪獸
+                        enemies.splice(eIndex, 1);
+                        continue; // 進入下一個怪獸的迴圈
+                    }
+                }
+
+                // 2. 檢查子彈是否打中怪獸
+                for (let bIndex = bullets.length - 1; bIndex >= 0; bIndex--) {
+                    const bullet = bullets[bIndex];
+                    const distToBullet = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                    
+                    // 碰撞判定
+                    if (distToBullet < enemy.radius + bullet.radius) {
+                        // 擊中！
+                        createExplosion(enemy.x, enemy.y, enemy.color);
+                        
+                        // 判斷是否打對
+                        if (enemy.isTarget) {
+                            // 答對了！
+                            score += 10;
+                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, "正確! +10", "#4ade80", true)); // green-400
+                            updateUI();
+                            
+                            // 答對後，清空畫面上其他錯誤的怪獸 (變成灰色碎塊)
+                            enemies.forEach(e => {
+                                if (e !== enemy) createExplosion(e.x, e.y, '#475569'); // slate-600
+                            });
+                            enemies = []; // 清空陣列
+                            
+                            // 延遲一下出下一題
+                            setTimeout(() => { if(isGameRunning) pickNewQuestion(); }, 400);
+                            
+                            // 移除這顆子彈並跳出迴圈 (因為敵人陣列已經清空)
+                            bullets.splice(bIndex, 1);
+                            break; 
+                            
+                        } else {
+                            // 答錯了！打到不對的單字
+                            health -= 5;
+                            floatingTexts.push(new FloatingText(enemy.x, enemy.y, "錯誤單字! -5", "#f87171")); // red-400
+                            updateUI();
+                            
+                            // 移除被打死的錯誤怪獸和子彈
+                            enemies.splice(eIndex, 1);
+                            bullets.splice(bIndex, 1);
+                            break; // 這隻怪獸死了，不用再檢查其他子彈對它的碰撞
+                        }
+                    }
+                }
+            }
+
+            // 更新與繪製漂浮文字 (放在最後畫，確保在最上層)
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const text = floatingTexts[i];
+                if (text.alpha <= 0) {
+                    floatingTexts.splice(i, 1);
+                } else {
+                    text.update();
+                }
+            }
+        }
+
+        // 結束遊戲
+        function gameOver() {
+            isGameRunning = false;
+            clearInterval(spawnInterval);
+            cancelAnimationFrame(animationId);
+            
+            // 隱藏遊戲中 UI，顯示結束畫面
+            uiLayer.style.display = 'none';
+            gameOverScreen.classList.remove('hidden');
+            
+            // 數字跳動動畫
+            let displayScore = 0;
+            const finalScore = score;
+            const scoreTimer = setInterval(() => {
+                displayScore += Math.max(1, Math.floor(finalScore / 20));
+                if (displayScore >= finalScore) {
+                    displayScore = finalScore;
+                    clearInterval(scoreTimer);
+                }
+                finalScoreEl.innerText = displayScore;
+            }, 50);
+        }
+
+        // --- 互動事件 ---
+
+        // 追蹤滑鼠位置來旋轉玩家角色
+        window.addEventListener('mousemove', (event) => {
+            if (!isGameRunning || !player) return;
+            const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
+            player.angle = angle;
+        });
+        
+        // 觸控螢幕追蹤瞄準
+        window.addEventListener('touchmove', (event) => {
+            if (!isGameRunning || !player) return;
+            // 防止螢幕捲動
+            event.preventDefault(); 
+            const touch = event.touches[0];
+            const angle = Math.atan2(touch.clientY - player.y, touch.clientX - player.x);
+            player.angle = angle;
+        }, { passive: false });
+
+        // 開火函數
+        function fireBullet(clientX, clientY) {
+            if (!isGameRunning || !player) return;
+            
+            // 計算射擊角度
+            const angle = Math.atan2(clientY - player.y, clientX - player.x);
+            
+            // 發射速度
+            const speed = 15;
+            const velocity = {
+                x: Math.cos(angle) * speed,
+                y: Math.sin(angle) * speed
+            };
+            
+            // 讓角色瞬間轉向射擊方向
+            player.angle = angle;
+
+            // 產生子彈 (從槍口位置發射)
+            // 槍口大概在距離角色中心 50px 的位置
+            const gunMuzzleX = player.x + Math.cos(angle) * 50;
+            const gunMuzzleY = player.y + Math.sin(angle) * 50;
+
+            bullets.push(new Bullet(gunMuzzleX, gunMuzzleY, velocity));
+            
+            // 射擊時的微小後座力 (視覺效果，產生一點火花粒子)
+            for(let i=0; i<3; i++) {
+                particles.push(new Particle(
+                    gunMuzzleX, gunMuzzleY, 
+                    Math.random() * 2 + 1, 
+                    '#fef08a', 
+                    { x: (Math.random()-0.5)*5 + velocity.x*0.2, y: (Math.random()-0.5)*5 + velocity.y*0.2 }
+                ));
+            }
+        }
+
+        // 滑鼠點擊開火
+        window.addEventListener('mousedown', (event) => {
+            // 避免點擊 UI 時開火
+            if(event.target.tagName === 'BUTTON') return; 
+            fireBullet(event.clientX, event.clientY);
+        });
+
+        // 觸控點擊開火
+        window.addEventListener('touchstart', (event) => {
+            if(event.target.tagName === 'BUTTON') return;
+            const touch = event.touches[0];
+            fireBullet(touch.clientX, touch.clientY);
+        });
+
+        // 按鈕事件
+        startBtn.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            init();
+        });
+
+        restartBtn.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            init();
+        });
+
+        // 初始繪製一次背景，避免全黑
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sanrio English & Pet Paradise</title>
+    <style>
+        :root {
+            --pink: #ffdae9;
+            --yellow: #fff9c4;
+            --blue: #e3f2fd;
+            --text-color: #5d4037;
+            --accent-pink: #ff80ab;
+            --accent-blue: #64b5f6;
+            --white: #ffffff;
+            --gold: #ffd700;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', "Microsoft YaHei", sans-serif;
+            color: var(--text-color);
+            background-color: var(--pink);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.8s ease;
+        }
+
+        #game-container {
+            width: 95%;
+            max-width: 800px;
+            height: 95vh;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 40px;
+            box-shadow: 0 15px 35px rgba(255, 128, 171, 0.2);
+            border: 6px solid var(--white);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            animation: fadeIn 0.4s ease;
+            overflow-y: auto;
+        }
+
+        .screen.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .top-bar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            box-sizing: border-box;
+            background: var(--white);
+            border-radius: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+        }
+
+        .stat-item { font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .coin-icon { color: var(--gold); font-size: 1.2rem; }
+
+        .question-box {
+            background: var(--white);
+            width: 100%;
+            min-height: 120px;
+            border-radius: 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: bold;
+            border: 3px solid #eee;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .option-btn {
+            background: var(--white);
+            border: 2px solid #f0f0f0;
+            border-radius: 15px;
+            padding: 15px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .option-btn.correct { background: #e8f5e9 !important; border-color: #4caf50 !important; }
+        .option-btn.wrong { background: #ffebee !important; border-color: #ef5350 !important; }
+
+        .shop-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: none;
+            background: #eee;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .tab-btn.active { background: var(--accent-pink); color: white; }
+
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            padding-bottom: 20px;
+        }
+
+        .shop-item {
+            background: white;
+            padding: 15px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 2px solid #f9f9f9;
+        }
+
+        .item-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .item-price { color: #f57c00; font-weight: bold; margin: 5px 0; }
+
+        .pet-yard {
+            width: 100%;
+            min-height: 250px;
+            background: #f1f8e9;
+            border-radius: 25px;
+            margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+            border: 3px dashed #c5e1a5;
+            transition: background 0.5s ease;
+        }
+
+        .yard-house {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 6rem;
+            z-index: 1;
+        }
+
+        .yard-facility {
+            position: absolute;
+            font-size: 3.5rem;
+            z-index: 1;
+        }
+
+        .my-pet {
+            position: absolute;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .pet-name-label {
+            font-size: 0.7rem;
+            background: rgba(255,255,255,0.8);
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-top: -5px;
+        }
+
+        .btn-main {
+            padding: 12px 25px;
+            background: var(--accent-pink);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .svg-lib { display: none; }
+
+        /* 动画 */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .bounce { animation: bounce 0.5s ease; }
+    </style>
+</head>
+<body>
+
+<svg class="svg-lib">
+    <symbol id="kitty" viewBox="0 0 100 100">
+        <ellipse cx="50" cy="55" rx="40" ry="32" fill="white" stroke="#333" stroke-width="2"/>
+        <path d="M25 35 Q15 20 32 30" fill="white" stroke="#333" stroke-width="2"/>
+        <path d="M75 35 Q85 20 68 30" fill="white" stroke="#333" stroke-width="2"/>
+        <circle cx="35" cy="55" r="3" fill="#333"/>
+        <circle cx="65" cy="55" r="3" fill="#333"/>
+        <ellipse cx="50" cy="62" rx="4" ry="3" fill="#FFD700"/>
+        <path d="M72 25 Q75 15 85 20 L82 35 Q72 35 72 25" fill="#FF0000" stroke="#333" stroke-width="1.5"/>
+        <circle cx="77" cy="27" r="4" fill="#FF0000" stroke="#333" stroke-width="1"/>
+        <path d="M15 55 H5 M15 60 H5 M15 65 H5 M85 55 H95 M85 60 H95 M85 65 H95" stroke="#333" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="melody" viewBox="0 0 100 100">
+        <path d="M30 50 Q15 5 45 25 L55 25 Q85 5 70 50" fill="#FF80AB" stroke="#333" stroke-width="2"/>
+        <ellipse cx="50" cy="60" rx="35" ry="30" fill="#FF80AB" stroke="#333" stroke-width="2"/>
+        <ellipse cx="50" cy="65" rx="25" ry="20" fill="white" stroke="#333" stroke-width="1.5"/>
+        <circle cx="40" cy="65" r="3" fill="#333"/>
+        <circle cx="60" cy="65" r="3" fill="#333"/>
+        <ellipse cx="50" cy="72" rx="3.5" ry="2.5" fill="#FFD700"/>
+    </symbol>
+    <symbol id="purin" viewBox="0 0 100 100">
+        <ellipse cx="50" cy="60" rx="42" ry="35" fill="#FFF176" stroke="#333" stroke-width="2"/>
+        <path d="M20 45 Q5 40 15 70" fill="#FFF176" stroke="#333" stroke-width="2"/>
+        <path d="M80 45 Q95 40 85 70" fill="#FFF176" stroke="#333" stroke-width="2"/>
+        <rect x="35" y="25" width="30" height="12" rx="5" fill="#5D4037" stroke="#333" stroke-width="1.5"/>
+        <circle cx="38" cy="60" r="3" fill="#333"/>
+        <circle cx="62" cy="60" r="3" fill="#333"/>
+    </symbol>
+    <symbol id="cinna" viewBox="0 0 100 100">
+        <ellipse cx="50" cy="65" rx="38" ry="28" fill="white" stroke="#333" stroke-width="2"/>
+        <path d="M25 55 Q-5 40 15 80" fill="white" stroke="#333" stroke-width="2"/>
+        <path d="M75 55 Q105 40 85 80" fill="white" stroke="#333" stroke-width="2"/>
+        <circle cx="40" cy="68" r="3.5" fill="#64B5F6"/>
+        <circle cx="60" cy="68" r="3.5" fill="#64B5F6"/>
+    </symbol>
+</svg>
+
+<div id="game-container">
+    <div class="top-bar">
+        <div class="stat-item" id="player-info">夥伴: 🎀</div>
+        <div class="stat-item"><span class="coin-icon">💰</span> <span id="coin-display">0</span> 元</div>
+    </div>
+
+    <!-- 1. 角色選擇屏幕 -->
+    <div id="start-screen" class="screen active">
+        <h2 style="color: #ff6699; margin: 10px 0;">選擇你的三麗鷗夥伴</h2>
+        <div class="character-grid">
+            <div class="char-card" onclick="selectChar('Hello Kitty', 'kitty', 'var(--pink)')">
+                <div style="width:80px;height:80px;margin:auto"><svg width="100%" height="100%"><use href="#kitty"/></svg></div>
+                <div>Hello Kitty</div>
+            </div>
+            <div class="char-card" onclick="selectChar('My Melody', 'melody', '#ffecf2')">
+                <div style="width:80px;height:80px;margin:auto"><svg width="100%" height="100%"><use href="#melody"/></svg></div>
+                <div>My Melody</div>
+            </div>
+            <div class="char-card" onclick="selectChar('Cinnamoroll', 'cinna', 'var(--blue)')">
+                <div style="width:80px;height:80px;margin:auto"><svg width="100%" height="100%"><use href="#cinna"/></svg></div>
+                <div>Cinnamoroll</div>
+            </div>
+            <div class="char-card" onclick="selectChar('Pompompurin', 'purin', 'var(--yellow)')">
+                <div style="width:80px;height:80px;margin:auto"><svg width="100%" height="100%"><use href="#purin"/></svg></div>
+                <div>Pompompurin</div>
+            </div>
+        </div>
+        <button class="btn-main" id="start-game-btn" onclick="showScreen('game-screen')" style="display:none">開始學習賺錢</button>
+        <button class="btn-main" onclick="showScreen('shop-screen')">去寵物樂園商店</button>
+    </div>
+
+    <!-- 2. 遊戲競技場 -->
+    <div id="game-screen" class="screen">
+        <div class="question-box" id="question-text">載入中...</div>
+        <div class="options-grid" id="options-container"></div>
+        <div style="margin-top: 20px;">
+            <button class="btn-main" onclick="showScreen('start-screen')">返回主頁</button>
+            <button class="btn-main" onclick="showScreen('shop-screen')">去商店買寵物</button>
+        </div>
+    </div>
+
+    <!-- 3. 商店屏幕 -->
+    <div id="shop-screen" class="screen">
+        <h2 style="margin: 10px 0;">寵物樂園商店</h2>
+        <div class="shop-tabs">
+            <button class="tab-btn active" id="tab-pets" onclick="switchTab('pets')">購買寵物</button>
+            <button class="tab-btn" id="tab-food" onclick="switchTab('food')">購買食物</button>
+            <button class="tab-btn" id="tab-house" onclick="switchTab('house')">房屋風格</button>
+            <button class="tab-btn" id="tab-facility" onclick="switchTab('facility')">樂園設施</button>
+        </div>
+        <div id="shop-content" class="shop-grid"></div>
+        
+        <div class="pet-yard" id="pet-yard">
+            <div id="yard-decor-layer"></div>
+            <div id="yard-house-display" class="yard-house"></div>
+            <div style="position:relative; z-index:50; padding:10px; color:#5d4037; font-size:0.8rem; text-align:center; font-weight:bold;">你的專屬樂園</div>
+        </div>
+        
+        <div style="margin: 10px 0;">
+            <button class="btn-main" onclick="showScreen('game-screen')">繼續答題賺錢</button>
+            <button class="btn-main" onclick="showScreen('start-screen')">回主頁</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let state = {
+        coins: 100, // 初始给点启动资金
+        selectedChar: null,
+        myPets: [],
+        inventory: { food: {}, houses: [], facilities: [] },
+        currentHouse: null,
+        currentQuestion: null,
+        level: 'words'
+    };
+
+    const shopData = {
+        pets: [
+            { id: 'cat', name: '小貓', icon: '🐱', price: 50 },
+            { id: 'dog', name: '小狗', icon: '🐶', price: 50 },
+            { id: 'deer', name: '梅花鹿', icon: '🦌', price: 150 },
+            { id: 'horse', name: '小馬', icon: '🐴', price: 200 },
+            { id: 'rabbit', name: '小兔子', icon: '🐰', price: 30 },
+            { id: 'bird', name: '小鳥', icon: '🐦', price: 20 },
+            { id: 'hamster', name: '倉鼠', icon: '🐹', price: 25 }
+        ],
+        food: [
+            { id: 'water', name: '飲用水', icon: '💧', price: 5, target: ['all'] },
+            { id: 'cat_food', name: '貓糧', icon: '🍣', price: 15, target: ['cat'] },
+            { id: 'dog_food', name: '狗糧', icon: '🍖', price: 15, target: ['dog'] },
+            { id: 'grass', name: '乾草', icon: '🌿', price: 8, target: ['horse', 'deer'] },
+            { id: 'corn', name: '玉米粒', icon: '🌽', price: 6, target: ['bird'] },
+            { id: 'cookie', name: '小餅乾', icon: '🍪', price: 7, target: ['hamster'] },
+            { id: 'carrot', name: '胡蘿蔔', icon: '🥕', price: 5, target: ['rabbit'] },
+            { id: 'can', name: '罐頭', icon: '🥫', price: 20, target: ['cat', 'dog'] },
+            { id: 'chicken', name: '雞胸肉', icon: '🍗', price: 18, target: ['cat', 'dog'] },
+            { id: 'fish', name: '魚乾', icon: '🐟', price: 12, target: ['cat'] }
+        ],
+        house: [
+            { id: 'h_jp', name: '日式和屋', icon: '⛩️', price: 500, bg: '#fff9c4' },
+            { id: 'h_kr', name: '韓式韓屋', icon: '🏯', price: 500, bg: '#fce4ec' },
+            { id: 'h_cn', name: '中式宅院', icon: '🏮', price: 800, bg: '#ffebee' },
+            { id: 'h_us', name: '美式別墅', icon: '🏡', price: 600, bg: '#e3f2fd' }
+        ],
+        facility: [
+            { id: 'onsen', name: '露天溫泉', icon: '♨️', price: 300, pos: {left: '10%', top: '40%'} },
+            { id: 'pool', name: '游泳池', icon: '🏊', price: 400, pos: {left: '40%', top: '60%'} },
+            { id: 'farm', name: '夢幻農場', icon: '👨‍🌾', price: 350, pos: {left: '15%', top: '65%'} },
+            { id: 'stable', name: '高級馬棚', icon: '🏚️', price: 450, pos: {left: '60%', top: '35%'} },
+            { id: 'fountain', name: '音樂噴泉', icon: '⛲', price: 250, pos: {left: '50%', top: '45%'} }
+        ]
+    };
+
+    const words = [
+        { q: "Courage", a: "勇氣", o: ["勇氣", "鼓勵", "好奇", "性格"] },
+        { q: "環境", a: "Environment", o: ["Equipment", "Environment", "Government", "Development"] },
+        { q: "Independent", a: "獨立的", o: ["依賴的", "獨立的", "有趣的", "昂貴的"] },
+        { q: "成功的", a: "Successful", o: ["Successful", "Successfully", "Success", "Succeed"] },
+        { q: "Ambitious", a: "有雄心的", o: ["有野心的", "有雄心的", "懶惰的", "友好的"] }
+    ];
+
+    const sentences = [
+        { q: "Where there is a will, there is a way.", a: "有志者事竟成。", o: ["哪裡有路，哪裡就有意志。", "有志者事竟成。", "條條大路通羅馬。", "勤奮是成功的基石。"] },
+        { q: "誠實是最好的策略。", a: "Honesty is the best policy.", o: ["Policy is honesty.", "Honesty is the best policy.", "Being honest is good.", "Always tell the truth."] }
+    ];
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if (id === 'game-screen') loadNewQuestion();
+        if (id === 'shop-screen') switchTab('pets');
+    }
+
+    function selectChar(name, svgId, color) {
+        state.selectedChar = { name, svgId, color };
+        document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+        document.getElementById('start-game-btn').style.display = 'inline-block';
+        document.body.style.backgroundColor = color;
+        document.getElementById('player-info').innerHTML = `夥伴: <svg width="20" height="20" style="vertical-align:middle"><use href="#${svgId}"/></svg>`;
+    }
+
+    function loadNewQuestion() {
+        const bank = state.level === 'words' ? words : sentences;
+        state.currentQuestion = bank[Math.floor(Math.random() * bank.length)];
+        document.getElementById('question-text').innerText = state.currentQuestion.q;
+        
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+        [...state.currentQuestion.o].sort(() => Math.random() - 0.5).forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => checkAnswer(opt, btn);
+            container.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(selected, btn) {
+        const correct = state.currentQuestion.a;
+        document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+        
+        if (selected === correct) {
+            btn.classList.add('correct');
+            state.coins += 10;
+            updateUI();
+            if(state.coins >= 100 && state.level === 'words') state.level = 'sentences';
+        } else {
+            btn.classList.add('wrong');
+            document.querySelectorAll('.option-btn').forEach(b => {
+                if(b.innerText === correct) b.classList.add('correct');
+            });
+        }
+        setTimeout(loadNewQuestion, 1500);
+    }
+
+    function updateUI() {
+        document.getElementById('coin-display').innerText = state.coins;
+    }
+
+    function switchTab(type) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + type).classList.add('active');
+        
+        const content = document.getElementById('shop-content');
+        content.innerHTML = '';
+        
+        shopData[type].forEach(item => {
+            const isOwned = (type === 'house' && state.inventory.houses.includes(item.id)) || 
+                            (type === 'facility' && state.inventory.facilities.includes(item.id));
+            
+            const div = document.createElement('div');
+            div.className = 'shop-item';
+            div.innerHTML = `
+                <div class="item-icon">${item.icon}</div>
+                <div style="font-weight:bold">${item.name}</div>
+                <div class="item-price">${isOwned ? '已擁有' : '💰 ' + item.price + ' 元'}</div>
+                <button class="btn-main" style="padding:5px 15px; font-size:0.8rem" 
+                    ${isOwned ? 'disabled' : ''}
+                    onclick="buyItem('${type}', '${item.id}')">${isOwned ? '已裝飾' : '購買'}</button>
+            `;
+            content.appendChild(div);
+        });
+        renderYard();
+    }
+
+    function buyItem(type, itemId) {
+        const item = shopData[type].find(i => i.id === itemId);
+        if (state.coins < item.price) {
+            alertMsg("餘額不足，快去答題賺錢吧！");
+            return;
+        }
+
+        state.coins -= item.price;
+        updateUI();
+
+        if (type === 'pets') {
+            const newPet = { ...item, instanceId: Date.now(), x: 20 + Math.random()*40, y: Math.random()*50 };
+            state.myPets.push(newPet);
+            alertMsg(`恭喜！你領養了一隻${item.name}！`);
+        } else if (type === 'food') {
+            state.inventory.food[itemId] = (state.inventory.food[itemId] || 0) + 1;
+            alertMsg(`購買成功！獲得了${item.name}！`);
+        } else if (type === 'house') {
+            state.inventory.houses.push(itemId);
+            state.currentHouse = item;
+            alertMsg(`豪華！你擁有了${item.name}！`);
+        } else if (type === 'facility') {
+            state.inventory.facilities.push(itemId);
+            alertMsg(`太棒了！樂園增添了${item.name}！`);
+        }
+        
+        switchTab(type); // 刷新商店状态
+        renderYard();
+    }
+
+    function renderYard() {
+        const yard = document.getElementById('pet-yard');
+        const houseLayer = document.getElementById('yard-house-display');
+        const decorLayer = document.getElementById('yard-decor-layer');
+        
+        // 更新房屋背景
+        if (state.currentHouse) {
+            yard.style.backgroundColor = state.currentHouse.bg;
+            houseLayer.innerText = state.currentHouse.icon;
+        } else {
+            yard.style.backgroundColor = '#f1f8e9';
+            houseLayer.innerText = '';
+        }
+
+        // 更新设施
+        decorLayer.innerHTML = '';
+        state.inventory.facilities.forEach(fid => {
+            const fac = shopData.facility.find(f => f.id === fid);
+            const fDiv = document.createElement('div');
+            fDiv.className = 'yard-facility';
+            fDiv.style.left = fac.pos.left;
+            fDiv.style.top = fac.pos.top;
+            fDiv.innerText = fac.icon;
+            decorLayer.appendChild(fDiv);
+        });
+
+        // 渲染宠物 (排除已有DOM重复，此处直接重绘)
+        state.myPets.forEach(pet => {
+            const pDiv = document.createElement('div');
+            pDiv.className = 'my-pet';
+            pDiv.style.left = pet.x + '%';
+            pDiv.style.top = (30 + pet.y) + 'px';
+            pDiv.innerHTML = `<div>${pet.icon}</div><div class="pet-name-label">${pet.name}</div>`;
+            pDiv.onclick = (e) => {
+                e.stopPropagation();
+                feedPet(pet, pDiv);
+            };
+            decorLayer.appendChild(pDiv);
+        });
+    }
+
+    function feedPet(pet, element) {
+        const foods = state.inventory.food;
+        const availableFoodIds = Object.keys(foods).filter(id => foods[id] > 0);
+        
+        if (availableFoodIds.length === 0) {
+            alertMsg("你沒有食物了，去商店買點吃的吧！");
+            return;
+        }
+
+        let foodToUseId = availableFoodIds.find(id => {
+            const item = shopData.food.find(f => f.id === id);
+            return item.target.includes(pet.id) || item.target.includes('all');
+        });
+
+        if (!foodToUseId) foodToUseId = availableFoodIds[0];
+
+        const foodItem = shopData.food.find(f => f.id === foodToUseId);
+        foods[foodToUseId]--;
+        
+        element.classList.add('bounce');
+        setTimeout(() => element.classList.remove('bounce'), 500);
+        alertMsg(`${pet.name}開心地吃了${foodItem.name}！✨`);
+    }
+
+    function alertMsg(text) {
+        const m = document.createElement('div');
+        m.style.position = 'absolute';
+        m.style.top = '30%';
+        m.style.left = '50%';
+        m.style.transform = 'translateX(-50%)';
+        m.style.background = 'rgba(255,102,153,0.95)';
+        m.style.color = 'white';
+        m.style.padding = '12px 25px';
+        m.style.borderRadius = '30px';
+        m.style.zIndex = '2000';
+        m.style.boxShadow = '0 5px 15px rgba(0,0,0,0.2)';
+        m.innerText = text;
+        document.body.appendChild(m);
+        setTimeout(() => m.remove(), 2000);
+    }
+    
+    // 初始化UI
+    updateUI();
+</script>
+
+</body>
+</html>

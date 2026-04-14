@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>街頭投籃：闖關挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+            touch-action: none; /* 防止觸控螢幕滾動 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 讓點擊穿透到 canvas */
+            display: flex;
+            flex-direction: column;
+        }
+        /* 浮動得分文字 */
+        .floating-text {
+            position: absolute;
+            animation: floatUp 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            font-weight: 900;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            pointer-events: none;
+            z-index: 10;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            20% { transform: translateY(-20px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-80px) scale(1); opacity: 0; }
+        }
+        /* 彈出視窗 */
+        .modal {
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.3s;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI 介面層 -->
+    <div class="ui-layer p-4 md:p-6">
+        <!-- 頂部資訊列 -->
+        <div class="flex justify-between items-start w-full max-w-4xl mx-auto">
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl px-4 py-2 shadow-xl border-b-4 border-blue-400">
+                <h1 class="text-xl md:text-2xl font-black text-gray-800" id="levelDisplay">第 1 關</h1>
+                <p class="text-sm md:text-base font-bold text-gray-600 mt-1">
+                    目標: <span id="scoreDisplay" class="text-orange-500 text-lg">0</span> / <span id="targetDisplay">3</span>
+                </p>
+            </div>
+            
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl px-4 py-2 shadow-xl border-b-4 border-orange-400 flex flex-col items-center">
+                <span class="text-sm font-bold text-gray-600 mb-1">剩餘球數</span>
+                <div id="ballsDisplay" class="flex gap-1">
+                    <!-- 球的圖示會用 JS 動態生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 畫面中央提示 (例如：滑動瞄準) -->
+        <div id="tutorialText" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white font-bold text-xl bg-black/40 px-6 py-2 rounded-full pointer-events-none transition-opacity duration-500">
+            👇 拖曳畫面來瞄準，放開投籃
+        </div>
+    </div>
+
+    <!-- 彈出視窗：關卡結算 / 遊戲結束 -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden modal">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl transform scale-100 transition-transform">
+            <h2 id="modalTitle" class="text-4xl font-black text-gray-800 mb-4">過關！</h2>
+            <p id="modalDesc" class="text-lg text-gray-600 mb-8 font-medium">準備好迎接下一關了嗎？</p>
+            <button id="modalBtn" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-xl py-3 px-6 rounded-xl shadow-lg transform transition active:scale-95">
+                下一關
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI 元素
+        const levelDisplay = document.getElementById('levelDisplay');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const targetDisplay = document.getElementById('targetDisplay');
+        const ballsDisplay = document.getElementById('ballsDisplay');
+        const tutorialText = document.getElementById('tutorialText');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalBtn = document.getElementById('modalBtn');
+
+        // 關卡設計 (闖關設定)
+        const levels = [
+            { target: 1, balls: 5, hoopType: 'fixed', hoopDist: 0.75 }, // 第1關：固定，較近
+            { target: 2, balls: 5, hoopType: 'fixed', hoopDist: 0.85 }, // 第2關：固定，較遠
+            { target: 2, balls: 5, hoopType: 'vertical', hoopSpeed: 1, hoopDist: 0.8 }, // 第3關：上下移動(慢)
+            { target: 3, balls: 6, hoopType: 'vertical', hoopSpeed: 2, hoopDist: 0.8 }, // 第4關：上下移動(快)
+            { target: 2, balls: 5, hoopType: 'horizontal', hoopSpeed: 1.5, hoopDist: 0.75 }, // 第5關：左右移動
+            { target: 3, balls: 6, hoopType: 'horizontal', hoopSpeed: 2.5, hoopDist: 0.85 }, // 第6關：左右移動(快)
+            { target: 4, balls: 7, hoopType: 'both', hoopSpeed: 2, hoopDist: 0.8 } // 第7關以上：隨機混合
+        ];
+
+        // 遊戲核心狀態
+        let currentLevelIndex = 0;
+        let score = 0;
+        let ballsLeft = 0;
+        let gameState = 'playing'; // 'playing', 'ball_flying', 'level_end'
+        
+        // 互動變數
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        let frameCount = 0;
+        
+        // 物理常數
+        const gravity = 0.45;
+        const restitution = 0.75; // 彈性
+        const friction = 0.99; // 空阻
+        const maxPower = 38;
+
+        // 籃球物件
+        let ball = {
+            x: 0, y: 0, startX: 0, startY: 0,
+            radius: 25, vx: 0, vy: 0,
+            rotation: 0, angularVelocity: 0,
+            isActive: false // 球是否在移動中
+        };
+
+        // 籃框物件
+        let hoop = {
+            baseX: 0, baseY: 0, // 基準位置
+            x: 0, y: 0,         // 實際位置 (受移動影響)
+            rimRadius: 5, width: 90,
+            leftRim: { x: 0, y: 0 }, rightRim: { x: 0, y: 0 },
+            backboard: { x: 0, y: 0, width: 12, height: 110 }
+        };
+
+        // 獲取當前關卡設定
+        function getCurrentLevel() {
+            if (currentLevelIndex < levels.length) {
+                return levels[currentLevelIndex];
+            } else {
+                // 無限關卡生成器
+                return {
+                    target: 3 + Math.floor((currentLevelIndex - levels.length) / 2),
+                    balls: 6 + Math.floor((currentLevelIndex - levels.length) / 2),
+                    hoopType: ['vertical', 'horizontal', 'both'][Math.floor(Math.random() * 3)],
+                    hoopSpeed: 2 + Math.random() * 2,
+                    hoopDist: 0.75 + Math.random() * 0.15
+                };
+            }
+        }
+
+        // 響應式佈局設定
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            setupLevelObjects();
+        }
+
+        // 根據關卡設定籃框與球的位置
+        function setupLevelObjects() {
+            const isMobile = canvas.width < 768;
+            const levelData = getCurrentLevel();
+            
+            ball.radius = isMobile ? 22 : 30;
+            hoop.width = ball.radius * 3.6;
+            hoop.backboard.height = ball.radius * 4.5;
+            hoop.backboard.width = ball.radius * 0.4;
+
+            // 根據關卡距離設定籃框基準 X 座標
+            hoop.baseX = canvas.width * levelData.hoopDist;
+            hoop.baseY = canvas.height * 0.35;
+            
+            updateHoopPosition(); // 強制更新一次實際位置
+            
+            // 重置球的位置
+            ball.startX = isMobile ? canvas.width * 0.15 : canvas.width * 0.2;
+            ball.startY = canvas.height * 0.75;
+            
+            if (!ball.isActive) {
+                resetBallToStart();
+            }
+        }
+
+        // 動態更新籃框位置 (移動籃框)
+        function updateHoopPosition() {
+            const levelData = getCurrentLevel();
+            hoop.x = hoop.baseX;
+            hoop.y = hoop.baseY;
+
+            if (levelData.hoopType === 'vertical' || levelData.hoopType === 'both') {
+                hoop.y = hoop.baseY + Math.sin(frameCount * 0.02 * levelData.hoopSpeed) * (canvas.height * 0.15);
+            }
+            if (levelData.hoopType === 'horizontal' || levelData.hoopType === 'both') {
+                // 限制不要移出畫面右側
+                let maxMove = canvas.width * 0.1;
+                hoop.x = hoop.baseX + Math.sin(frameCount * 0.015 * levelData.hoopSpeed) * maxMove;
+            }
+
+            // 更新碰撞點座標
+            hoop.backboard.x = hoop.x + hoop.width / 2 + 10;
+            hoop.backboard.y = hoop.y - hoop.backboard.height * 0.6;
+            hoop.leftRim = { x: hoop.x - hoop.width / 2, y: hoop.y };
+            hoop.rightRim = { x: hoop.x + hoop.width / 2, y: hoop.y };
+        }
+
+        // 更新 UI 顯示
+        function updateUI() {
+            levelDisplay.innerText = `第 ${currentLevelIndex + 1} 關`;
+            scoreDisplay.innerText = score;
+            targetDisplay.innerText = getCurrentLevel().target;
+            
+            // 更新剩餘球數圖示
+            ballsDisplay.innerHTML = '';
+            for (let i = 0; i < ballsLeft; i++) {
+                ballsDisplay.innerHTML += `<div class="w-4 h-4 md:w-5 md:h-5 rounded-full bg-orange-500 border border-orange-700 shadow-sm"></div>`;
+            }
+            if (ballsLeft === 0) {
+                ballsDisplay.innerHTML = `<span class="text-xs text-red-500 font-bold">無</span>`;
+            }
+        }
+
+        // 開始新關卡
+        function startLevel(index) {
+            currentLevelIndex = index;
+            const levelData = getCurrentLevel();
+            score = 0;
+            ballsLeft = levelData.balls;
+            gameState = 'playing';
+            
+            setupLevelObjects();
+            updateUI();
+            
+            modalOverlay.classList.add('hidden');
+            if (index === 0) {
+                tutorialText.style.opacity = '1';
+                setTimeout(() => tutorialText.style.opacity = '0', 3000);
+            }
+        }
+
+        // 將球放回起點
+        function resetBallToStart() {
+            ball.x = ball.startX;
+            ball.y = ball.startY;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.rotation = 0;
+            ball.angularVelocity = 0;
+            ball.isActive = false;
+        }
+
+        // 回合結束判定 (一顆球投完)
+        function checkTurnEnd() {
+            if (gameState === 'level_end') return;
+            
+            const levelData = getCurrentLevel();
+            
+            // 檢查是否達成目標
+            if (score >= levelData.target) {
+                gameState = 'level_end';
+                setTimeout(() => showModal('過關！', '太棒了，你達成了目標！', '下一關', () => startLevel(currentLevelIndex + 1)), 500);
+                return;
+            }
+
+            // 檢查是否還有球
+            if (ballsLeft <= 0) {
+                gameState = 'level_end';
+                setTimeout(() => showModal('挑戰失敗', '球用光了，再試一次吧！', '重新挑戰', () => startLevel(currentLevelIndex)), 500);
+                return;
+            }
+
+            // 如果還沒結束，重置球讓玩家繼續投
+            resetBallToStart();
+            gameState = 'playing';
+        }
+
+        function showModal(title, desc, btnText, callback) {
+            modalTitle.innerText = title;
+            modalDesc.innerText = desc;
+            modalBtn.innerText = btnText;
+            modalOverlay.classList.remove('hidden');
+            
+            modalBtn.onclick = callback;
+        }
+
+        // === 繪圖函式 ===
+
+        // 繪製背景
+        function drawBackground() {
+            // 背景已由 CSS 漸層處理，這裡只畫些雲朵點綴
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.arc(canvas.width * 0.2, canvas.height * 0.2, 50, 0, Math.PI*2);
+            ctx.arc(canvas.width * 0.25, canvas.height * 0.22, 60, 0, Math.PI*2);
+            ctx.arc(canvas.width * 0.15, canvas.height * 0.25, 40, 0, Math.PI*2);
+            ctx.fill();
+            
+            // 畫地板
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, canvas.height * 0.9, canvas.width, canvas.height * 0.1);
+        }
+
+        // 繪製精緻的籃球 (3D漸層與紋路)
+        function drawBall() {
+            ctx.save();
+            ctx.translate(ball.x, ball.y);
+            ctx.rotate(ball.rotation);
+
+            // 1. 3D 漸層底色
+            const gradient = ctx.createRadialGradient(
+                -ball.radius * 0.3, -ball.radius * 0.3, ball.radius * 0.1, 
+                0, 0, ball.radius
+            );
+            gradient.addColorStop(0, '#fdba74'); // 亮部 (高光)
+            gradient.addColorStop(0.3, '#f97316'); // 主色
+            gradient.addColorStop(0.8, '#c2410c'); // 暗部
+            gradient.addColorStop(1, '#7c2d12');   // 邊緣陰影
+
+            ctx.beginPath();
+            ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // 2. 籃球黑色紋路 (細緻化)
+            ctx.strokeStyle = '#292524'; // 深灰色
+            ctx.lineWidth = ball.radius * 0.08;
+            ctx.lineCap = 'round';
+            
+            // 垂直線
+            ctx.beginPath();
+            ctx.moveTo(0, -ball.radius);
+            ctx.lineTo(0, ball.radius);
+            ctx.stroke();
+            
+            // 水平線
+            ctx.beginPath();
+            ctx.moveTo(-ball.radius, 0);
+            ctx.lineTo(ball.radius, 0);
+            ctx.stroke();
+
+            // 左側弧線
+            ctx.beginPath();
+            ctx.arc(-ball.radius * 0.65, 0, ball.radius * 0.85, -Math.PI*0.4, Math.PI*0.4);
+            ctx.stroke();
+
+            // 右側弧線
+            ctx.beginPath();
+            ctx.arc(ball.radius * 0.65, 0, ball.radius * 0.85, Math.PI - Math.PI*0.4, Math.PI + Math.PI*0.4);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // 繪製籃框
+        function drawHoop() {
+            // 籃板
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 5;
+            ctx.shadowOffsetY = 5;
+            ctx.fillRect(hoop.backboard.x, hoop.backboard.y, hoop.backboard.width, hoop.backboard.height);
+            ctx.shadowColor = 'transparent'; // 重置陰影
+
+            // 籃板上的紅框
+            ctx.strokeStyle = '#ef4444'; 
+            ctx.lineWidth = 4;
+            ctx.strokeRect(hoop.backboard.x + 2, hoop.backboard.y + hoop.backboard.height*0.35, hoop.backboard.width - 4, hoop.backboard.height*0.3);
+
+            // 籃網 (使用貝茲曲線畫得更自然)
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const netBottomY = hoop.y + ball.radius * 2.5;
+            const netBottomWidth = hoop.width * 0.6;
+            
+            for (let i = 0; i <= 5; i++) {
+                let startX = hoop.leftRim.x + (hoop.width / 5) * i;
+                let endX = (hoop.x - netBottomWidth/2) + (netBottomWidth / 5) * i;
+                ctx.moveTo(startX, hoop.leftRim.y);
+                ctx.quadraticCurveTo(startX, hoop.y + 30, endX, netBottomY);
+            }
+            // 橫向網線
+            for (let i = 1; i <= 3; i++) {
+                let yOff = i * (ball.radius * 0.7);
+                let shrink = i * (ball.radius * 0.2);
+                ctx.moveTo(hoop.leftRim.x + shrink, hoop.leftRim.y + yOff);
+                ctx.quadraticCurveTo(hoop.x, hoop.leftRim.y + yOff + 5, hoop.rightRim.x - shrink, hoop.leftRim.y + yOff);
+            }
+            ctx.stroke();
+
+            // 籃圈 (前緣)
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(hoop.leftRim.x, hoop.leftRim.y, hoop.rimRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(hoop.rightRim.x, hoop.rightRim.y, hoop.rimRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = hoop.rimRadius * 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(hoop.leftRim.x, hoop.leftRim.y);
+            ctx.lineTo(hoop.rightRim.x, hoop.rightRim.y);
+            ctx.stroke();
+        }
+
+        // 繪製瞄準軌跡
+        function drawTrajectory() {
+            if (!isDragging || ball.isActive || gameState !== 'playing') return;
+
+            let vx = (dragStart.x - dragCurrent.x) * 0.15;
+            let vy = (dragStart.y - dragCurrent.y) * 0.15;
+
+            // 限制力道
+            const speed = Math.sqrt(vx*vx + vy*vy);
+            if (speed > maxPower) {
+                vx = (vx / speed) * maxPower;
+                vy = (vy / speed) * maxPower;
+            }
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            let simX = ball.x;
+            let simY = ball.y;
+            let simVx = vx;
+            let simVy = vy;
+
+            // 模擬未來的 60 幀 (約 1 秒的飛行軌跡)
+            for (let i = 0; i < 60; i++) {
+                // 完全重現實際的物理邏輯 (包含重力與空氣阻力)
+                simVy += gravity;
+                simVx *= friction;
+                simVy *= friction;
+                simX += simVx;
+                simY += simVy;
+
+                // 每隔 3 幀畫一個點，讓軌跡變成虛線狀
+                if (i % 3 === 0) {
+                    ctx.beginPath();
+                    // 點的大小隨距離縮小，製造遠近感
+                    ctx.arc(simX, simY, 5 * (1 - i/60), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 如果模擬的軌跡已經掉出畫面底部，就提早停止運算
+                if (simY > canvas.height) break;
+            }
+        }
+
+        // === 物理與碰撞演算 ===
+
+        function checkCircleCollision(cx, cy, cr) {
+            const dx = ball.x - cx;
+            const dy = ball.y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < ball.radius + cr) {
+                // 解開重疊
+                const overlap = (ball.radius + cr) - dist;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                
+                ball.x += nx * overlap;
+                ball.y += ny * overlap;
+                
+                // 反彈
+                const relativeVelocity = ball.vx * nx + ball.vy * ny;
+                if (relativeVelocity < 0) {
+                    ball.vx -= (1 + restitution) * relativeVelocity * nx;
+                    ball.vy -= (1 + restitution) * relativeVelocity * ny;
+                    ball.angularVelocity -= nx * 0.15; // 撞擊產生旋轉
+                }
+            }
+        }
+
+        function updatePhysics() {
+            frameCount++;
+            updateHoopPosition(); // 無論球有沒有飛，籃框都在更新
+
+            if (!ball.isActive) return;
+
+            // 記錄上一幀位置用於計分判定
+            const prevY = ball.y;
+
+            // 運動學
+            ball.vy += gravity;
+            ball.vx *= friction;
+            ball.vy *= friction;
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            ball.rotation += ball.angularVelocity;
+
+            // 碰到地板
+            if (ball.y + ball.radius > canvas.height * 0.9) {
+                ball.y = canvas.height * 0.9 - ball.radius;
+                ball.vy *= -restitution * 0.8;
+                ball.vx *= 0.8; 
+                ball.angularVelocity *= 0.8;
+                
+                // 停下時判斷回合結束
+                if (Math.abs(ball.vx) < 0.5 && Math.abs(ball.vy) < 2) {
+                    ball.isActive = false;
+                    setTimeout(checkTurnEnd, 400);
+                }
+            }
+
+            // 碰到籃圈
+            checkCircleCollision(hoop.leftRim.x, hoop.leftRim.y, hoop.rimRadius);
+            checkCircleCollision(hoop.rightRim.x, hoop.rightRim.y, hoop.rimRadius);
+
+            // 碰到籃板 (矩形檢測)
+            if (ball.x + ball.radius > hoop.backboard.x && 
+                ball.x - ball.radius < hoop.backboard.x + hoop.backboard.width &&
+                ball.y + ball.radius > hoop.backboard.y && 
+                ball.y - ball.radius < hoop.backboard.y + hoop.backboard.height) {
+                
+                ball.x = hoop.backboard.x - ball.radius;
+                ball.vx *= -restitution;
+                ball.angularVelocity += 0.3;
+            }
+
+            // 出界檢測 (左右飛出)
+            if (ball.x > canvas.width + ball.radius || ball.x < -ball.radius) {
+                ball.isActive = false;
+                setTimeout(checkTurnEnd, 200);
+            }
+
+            // 計分判定：球從上方往下穿過籃框水平線
+            if (ball.vy > 0 && !ball.scoredThisTurn) { 
+                if (prevY < hoop.leftRim.y && ball.y >= hoop.leftRim.y) {
+                    // 確認 X 座標在左右籃圈之間
+                    if (ball.x > hoop.leftRim.x + 5 && ball.x < hoop.rightRim.x - 5) {
+                        score++;
+                        ball.scoredThisTurn = true; // 防止一球算兩次
+                        updateUI();
+                        createFloatingText("空心入網！ +1", ball.x, ball.y, '#22c55e');
+                        ball.vx *= 0.5; // 過網減速
+                        ball.vy *= 0.8;
+                    }
+                }
+            }
+        }
+
+        // 浮動文字特效 (HTML元素)
+        function createFloatingText(text, x, y, color) {
+            const el = document.createElement('div');
+            el.className = 'floating-text text-2xl md:text-3xl text-white';
+            el.innerText = text;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            // el.style.color = color; // 使用 CSS class 定義的顏色比較好，或加上 inline color
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1200);
+        }
+
+        // 遊戲主迴圈
+        function gameLoop() {
+            updatePhysics();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            
+            // 繪圖順序：軌跡 -> 籃框(後) -> 球 -> 籃框(前)
+            drawTrajectory();
+            
+            // 簡單處理：全部畫籃框，再畫球，若要網子遮擋球，需分層繪製，這邊為了效能簡化
+            drawHoop();
+            drawBall();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // === 輸入事件處理 ===
+
+        function handleStart(e) {
+            if (ball.isActive || gameState !== 'playing') return;
+            e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            // 判斷點擊區域 (左半邊或點到球)
+            const dx = clientX - ball.x;
+            const dy = clientY - ball.y;
+            if (Math.sqrt(dx*dx + dy*dy) < ball.radius * 4 || clientX < canvas.width * 0.4) { 
+                isDragging = true;
+                dragStart = { x: clientX, y: clientY };
+                dragCurrent = { x: clientX, y: clientY };
+                tutorialText.style.opacity = '0'; // 隱藏提示
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            dragCurrent.x = e.touches ? e.touches[0].clientX : e.clientX;
+            dragCurrent.y = e.touches ? e.touches[0].clientY : e.clientY;
+        }
+
+        function handleEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            let vx = (dragStart.x - dragCurrent.x) * 0.15;
+            let vy = (dragStart.y - dragCurrent.y) * 0.15;
+
+            const speed = Math.sqrt(vx*vx + vy*vy);
+            
+            // 拖曳夠長才算發射
+            if (speed > 5) {
+                if (speed > maxPower) {
+                    vx = (vx / speed) * maxPower;
+                    vy = (vy / speed) * maxPower;
+                }
+                
+                ballsLeft--; // 扣除球數
+                updateUI();
+
+                ball.vx = vx;
+                ball.vy = vy;
+                ball.angularVelocity = -vx * 0.04; // 根據力道給予自旋
+                ball.isActive = true;
+                ball.scoredThisTurn = false;
+            }
+        }
+
+        // 註冊事件監聽器
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        canvas.addEventListener('touchstart', handleStart, {passive: false});
+        window.addEventListener('touchmove', handleMove, {passive: false});
+        window.addEventListener('touchend', handleEnd);
+
+        window.addEventListener('resize', resize);
+
+        // 初始化啟動
+        resize();
+        startLevel(0); // 從第0關(第一關)開始
+        gameLoop();
+
+    </script>
+</body>
+</html>

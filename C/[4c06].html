@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GTA: 巔峰梟雄 - 品質保證版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap');
+
+        :root {
+            --gold: #fbbf24;
+            --neon-green: #22c55e;
+            --police-red: #ef4444;
+            --police-blue: #3b82f6;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', 'Oswald', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #020202;
+            overflow: hidden;
+        }
+
+        /* 性能優化後的動態背景 */
+        .bg-grid {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image: 
+                linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px);
+            background-size: 100px 100px;
+            transform: perspective(1000px) rotateX(60deg);
+            animation: moveGrid 8s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes moveGrid {
+            from { transform: perspective(1000px) rotateX(60deg) translateY(0); }
+            to { transform: perspective(1000px) rotateX(60deg) translateY(100px); }
+        }
+
+        /* 狂熱模式特效 */
+        .fever-active {
+            animation: goldPulse 1.5s infinite alternate;
+        }
+        @keyframes goldPulse {
+            from { box-shadow: inset 0 0 50px rgba(251, 191, 36, 0.2); }
+            to { box-shadow: inset 0 0 200px rgba(251, 191, 36, 0.5); }
+        }
+
+        /* 螢幕震動 - 質量保證：更自然的震動幅度 */
+        .shake {
+            animation: shakeHard 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shakeHard {
+            10%, 90% { transform: translate3d(-4px, 0, 0); }
+            20%, 80% { transform: translate3d(8px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-12px, 0, 0); }
+            40%, 60% { transform: translate3d(12px, 0, 0); }
+        }
+
+        .item {
+            position: absolute;
+            font-size: 5rem;
+            z-index: 10;
+            will-change: transform;
+            transition: transform 0.1s linear;
+        }
+
+        #player {
+            position: absolute;
+            bottom: 80px;
+            width: 240px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            will-change: transform, left;
+        }
+
+        .car-body {
+            font-size: 10rem;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.8));
+        }
+
+        .car-fever {
+            filter: drop-shadow(0 0 40px var(--gold));
+        }
+
+        .b-logo {
+            font-weight: 900;
+            color: var(--gold);
+            text-shadow: 0 0 30px var(--gold);
+            animation: bFloat 2s infinite ease-in-out;
+        }
+        @keyframes bFloat {
+            0%, 100% { transform: scale(1.1) rotate(0deg); }
+            50% { transform: scale(1.3) rotate(10deg); }
+        }
+
+        /* 漂浮文字動畫 */
+        .score-pop {
+            position: absolute;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 900;
+            font-size: 4rem;
+            pointer-events: none;
+            z-index: 200;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-300px) scale(1.5); opacity: 0; }
+        }
+
+        #b-alert {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10vw;
+            font-weight: 900;
+            color: var(--gold);
+            text-shadow: 0 0 60px var(--gold), 4px 4px 0 #000;
+            z-index: 500;
+            display: none;
+            white-space: nowrap;
+            font-style: italic;
+        }
+
+        .instruction-card {
+            background: rgba(15, 15, 15, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="bg-grid"></div>
+    <div id="b-alert">EMPIRE MODE</div>
+
+    <!-- HUD -->
+    <div class="absolute top-8 left-8 right-8 z-[110] flex justify-between items-start pointer-events-none">
+        <div>
+            <div class="flex items-center gap-6">
+                <div id="score-val" class="text-[8rem] font-black text-green-500 italic leading-none" style="text-shadow: 6px 6px 0 #000;">$0</div>
+                <div id="multiplier" class="text-6xl font-black text-yellow-500 opacity-0 transition-opacity" style="text-shadow: 4px 4px 0 #000;">X1</div>
+            </div>
+            <div id="rank-tag" class="mt-4 inline-block bg-yellow-500 text-black text-xl font-black px-4 py-1 uppercase italic">Empire Lord</div>
+        </div>
+        <div class="text-right">
+            <div id="timer-val" class="text-8xl font-black text-white italic" style="text-shadow: 6px 6px 0 #000;">60</div>
+            <div id="wanted-stars" class="text-yellow-400 text-6xl mt-2">☆☆☆☆☆</div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 z-[250] flex items-center justify-center bg-black/95">
+        <div class="max-w-6xl w-full p-8 text-center">
+            <h1 class="text-[12rem] font-black text-white italic leading-none mb-4 tracking-tighter" style="font-family: 'Oswald';">EMPIRE</h1>
+            <p class="text-yellow-500 text-4xl font-black tracking-[0.5em] mb-12 uppercase italic">巔峰梟雄：品質保證版</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div class="instruction-card border-b-4 border-blue-500">
+                    <div class="text-6xl mb-4">🏎️</div>
+                    <h3 class="text-white text-2xl font-bold mb-2">移動</h3>
+                    <p class="text-white/60">左右拖移或滑動</p>
+                </div>
+                <div class="instruction-card border-b-4 border-green-500">
+                    <div class="text-6xl mb-4">💎</div>
+                    <h3 class="text-white text-2xl font-bold mb-2">收益</h3>
+                    <p class="text-white/60">鑽石與金幣是關鍵</p>
+                </div>
+                <div class="instruction-card border-b-4 border-yellow-500">
+                    <div class="text-6xl mb-4">B</div>
+                    <h3 class="text-yellow-500 text-2xl font-bold mb-2">狂熱</h3>
+                    <p class="text-white/60">磁吸自動收錢 & 無敵</p>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-white text-black py-8 text-5xl font-black hover:bg-yellow-500 transition-all transform active:scale-95 shadow-[0_15px_0_#999]">
+                接管城市 (START)
+            </button>
+        </div>
+    </div>
+
+    <!-- End Screen -->
+    <div id="end-screen" class="hidden absolute inset-0 z-[300] flex items-center justify-center bg-black/98">
+        <div class="text-center p-16 border-[10px] border-yellow-500 bg-zinc-900 shadow-2xl">
+            <h2 class="text-5xl text-yellow-500 font-black mb-4 uppercase italic">Mission Accomplished</h2>
+            <div class="text-[10rem] text-white font-black mb-8 leading-none" id="final-score">$0</div>
+            <div class="text-2xl text-white/50 mb-12 uppercase">最終頭銜: <span id="final-rank" class="text-white font-bold text-3xl">GODFATHER</span></div>
+            <button onclick="location.reload()" class="w-full bg-white text-black font-black py-6 text-4xl hover:bg-yellow-500 transition-all">
+                再次統治
+            </button>
+        </div>
+    </div>
+
+    <div id="player">
+        <span class="car-body" id="car-icon">🏎️</span>
+    </div>
+</div>
+
+<script>
+    // 遊戲常數
+    const CONFIG = {
+        PLAYER_WIDTH: 240,
+        ITEM_SPAWN_RATE: 220,
+        BASE_SPEED: 9,
+        FEVER_DURATION: 10000,
+        MAX_COMBO: 10
+    };
+
+    const container = document.getElementById('game-container');
+    const player = document.getElementById('player');
+    const scoreEl = document.getElementById('score-val');
+    const multiplierEl = document.getElementById('multiplier');
+    const timerEl = document.getElementById('timer-val');
+    const starsEl = document.getElementById('wanted-stars');
+    const bAlert = document.getElementById('b-alert');
+    const carIcon = document.getElementById('car-icon');
+
+    let state = {
+        score: 0,
+        combo: 0,
+        timeLeft: 60,
+        gameActive: false,
+        wantedLevel: 0,
+        isBMode: false,
+        items: [],
+        voiceLocked: false
+    };
+
+    function playVoice(text) {
+        if (state.voiceLocked) return;
+        try {
+            state.voiceLocked = true;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-TW';
+            utterance.rate = 1.4;
+            utterance.onend = () => { state.voiceLocked = false; };
+            window.speechSynthesis.speak(utterance);
+        } catch(e) { state.voiceLocked = false; }
+    }
+
+    const updatePlayerPos = (x) => {
+        if (!state.gameActive) return;
+        const halfWidth = CONFIG.PLAYER_WIDTH / 2;
+        let playerX = x - halfWidth;
+        playerX = Math.max(0, Math.min(window.innerWidth - CONFIG.PLAYER_WIDTH, playerX));
+        
+        player.style.left = `${playerX}px`;
+        const tilt = (x / window.innerWidth - 0.5) * 50;
+        player.style.transform = `rotate(${tilt}deg)`;
+    };
+
+    window.addEventListener('mousemove', e => updatePlayerPos(e.clientX));
+    window.addEventListener('touchmove', e => {
+        if (e.touches[0]) updatePlayerPos(e.touches[0].clientX);
+    }, { passive: true });
+
+    function spawn() {
+        if (!state.gameActive) return;
+
+        const pool = [
+            { char: '💰', score: 200, type: 'money' },
+            { char: '💵', score: 100, type: 'money' },
+            { char: '💎', score: 5000, type: 'money' },
+            { char: 'B', score: 2000, type: 'b-mode' },
+            { char: '🚔', score: -2000, type: 'police' },
+            { char: '🔥', score: 0, type: 'bad' }
+        ];
+
+        let itemConfig = pool[Math.floor(Math.random() * pool.length)];
+        // 狂熱模式保護
+        if (state.isBMode && (itemConfig.type === 'police' || itemConfig.type === 'bad')) {
+            itemConfig = pool[0];
+        }
+
+        const el = document.createElement('div');
+        el.className = `item ${itemConfig.char === 'B' ? 'b-logo' : ''}`;
+        el.textContent = itemConfig.char;
+        
+        const startX = Math.random() * (window.innerWidth - 100);
+        el.style.left = `${startX}px`;
+        el.style.top = '-150px';
+        container.appendChild(el);
+
+        state.items.push({
+            el: el,
+            y: -150,
+            x: startX,
+            speed: CONFIG.BASE_SPEED + Math.random() * 5 + (state.score / 25000),
+            ...itemConfig
+        });
+    }
+
+    function update() {
+        if (!state.gameActive) return;
+
+        const pRect = player.getBoundingClientRect();
+        const pCenterX = pRect.left + pRect.width / 2;
+        const pCenterY = pRect.top + pRect.height / 2;
+
+        for (let i = state.items.length - 1; i >= 0; i--) {
+            let item = state.items[i];
+
+            // 磁吸邏輯 (品質優化：僅在梟雄模式觸發)
+            if (state.isBMode && item.type !== 'police' && item.type !== 'bad') {
+                const dx = pCenterX - (item.x + 50);
+                const dy = pCenterY - (item.y + 50);
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 800) {
+                    item.x += dx * 0.2;
+                    item.y += dy * 0.2;
+                    item.el.style.left = `${item.x}px`;
+                }
+            }
+
+            item.y += item.speed;
+            item.el.style.top = `${item.y}px`;
+
+            // 碰撞檢測 (Hitbox 優化)
+            const iRect = item.el.getBoundingClientRect();
+            if (
+                iRect.bottom > pRect.top + 30 &&
+                iRect.top < pRect.bottom - 30 &&
+                iRect.right > pRect.left + 40 &&
+                iRect.left < pRect.right - 40
+            ) {
+                handleCollection(item, i);
+                continue;
+            }
+
+            // 性能優化：移除出界元素
+            if (item.y > window.innerHeight) {
+                item.el.remove();
+                state.items.splice(i, 1);
+            }
+        }
+        requestAnimationFrame(update);
+    }
+
+    function handleCollection(item, idx) {
+        if (item.type === 'police' || item.type === 'bad') {
+            container.classList.add('shake');
+            setTimeout(() => container.classList.remove('shake'), 400);
+            
+            if (item.type === 'police') {
+                state.score = Math.max(0, state.score - 2000);
+                state.wantedLevel = Math.min(5, state.wantedLevel + 1);
+                updateStars();
+                playVoice("通緝等級上升！");
+            } else {
+                state.combo = 0;
+                updateUI();
+                playVoice("連擊斷了！");
+            }
+        } else if (item.type === 'b-mode') {
+            triggerFever();
+            state.score += item.score;
+        } else {
+            state.combo++;
+            const mult = Math.min(CONFIG.MAX_COMBO, Math.floor(state.combo / 5) + 1);
+            let addedScore = item.score * mult * (state.isBMode ? 2 : 1);
+            state.score += addedScore;
+            popText(item.x, item.y, `+$${addedScore}`, mult > 1 ? '#fbbf24' : '#4ade80');
+        }
+
+        updateUI();
+        item.el.remove();
+        state.items.splice(idx, 1);
+    }
+
+    function triggerFever() {
+        if (state.isBMode) return;
+        state.isBMode = true;
+        container.classList.add('fever-active');
+        carIcon.classList.add('car-fever');
+        bAlert.style.display = 'block';
+        playVoice("梟雄模式啟動，全城掠奪！");
+        
+        setTimeout(() => {
+            state.isBMode = false;
+            container.classList.remove('fever-active');
+            carIcon.classList.remove('car-fever');
+            bAlert.style.display = 'none';
+        }, CONFIG.FEVER_DURATION);
+    }
+
+    function updateUI() {
+        scoreEl.textContent = `$${state.score.toLocaleString()}`;
+        const mult = Math.floor(state.combo / 5) + 1;
+        if (mult > 1) {
+            multiplierEl.textContent = `X${mult}`;
+            multiplierEl.style.opacity = '1';
+        } else {
+            multiplierEl.style.opacity = '0';
+        }
+    }
+
+    function updateStars() {
+        let stars = "";
+        for (let i = 0; i < 5; i++) stars += (i < state.wantedLevel) ? "★" : "☆";
+        starsEl.textContent = stars;
+    }
+
+    function popText(x, y, text, color) {
+        const p = document.createElement('div');
+        p.className = 'score-pop';
+        p.textContent = text;
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+        p.style.color = color;
+        p.style.textShadow = "4px 4px 0 #000";
+        container.appendChild(p);
+        setTimeout(() => p.remove(), 1000);
+    }
+
+    function startGame() {
+        document.getElementById('start-screen').classList.add('hidden');
+        state.gameActive = true;
+        playVoice("任務開始，去拿屬於你的錢。");
+        
+        requestAnimationFrame(update);
+        const spawnTimer = setInterval(spawn, CONFIG.ITEM_SPAWN_RATE);
+        const gameTimer = setInterval(() => {
+            state.timeLeft--;
+            timerEl.textContent = state.timeLeft;
+            if (state.timeLeft <= 0) {
+                clearInterval(spawnTimer);
+                clearInterval(gameTimer);
+                endGame();
+            }
+        }, 1000);
+    }
+
+    function endGame() {
+        state.gameActive = false;
+        playVoice("任務完成，洛聖都已經在你的掌控之下。");
+        document.getElementById('final-score').textContent = `$${state.score.toLocaleString()}`;
+        
+        const rankLabel = document.getElementById('final-rank');
+        if (state.score > 150000) rankLabel.textContent = "城市之巔 (LEGENDARY LORD)";
+        else if (state.score > 80000) rankLabel.textContent = "地下教父 (GODFATHER)";
+        else rankLabel.textContent = "街頭狂徒 (HUSTLER)";
+
+        document.getElementById('end-screen').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>

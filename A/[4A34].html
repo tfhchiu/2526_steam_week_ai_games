@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>初中生電腦單字挑戰</title>
+    <style>
+        body { background-color: #2c3e50; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        h2 { color: #f1c40f; }
+        #word-display { font-size: 3rem; margin: 20px; letter-spacing: 2px; }
+        #input-field { font-size: 1.5rem; padding: 10px; border-radius: 5px; border: none; width: 300px; text-align: center; }
+        .info { margin-top: 20px; font-size: 1.2rem; }
+        #message { height: 30px; color: #2ecc71; margin-top: 10px; font-weight: bold; }
+        .container { text-align: center; background: #34495e; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>💻 電腦單字打字挑戰</h2>
+    <p>請輸入畫面上的單字並按下 <b>Enter</b></p>
+    
+    <div id="word-display">Loading...</div>
+    
+    <input type="text" id="input-field" autocomplete="off" autofocus placeholder="在此輸入...">
+    
+    <div id="message"></div>
+
+    <div class="info">
+        得分: <span id="score">0</span> | 
+        剩餘時間: <span id="time">30</span>s
+    </div>
+    
+    <button onclick="startGame()" id="start-btn" style="margin-top:20px; padding:10px 20px; cursor:pointer;">開始遊戲 / 重新開始</button>
+</div>
+
+<script>
+    // 初中程度電腦相關單字庫
+    const words = [
+        'keyboard', 'mouse', 'monitor', 'laptop', 'browser', 
+        'software', 'hardware', 'internet', 'password', 'account',
+        'download', 'message', 'network', 'security', 'website',
+        'folder', 'button', 'update', 'database', 'screen'
+    ];
+
+    let score = 0;
+    let time = 30;
+    let isPlaying = false;
+    let timer;
+
+    const wordDisplay = document.getElementById('word-display');
+    const inputField = document.getElementById('input-field');
+    const scoreDisplay = document.getElementById('score');
+    const timeDisplay = document.getElementById('time');
+    const message = document.getElementById('message');
+
+    // 隨機選取單字
+    function showWord() {
+        const randomIndex = Math.floor(Math.random() * words.length);
+        wordDisplay.innerText = words[randomIndex];
+    }
+
+    // 開始遊戲
+    function startGame() {
+        if (isPlaying) clearInterval(timer);
+        score = 0;
+        time = 30;
+        isPlaying = true;
+        scoreDisplay.innerText = score;
+        timeDisplay.innerText = time;
+        inputField.value = '';
+        inputField.focus();
+        message.innerText = '';
+        showWord();
+        
+        timer = setInterval(countdown, 1000);
+    }
+
+    // 倒計時邏輯
+    function countdown() {
+        if (time > 0) {
+            time--;
+            timeDisplay.innerText = time;
+        } else {
+            isPlaying = false;
+            clearInterval(timer);
+            message.innerText = '遊戲結束！您的最終得分是 ' + score;
+            wordDisplay.innerText = 'Game Over';
+        }
+    }
+
+    // 監聽輸入
+    inputField.addEventListener('keyup', (e) => {
+        if (!isPlaying) return;
+
+        if (e.key === 'Enter') {
+            if (inputField.value.toLowerCase() === wordDisplay.innerText.toLowerCase()) {
+                message.innerText = '正確！✅';
+                score++;
+                scoreDisplay.innerText = score;
+                inputField.value = '';
+                showWord();
+            } else {
+                message.innerText = '再試一次！❌';
+                inputField.value = '';
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

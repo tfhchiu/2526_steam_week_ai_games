@@ -1,0 +1,726 @@
+import React, { useState, useEffect } from 'react';
+import { User, Mic, Music, Activity, Star, ShieldAlert, Heart, Zap, TrendingUp, AlertTriangle, Crown, Skull, Swords, Users, Camera, MessageSquareWarning } from 'lucide-react';
+
+// --- 游戏数据 ---
+const CHARACTERS = [
+  { id: 'wjk', name: '王俊凯', group: 'TFBOYS', gen: '一代', color: 'from-blue-500 to-blue-700', desc: '帝国的大哥，自带庞大粉丝基本盘，全能偶像先驱。', baseStats: { vocal: 85, dance: 80, rap: 70, pop: 95, stress: 10, money: 500 }, trait: '帝国之辉：每周自动增加人气。' },
+  { id: 'yyqx', name: '易烊千玺', group: 'TFBOYS', gen: '一代', color: 'from-red-500 to-red-700', desc: '舞蹈天花板，内敛沉稳，拥有极强的艺术感知力。', baseStats: { vocal: 75, dance: 98, rap: 80, pop: 92, stress: 15, money: 500 }, trait: '街舞大神：舞蹈训练效果翻倍。' },
+  { id: 'mjq', name: '马嘉祺', group: '时代少年团', gen: '二代', color: 'from-purple-500 to-purple-700', desc: '二代绝对主唱，温柔且坚韧，定海神针。', baseStats: { vocal: 95, dance: 80, rap: 70, pop: 88, stress: 20, money: 300 }, trait: '天籁之音：声乐训练有概率额外大幅提升人气。' },
+  { id: 'syx', name: '宋亚轩', group: '时代少年团', gen: '二代', color: 'from-cyan-400 to-blue-500', desc: '人鱼主唱，治愈系笑容，拥有极高的国民好感度。', baseStats: { vocal: 92, dance: 75, rap: 70, pop: 90, stress: 15, money: 300 }, trait: '治愈微笑：每次休息额外降低压力，自带防爆体质。' },
+  { id: 'lyw', name: '刘耀文', group: '时代少年团', gen: '二代', color: 'from-gray-700 to-black', desc: '舞台上的狼崽，暴风成长的老幺，RAP担当。', baseStats: { vocal: 70, dance: 85, rap: 92, pop: 85, stress: 10, money: 300 }, trait: '暴风成长：每次训练随机额外提升一项属性。' },
+  { id: 'zzx', name: '朱志鑫', group: 'TOP登陆少年', gen: '三代', color: 'from-pink-500 to-rose-600', desc: '三代全能ACE，冷感外表下是绝对的胜负欲。', baseStats: { vocal: 85, dance: 88, rap: 85, pop: 80, stress: 25, money: 200 }, trait: '全能ACE：全属性均衡，初始无短板。' },
+  { id: 'sxh', name: '苏新皓', group: 'TOP登陆少年', gen: '三代', color: 'from-orange-500 to-red-500', desc: '拼命三郎，全能舞担，对舞台有极致追求。', baseStats: { vocal: 80, dance: 92, rap: 80, pop: 78, stress: 30, money: 200 }, trait: '拼命三郎：训练不消耗行动点，但压力值增加翻倍。' },
+  { id: 'hs', name: '黄朔', group: 'TFING', gen: '四代', color: 'from-green-400 to-emerald-600', desc: '四代养成系黑马，拥有独特的嗓音和无限潜力。', baseStats: { vocal: 82, dance: 75, rap: 75, pop: 60, stress: 10, money: 100 }, trait: '养成黑马：压力值越低，训练效果越好。' },
+  { id: 'gjc', name: '官俊臣', group: 'TF家族', gen: '四代', color: 'from-teal-400 to-teal-600', desc: '家族新鲜血液，带着初生牛犊不怕虎的冲劲。', baseStats: { vocal: 75, dance: 75, rap: 70, pop: 55, stress: 5, money: 100 }, trait: '初生牛犊：触发负面宫斗事件概率降低。' },
+  { id: 'lyd', name: '李煜东', group: 'TF家族', gen: '四代', color: 'from-indigo-400 to-indigo-600', desc: '全能预备役，舞台表现力极强，野心勃勃。', baseStats: { vocal: 78, dance: 85, rap: 75, pop: 65, stress: 15, money: 100 }, trait: '舞台狂热：参与任何训练都有概率全属性微弱提升。' }
+];
+
+const RIVALS = [
+  { name: '空降皇族 (资本力捧)', pop: 85, power: 85 },
+  { name: '回锅肉前辈 (实力派)', pop: 75, power: 95 },
+  { name: '初评级A班黑马', pop: 60, power: 90 },
+  { name: '话题炒作大王', pop: 90, power: 60 },
+  { name: '绝美门面担当', pop: 80, power: 70 }
+];
+
+const EVENTS = [
+  { title: '私生饭跟车', desc: '下班途中遭遇私生饭疯狂围堵，引发网络热议！', type: 'bad', effect: (s) => ({ ...s, stress: s.stress + 20, pop: s.pop + 5 }) },
+  { title: '飞总的凝视', desc: '李飞巡查练习室，刚好看到你在加练，默默点头。', type: 'good', effect: (s) => ({ ...s, bossFavor: s.bossFavor + 15 }) },
+  { title: '节目组孤儿剪辑', desc: '节目组为了热度，把你的一句话恶意剪辑成了“耍大牌”。', type: 'bad', effect: (s) => ({ ...s, pop: s.pop - 15, stress: s.stress + 10 }) },
+  { title: '百万直拍神级出圈', desc: '上周的主题曲直拍在B站和抖音双爆，路人粉疯狂涌入！', type: 'good', effect: (s) => ({ ...s, pop: s.pop + 30 }) },
+  { title: '黑通稿满天飞', desc: '对家买了大量营销号发你的黑通稿，路人盘动摇。', type: 'bad', effect: (s) => ({ ...s, pop: s.pop - 20, stress: s.stress + 15 }) },
+];
+
+// 生成随机头像框
+const Avatar = ({ char, size = 'w-16 h-16' }) => (
+  <div className={`${size} rounded-full bg-gradient-to-br ${char.color} flex items-center justify-center text-white font-bold shadow-lg border-2 border-white/20`}>
+    {char.name.slice(-2)}
+  </div>
+);
+
+export default function App() {
+  const [gameState, setGameState] = useState('intro'); // intro, mode_select, select, main, event, ending
+  const [gameMode, setGameMode] = useState(1); // 1: 单人, 2: 双人
+  
+  // 玩家状态
+  const [players, setPlayers] = useState([]);
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0); // 当前行动的玩家索引 (0 或 1)
+  
+  const [week, setWeek] = useState(1);
+  const [logs, setLogs] = useState([]);
+  const [currentEvent, setCurrentEvent] = useState(null);
+  const [rivals, setRivals] = useState(RIVALS);
+  const [selectingPlayerIndex, setSelectingPlayerIndex] = useState(0); // 选角阶段用
+
+  // --- 初始化游戏 ---
+  const startGame = (mode) => {
+    setGameMode(mode);
+    setGameState('select');
+    setSelectingPlayerIndex(0);
+    setPlayers([]);
+  };
+
+  const selectCharacter = (character) => {
+    // 防止双人模式选同一个人
+    if (players.some(p => p.char.id === character.id)) {
+      alert("该角色已被选择！");
+      return;
+    }
+
+    const newPlayer = {
+      id: selectingPlayerIndex,
+      char: character,
+      stats: {
+        ...character.baseStats,
+        bossFavor: 50,
+        cp: null,
+        shield: false
+      },
+      ap: 3
+    };
+
+    const newPlayers = [...players, newPlayer];
+    setPlayers(newPlayers);
+
+    if (gameMode === 1 || selectingPlayerIndex === 1) {
+      // 选角结束，进入游戏
+      setGameState('main');
+      setWeek(1);
+      setCurrentPlayerIndex(0);
+      setLogs([`【系统】欢迎来到《时空大选秀》，残酷的舞台争夺战正式开始！只有前3名能出道！`]);
+    } else {
+      // 双人模式，P2选角
+      setSelectingPlayerIndex(1);
+    }
+  };
+
+  const addLog = (msg) => {
+    setLogs(prev => [msg, ...prev].slice(0, 15));
+  };
+
+  // --- 动作逻辑 ---
+  const handleAction = (type) => {
+    let pList = [...players];
+    // 深拷贝当前玩家和目标玩家的状态，防止意外污染
+    let currP = { ...pList[currentPlayerIndex], stats: { ...pList[currentPlayerIndex].stats } };
+    let targetPIndex = currentPlayerIndex === 0 ? 1 : 0;
+    let targetP = gameMode === 2 ? { ...pList[targetPIndex], stats: { ...pList[targetPIndex].stats } } : null;
+    
+    if (currP.ap <= 0) {
+      alert("本周行动点已耗尽！");
+      return;
+    }
+
+    let costAp = 1;
+    let logMsg = "";
+    let s = currP.stats; // 引用到了 currP 的 stats，直接修改即可
+
+    // 拼命三郎特质
+    if (currP.char.id === 'sxh' && ['vocal', 'dance', 'rap'].includes(type)) {
+      costAp = 0;
+      s.stress += 10;
+    }
+
+    switch (type) {
+      case 'vocal':
+        let vGain = Math.floor(Math.random() * 5) + 3;
+        if (currP.char.id === 'mjq') { vGain += 3; if (Math.random() > 0.4) s.pop += 8; }
+        if (currP.char.id === 'lyd' && Math.random() > 0.5) { s.dance += 1; s.rap += 1; }
+        s.vocal += vGain; s.stress += 5;
+        logMsg = `[练习] ${currP.char.name} 狂练声乐，Vocal +${vGain}。`;
+        break;
+      case 'dance':
+        let dGain = Math.floor(Math.random() * 5) + 3;
+        if (currP.char.id === 'yyqx') dGain *= 2;
+        if (currP.char.id === 'lyd' && Math.random() > 0.5) { s.vocal += 1; s.rap += 1; }
+        s.dance += dGain; s.stress += 5;
+        logMsg = `[练习] ${currP.char.name} 死磕舞蹈，Dance +${dGain}。`;
+        break;
+      case 'rap':
+        let rGain = Math.floor(Math.random() * 5) + 3;
+        if (currP.char.id === 'lyw') rGain += 3;
+        if (currP.char.id === 'lyd' && Math.random() > 0.5) { s.vocal += 1; s.dance += 1; }
+        s.rap += rGain; s.stress += 5;
+        logMsg = `[练习] ${currP.char.name} 琢磨Flow，Rap +${rGain}。`;
+        break;
+      case 'rest':
+        let sDrop = Math.floor(Math.random() * 15) + 15;
+        if (currP.char.id === 'syx') { sDrop += 10; s.pop += 5; } // 宋亚轩特质
+        s.stress = Math.max(0, s.stress - sDrop);
+        logMsg = `[休息] ${currP.char.name} 躲在角落吃零食/睡觉，压力大幅下降 -${sDrop}。`;
+        break;
+
+      // --- 宫斗环节 ---
+      case 'drama_water': // 买水军黑人
+        if (s.money >= 150) {
+          s.money -= 150;
+          if (gameMode === 2) {
+            // 互撕模式：直接攻击另一个玩家
+            if (targetP.stats.shield) {
+              targetP.stats.shield = false;
+              logMsg = `【宫斗大戏】${currP.char.name} 雇水军黑 ${targetP.char.name}，但对方有李飞的[防爆盾]，攻击无效！盾已碎！`;
+            } else {
+              targetP.stats.pop -= 15;
+              targetP.stats.stress += 20;
+              logMsg = `【宫斗大戏】${currP.char.name} 花费¥150雇水军，成功带了 ${targetP.char.name} 的节奏！对方人气急跌，压力暴增！`;
+            }
+          } else {
+            // 单人模式：黑随机NPC
+            let rivalTarget = rivals[Math.floor(Math.random() * rivals.length)];
+            setRivals(prev => prev.map(r => r.name === rivalTarget.name ? { ...r, pop: r.pop - 15 } : r));
+            logMsg = `【宫斗】${currP.char.name} 雇水军黑了 ${rivalTarget.name}，对方路人盘崩塌！`;
+          }
+        } else {
+          alert("资金不足！"); return;
+        }
+        break;
+      case 'drama_camera': // 抢镜头/抢C位
+        s.stress += 20;
+        s.pop += 25;
+        if (gameMode === 2 && Math.random() > 0.3) {
+           targetP.stats.pop -= 10;
+           targetP.stats.stress += 15;
+           logMsg = `【心机】${currP.char.name} 在合舞时疯狂挡住 ${targetP.char.name} 抢镜头！自己人气+25，对方成为背景板人气受损！`;
+        } else {
+           logMsg = `【心机】${currP.char.name} 在直拍中疯狂抢戏加动作，人气大涨+25，但也引来争议，压力+20。`;
+        }
+        break;
+      case 'drama_cp': // 炒CP麦麸
+        s.stress += 15;
+        s.pop += 30;
+        if (gameMode === 2) {
+          targetP.stats.pop += 10; // 对方也吸血
+          logMsg = `【麦麸】${currP.char.name} 强行和 ${targetP.char.name} 炒CP！CP粉陷入疯狂，两人人气双双上涨（你拿了大头）！`;
+        } else {
+          logMsg = `【麦麸】${currP.char.name} 刻意制造营业名场面，CP粉狂欢！人气+30，但随时面临提纯反噬。`;
+        }
+        break;
+      case 'drama_boss': // 讨好高层
+        if (s.money >= 200) {
+          s.money -= 200;
+          s.bossFavor += 30;
+          s.shield = true;
+          logMsg = `【资本】${currP.char.name} 连夜给李飞送上极品重庆火锅底料。飞总大悦，赐予[防爆盾]与[防恶剪特权]！`;
+        } else {
+          alert("资金不足！"); return;
+        }
+        break;
+      default:
+        break;
+    }
+
+    // 个人被动结算
+    if (currP.char.id === 'wjk') s.pop += 3;
+    if (currP.char.id === 'syx') s.shield = true; // 宋亚轩自带防爆
+    
+    // 压力过高崩溃判定
+    if (s.stress >= 100) {
+      s.stress = 70;
+      s.pop -= 25;
+      logMsg += ` 🚨【警告】${currP.char.name} 压力爆表，在后台崩溃大哭被拍，痛失路人盘，人气骤降！`;
+    }
+
+    currP.ap -= costAp;
+    pList[currentPlayerIndex] = currP;
+    if (gameMode === 2 && targetP) {
+      pList[targetPIndex] = targetP; // 更新对手状态
+    }
+
+    setPlayers(pList);
+    addLog(logMsg);
+  };
+
+  const endTurn = () => {
+    let pList = [...players];
+    let currP = { ...pList[currentPlayerIndex] }; // 深拷贝
+    
+    if (currP.ap > 0) {
+      if(!window.confirm(`${currP.char.name} 还有体力(AP)未使用，确定要结束回合吗？`)) return;
+    }
+    
+    // 清空AP（理论上已经耗尽，这里强制重置为下周准备）
+    currP.ap = 0; 
+    pList[currentPlayerIndex] = currP;
+    setPlayers(pList);
+
+    if (gameMode === 2 && currentPlayerIndex === 0) {
+      // 切换到P2
+      setCurrentPlayerIndex(1);
+    } else {
+      // 一周结束，所有人回合完毕，结算周更
+      processWeekEnd();
+    }
+  };
+
+  const processWeekEnd = () => {
+    if (week >= 10) {
+      setGameState('ending');
+      return;
+    }
+
+    // 对手成长
+    setRivals(prev => prev.map(r => ({
+      ...r,
+      pop: r.pop + Math.floor(Math.random() * 12),
+      power: r.power + Math.floor(Math.random() * 8)
+    })));
+
+    // 随机事件触发 (抽选一个玩家承受)
+    if (Math.random() > 0.4) {
+      const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+      setCurrentEvent({ ...ev, targetPlayer: Math.floor(Math.random() * players.length) });
+      setGameState('event');
+    } else {
+      startNewWeek();
+    }
+  };
+
+  const handleEventResolve = () => {
+    let pList = [...players];
+    let targetP = { ...pList[currentEvent.targetPlayer], stats: { ...pList[currentEvent.targetPlayer].stats } };
+
+    if (currentEvent.type === 'bad' && targetP.stats.shield) {
+      targetP.stats.shield = false;
+      addLog(`【化险为夷】多亏了防爆盾，${targetP.char.name} 的公关危机被时代峰峻压下去了！`);
+    } else {
+      targetP.stats = currentEvent.effect(targetP.stats);
+      addLog(`【突发事件】${currentEvent.title} 发生在了 ${targetP.char.name} 身上！`);
+    }
+    
+    pList[currentEvent.targetPlayer] = targetP;
+    setPlayers(pList);
+    startNewWeek();
+  };
+
+  const startNewWeek = () => {
+    let pList = [...players].map(p => ({ ...p, ap: 3, stats: { ...p.stats, money: p.stats.money + 50 } }));
+    setPlayers(pList);
+    setWeek(prev => prev + 1);
+    setCurrentPlayerIndex(0);
+    setGameState('main');
+    addLog(`====== 选秀第 ${week + 1} 周录制开始 ======`);
+  };
+
+  // --- 画面渲染 ---
+  if (gameState === 'intro') {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
+        {/* 背景装饰 */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-black z-0"></div>
+        <div className="z-10 text-center">
+          <Crown className="w-24 h-24 text-yellow-400 mb-6 mx-auto animate-bounce shadow-yellow-500/50 drop-shadow-2xl" />
+          <h1 className="text-5xl md:text-7xl font-black mb-4 tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-500 to-purple-500">
+            十八楼风云
+          </h1>
+          <h2 className="text-3xl font-bold mb-8 tracking-widest text-pink-300 drop-shadow-md">时空大选秀 · 决战C位</h2>
+          
+          <div className="bg-gray-900/80 p-6 rounded-2xl border border-pink-500/30 max-w-xl mx-auto mb-10 backdrop-blur-sm">
+            <p className="text-gray-300 mb-4 leading-relaxed text-left text-sm md:text-base">
+              时代峰峻启动“时空折叠”计划！一至四代全员集结，打响史上最残酷的同台竞技。<br/><br/>
+              <span className="text-red-400 font-bold">⚠️ 赛制极其残酷：</span>只有<span className="text-yellow-400 font-bold">最终排名前3</span>的练习生能够成团出道。只有<span className="text-yellow-400 font-bold">第1名</span>能够坐上象征最高荣耀的巨C宝座。<br/><br/>
+              为了出道，单纯的练习是不够的，你必须学会在镜头前伪装、炒作、甚至打压对手！
+            </p>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-6 justify-center">
+            <button onClick={() => startGame(1)} className="group relative px-8 py-4 bg-gray-800 border-2 border-blue-500 hover:bg-blue-900 text-white font-bold rounded-xl transition overflow-hidden">
+              <User className="inline mr-2 mb-1" /> 单人闯关模式
+            </button>
+            <button onClick={() => startGame(2)} className="group relative px-8 py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.5)] transition transform hover:scale-105">
+              <Swords className="inline mr-2 mb-1" /> 双人同屏撕X模式
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === 'select') {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white p-6 md:p-12 relative">
+        <div className="max-w-7xl mx-auto z-10 relative">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-400">
+              {gameMode === 2 ? `玩家 ${selectingPlayerIndex + 1} 选择练习生` : '选择你的偶像'}
+            </h2>
+            <p className="text-gray-400 mt-2">选择一位，助他在腥风血雨中登顶出道！</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {CHARACTERS.map(char => {
+              const isSelected = players.some(p => p.char.id === char.id);
+              return (
+                <div key={char.id} 
+                  className={`bg-gray-900 rounded-2xl p-5 border-2 flex flex-col relative overflow-hidden transition ${isSelected ? 'border-gray-700 opacity-50 grayscale cursor-not-allowed' : 'border-gray-800 hover:border-pink-500 hover:shadow-[0_0_15px_rgba(236,72,153,0.4)] cursor-pointer'}`}
+                  onClick={() => !isSelected && selectCharacter(char)}
+                >
+                  {/* 背景色带 */}
+                  <div className={`absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${char.color}`}></div>
+                  
+                  <div className="flex flex-col items-center mb-4 mt-2">
+                    <Avatar char={char} size="w-20 h-20 mb-3" />
+                    <h3 className="text-2xl font-bold">{char.name}</h3>
+                    <span className="text-xs font-semibold px-2 py-1 bg-gray-800 rounded mt-2 text-gray-300 border border-gray-700">{char.group} | {char.gen}</span>
+                  </div>
+                  
+                  <p className="text-gray-400 text-xs mb-4 text-center h-16">{char.desc}</p>
+                  
+                  <div className="space-y-1 mb-4 text-xs bg-black/40 p-3 rounded">
+                    <div className="flex justify-between"><span>🎤 Vocal</span> <span className="text-blue-300">{char.baseStats.vocal}</span></div>
+                    <div className="flex justify-between"><span>🕺 Dance</span> <span className="text-green-300">{char.baseStats.dance}</span></div>
+                    <div className="flex justify-between"><span>🔥 初始人气</span> <span className="text-pink-300 font-bold">{char.baseStats.pop}</span></div>
+                  </div>
+                  
+                  <div className="mt-auto">
+                    <p className="text-[10px] text-yellow-300 font-semibold bg-yellow-900/20 p-2 rounded leading-tight">
+                      <Zap className="inline w-3 h-3 mr-1" />{char.trait}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === 'event') {
+    const targetChar = players[currentEvent.targetPlayer].char;
+    return (
+      <div className="min-h-screen bg-black/95 flex items-center justify-center p-6 text-white backdrop-blur-md">
+        <div className={`bg-gray-900 p-8 rounded-3xl max-w-md w-full border-t-4 shadow-2xl text-center ${currentEvent.type === 'bad' ? 'border-red-500 shadow-red-900/50' : 'border-green-500 shadow-green-900/50'}`}>
+          <div className="mb-6 relative inline-block">
+             <Avatar char={targetChar} size="w-24 h-24" />
+             <div className="absolute -bottom-2 -right-2 bg-gray-900 rounded-full p-1">
+                {currentEvent.type === 'bad' ? <MessageSquareWarning className="text-red-500 w-8 h-8" /> : <Star className="text-green-500 w-8 h-8" />}
+             </div>
+          </div>
+          <h2 className="text-2xl font-black mb-2 tracking-wide">{currentEvent.title}</h2>
+          <p className="text-pink-400 font-bold mb-4 text-sm">主角：{targetChar.name}</p>
+          <p className="text-gray-300 mb-8 leading-relaxed">{currentEvent.desc}</p>
+          <button 
+            onClick={handleEventResolve}
+            className={`w-full py-4 rounded-xl font-bold transition text-lg ${currentEvent.type === 'bad' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+          >
+            {currentEvent.type === 'bad' ? '硬着头皮面对' : '美滋滋收下'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === 'ending') {
+    // 计算所有人的最终得分并排名
+    let allCompetitors = [];
+    
+    // 放入玩家
+    players.forEach(p => {
+      const power = p.stats.vocal + p.stats.dance + p.stats.rap;
+      // 最终得分：人气占70%，实力占30% (十八楼本质)
+      const score = p.stats.pop * 0.7 + power * 0.3;
+      allCompetitors.push({ name: p.char.name, isPlayer: true, char: p.char, pop: p.stats.pop, power, score });
+    });
+    
+    // 放入NPC
+    rivals.forEach(r => {
+      const score = r.pop * 0.7 + r.power * 0.3;
+      allCompetitors.push({ name: r.name, isPlayer: false, pop: r.pop, power: r.power, score });
+    });
+    
+    allCompetitors.sort((a, b) => b.score - a.score);
+    const highestScore = allCompetitors[0]?.score || 0;
+
+    return (
+      <div className="min-h-screen bg-black text-white p-6 md:p-12 relative overflow-hidden flex flex-col items-center">
+        {/* 聚光灯效果 */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-[500px] bg-yellow-500/20 blur-[100px] rounded-full z-0 pointer-events-none"></div>
+        
+        <div className="z-10 w-full max-w-4xl text-center mb-10 mt-10">
+          <h1 className="text-5xl md:text-6xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-yellow-600">
+            出道之夜 · 最终排名
+          </h1>
+          <p className="text-gray-400">历经10周的腥风血雨，属于他们的时代即将来临...</p>
+        </div>
+
+        <div className="z-10 w-full max-w-3xl space-y-4">
+          {allCompetitors.map((comp, idx) => {
+            const rank = idx + 1;
+            const isDebut = rank <= 3;
+            const isCenter = rank === 1;
+            
+            let rankColor = "text-gray-400";
+            if (rank === 1) rankColor = "text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]";
+            else if (rank === 2) rankColor = "text-gray-200";
+            else if (rank === 3) rankColor = "text-orange-400";
+
+            let playerBorderColor = "border-gray-800";
+            if (comp.isPlayer) {
+              playerBorderColor = comp.score >= highestScore ? "border-yellow-500 shadow-lg shadow-yellow-900/20" : "border-pink-900/50";
+            }
+
+            return (
+              <div key={comp.name} className={`flex items-center p-4 rounded-2xl border ${playerBorderColor} ${isDebut ? 'bg-gray-900' : 'bg-gray-950 opacity-70'}`}>
+                <div className={`text-4xl font-black w-16 text-center ${rankColor}`}>
+                  {rank}
+                </div>
+                
+                {comp.isPlayer ? (
+                  <Avatar char={comp.char} size="w-12 h-12 mx-4" />
+                ) : (
+                  <div className="w-12 h-12 mx-4 rounded-full bg-gray-800 flex items-center justify-center border border-gray-700">
+                    <User className="text-gray-500" />
+                  </div>
+                )}
+
+                <div className="flex-grow">
+                  <h3 className={`text-xl font-bold ${comp.isPlayer ? 'text-white' : 'text-gray-400'}`}>
+                    {comp.name} {comp.isPlayer && <span className="text-xs bg-pink-600 text-white px-2 py-0.5 rounded ml-2">你推的角</span>}
+                    {isCenter && <Crown className="inline w-5 h-5 ml-2 text-yellow-400 pb-1" />}
+                  </h3>
+                  <div className="text-xs text-gray-500 mt-1">
+                    综合得分: {Math.round(comp.score)} (人气: {Math.round(comp.pop)} | 实力: {Math.round(comp.power)})
+                  </div>
+                </div>
+
+                <div className="text-right ml-4">
+                  {isCenter ? (
+                    <span className="text-yellow-400 font-bold px-3 py-1 bg-yellow-900/30 rounded-lg border border-yellow-700/50">巨C出道</span>
+                  ) : isDebut ? (
+                    <span className="text-green-400 font-bold px-3 py-1 bg-green-900/30 rounded-lg border border-green-700/50">成团出道</span>
+                  ) : (
+                    <span className="text-gray-500 font-bold px-3 py-1 bg-gray-800 rounded-lg">收拾行李下楼</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <button 
+          onClick={() => startGame(gameMode)} // 返回主界面可以重置状态
+          className="mt-12 z-10 bg-gray-800 hover:bg-gray-700 border border-gray-600 px-8 py-3 rounded-full font-bold transition shadow-lg"
+        >
+          重新开启时空折叠
+        </button>
+      </div>
+    );
+  }
+
+  // --- 主游戏界面 (Main) ---
+  const activeP = players[currentPlayerIndex];
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white font-sans flex flex-col md:flex-row">
+      
+      {/* 左侧：状态栏面板 */}
+      <div className="w-full md:w-1/3 bg-[#0a0a0a] border-r border-gray-800 flex flex-col relative overflow-hidden">
+        {/* 背景氛围 */}
+        <div className={`absolute top-0 left-0 w-full h-48 bg-gradient-to-b ${activeP.char.color} opacity-20 pointer-events-none`}></div>
+        
+        <div className="p-6 relative z-10 flex-grow flex flex-col">
+          {/* Header */}
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center gap-4">
+              <Avatar char={activeP.char} size="w-20 h-20" />
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">{activeP.char.name}</h2>
+                <div className="mt-1 flex gap-2">
+                  <span className="bg-gray-800/80 px-2 py-0.5 rounded text-xs text-gray-300 border border-gray-700 backdrop-blur-sm">{activeP.char.group}</span>
+                  {gameMode === 2 && <span className={`px-2 py-0.5 rounded text-xs font-bold ${currentPlayerIndex === 0 ? 'bg-blue-600' : 'bg-red-600'}`}>P{currentPlayerIndex + 1}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-gray-900/80 border border-gray-800 p-3 rounded-xl text-center shadow-inner">
+              <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-1">当前进度</span>
+              <span className="text-xl font-bold text-yellow-500">W{week} <span className="text-sm text-gray-600">/ 10</span></span>
+            </div>
+            <div className="bg-gray-900/80 border border-gray-800 p-3 rounded-xl text-center shadow-inner">
+              <span className="text-gray-500 text-[10px] uppercase tracking-widest block mb-1">体力 (AP)</span>
+              <span className="text-xl font-bold text-green-400">{activeP.ap} <span className="text-sm text-gray-600">/ 3</span></span>
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-6 flex-grow">
+            <div className="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-xl space-y-4">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2 mb-4">综合素质面板</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center text-sm font-medium text-gray-300"><Mic className="w-4 h-4 mr-2 text-blue-400"/> 声乐</span>
+                  <span className="font-mono font-bold text-lg">{activeP.stats.vocal}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center text-sm font-medium text-gray-300"><Activity className="w-4 h-4 mr-2 text-green-400"/> 舞蹈</span>
+                  <span className="font-mono font-bold text-lg">{activeP.stats.dance}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center text-sm font-medium text-gray-300"><Music className="w-4 h-4 mr-2 text-purple-400"/> 说唱</span>
+                  <span className="font-mono font-bold text-lg">{activeP.stats.rap}</span>
+                </div>
+              </div>
+
+              <div className="w-full h-px bg-gray-800 my-4"></div>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-pink-950/20 p-2 rounded-lg border border-pink-900/30">
+                  <span className="flex items-center text-sm font-bold text-pink-400"><Heart className="w-4 h-4 mr-2"/> 死忠粉(人气)</span>
+                  <span className="font-black text-xl text-pink-500 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]">{activeP.stats.pop}</span>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="flex items-center text-gray-400"><AlertTriangle className="w-3 h-3 mr-1 text-red-400"/> 心理崩溃临界值</span>
+                    <span className="font-mono text-gray-500">{activeP.stats.stress}/100</span>
+                  </div>
+                  <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden border border-gray-700">
+                    <div className={`h-full transition-all duration-300 ${activeP.stats.stress > 80 ? 'bg-red-500 shadow-[0_0_10px_red]' : activeP.stats.stress > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, activeP.stats.stress)}%` }}></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between bg-gray-800/50 p-2 rounded-lg">
+                  <span className="flex items-center text-xs text-gray-400">资金 / 李飞好感</span>
+                  <span className="font-mono text-sm text-yellow-400">¥{activeP.stats.money} | ❤️ {activeP.stats.bossFavor}</span>
+                </div>
+              </div>
+            </div>
+            
+            {activeP.stats.shield && (
+              <div className="bg-blue-900/40 text-blue-300 p-3 rounded-xl text-sm text-center border border-blue-800 flex items-center justify-center font-bold animate-pulse">
+                <ShieldAlert className="w-5 h-5 mr-2" /> 李飞的防爆盾已激活
+              </div>
+            )}
+          </div>
+
+          <button 
+            onClick={endTurn}
+            className={`w-full font-black py-4 rounded-xl shadow-lg mt-auto text-lg tracking-widest transition ${activeP.ap > 0 ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:from-pink-500 hover:to-purple-500 shadow-pink-500/20 hover:scale-[1.02]'}`}
+          >
+            {activeP.ap > 0 ? '结束本回合' : (gameMode === 2 && currentPlayerIndex === 0 ? '换对手行动' : '进入下周结算')}
+          </button>
+        </div>
+      </div>
+
+      {/* 右侧：行动区 & 视觉舞台 */}
+      <div className="w-full md:w-2/3 flex flex-col h-screen bg-black">
+        
+        {/* 舞台视觉区 (画面感) */}
+        <div className="h-48 border-b border-gray-800 relative flex items-end justify-center pb-4 overflow-hidden">
+          {/* 背景图模拟 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black z-0">
+             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at center, white 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+          </div>
+          
+          <div className="z-10 flex items-end gap-12 w-full max-w-2xl justify-center">
+            {players.map((p, idx) => (
+              <div key={idx} className={`flex flex-col items-center transition-all duration-300 ${currentPlayerIndex === idx ? 'scale-110 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'scale-90 opacity-50 grayscale'}`}>
+                {currentPlayerIndex === idx && <div className="text-yellow-400 mb-2 animate-bounce"><Crown className="w-6 h-6" /></div>}
+                <Avatar char={p.char} size="w-24 h-24" />
+                <span className="mt-3 font-bold bg-gray-900 px-3 py-1 rounded-full border border-gray-700 text-sm">{p.char.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 交互区 */}
+        <div className="flex-grow p-6 overflow-y-auto flex flex-col">
+          
+          {/* 行动按钮 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            
+            {/* 练习室 */}
+            <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+              <h3 className="text-lg font-bold mb-4 flex items-center text-blue-400"><TrendingUp className="mr-2" /> 时代峰峻练习室 <span className="text-xs text-gray-500 ml-2 font-normal">提升硬实力</span></h3>
+              <div className="space-y-3">
+                <ActionBtn icon="🎤" text="声乐课/练高音" sub="-1 AP, +压力" onClick={() => handleAction('vocal')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="🕺" text="扒舞/体能课" sub="-1 AP, +压力" onClick={() => handleAction('dance')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="🎧" text="说唱/写词" sub="-1 AP, +压力" onClick={() => handleAction('rap')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="☕" text="楼顶吹风避险" sub="-1 AP, 大幅减压" color="border-green-800/50 hover:bg-green-900/20 text-green-400" onClick={() => handleAction('rest')} disabled={activeP.ap <= 0} />
+              </div>
+            </div>
+
+            {/* 宫斗区 */}
+            <div className="bg-pink-950/10 border border-pink-900/30 rounded-2xl p-5 relative overflow-hidden hover:border-pink-800/50 transition">
+              <div className="absolute top-0 right-0 bg-pink-900 text-[10px] px-3 py-1 rounded-bl-xl font-bold tracking-wider text-white shadow-lg shadow-pink-900/50">内卷/撕X区</div>
+              <h3 className="text-lg font-bold mb-4 flex items-center text-pink-400"><Camera className="mr-2" /> 镜头争夺战 <span className="text-xs text-pink-900 ml-2 font-normal">高风险收益</span></h3>
+              <div className="space-y-3">
+                <ActionBtn icon="🌊" text={gameMode === 2 ? "买水军黑对手" : "买水军黑皇族"} sub="-1 AP, -¥150" color="border-red-900/30 hover:bg-red-900/20 text-red-300" onClick={() => handleAction('drama_water')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="📸" text="合舞抢镜头/抢C" sub="-1 AP, 人气++, 压力++" color="border-orange-900/30 hover:bg-orange-900/20 text-orange-300" onClick={() => handleAction('drama_camera')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="💞" text="刻意麦麸炒CP" sub="-1 AP, 人气+++, 压力+" color="border-pink-900/30 hover:bg-pink-900/20 text-pink-300" onClick={() => handleAction('drama_cp')} disabled={activeP.ap <= 0} />
+                <ActionBtn icon="🎁" text="讨好李飞求资源" sub="-1 AP, -¥200, 获防爆盾" color="border-yellow-900/30 hover:bg-yellow-900/20 text-yellow-300" onClick={() => handleAction('drama_boss')} disabled={activeP.ap <= 0} />
+              </div>
+            </div>
+          </div>
+
+          {/* 情报与日志 */}
+          <div className="flex-grow flex flex-col lg:flex-row gap-6">
+            
+            {/* 日志区 */}
+            <div className="w-full lg:w-2/3 bg-black border border-gray-800 rounded-2xl p-5 flex flex-col relative">
+              <div className="absolute top-4 right-4 flex gap-2">
+                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                 <span className="text-[10px] text-gray-500 uppercase">Live Feed</span>
+              </div>
+              <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center"><MessageSquareWarning className="w-4 h-4 mr-2" /> 饭圈前线快报</h3>
+              <div className="flex-grow overflow-y-auto space-y-3 pr-2 text-sm">
+                {logs.map((log, idx) => {
+                  let logStyle = "text-gray-400 border-l-2 border-gray-700 pl-3";
+                  if (log.includes('======')) logStyle = "text-yellow-500 font-bold text-center border-y border-yellow-900/30 py-2 my-4";
+                  else if (log.includes('【系统】')) logStyle = "text-blue-400 font-bold border-l-2 border-blue-500 pl-3";
+                  else if (log.includes('【宫斗大戏】') || log.includes('【心机】') || log.includes('【麦麸】')) logStyle = "text-pink-300 bg-pink-950/20 p-2 rounded-r border-l-4 border-pink-500";
+                  else if (log.includes('【警告】') || log.includes('【突发事件】')) logStyle = "text-red-400 bg-red-950/20 p-2 rounded-r border-l-4 border-red-500";
+                  else if (log.includes('【资本】') || log.includes('【化险为夷】')) logStyle = "text-yellow-300 bg-yellow-950/20 p-2 rounded-r border-l-4 border-yellow-500";
+                  
+                  return (
+                    <div key={idx} className={`${logStyle} transition-all`}>
+                      {log}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 竞争对手情报 */}
+            <div className="w-full lg:w-1/3 bg-gray-900/50 border border-gray-800 rounded-2xl p-5 flex flex-col">
+              <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center"><Users className="w-4 h-4 mr-2" /> 外部假想敌 (NPC)</h3>
+              <div className="space-y-3 flex-grow overflow-y-auto pr-1">
+                {rivals.map((rival, i) => (
+                  <div key={i} className="bg-gray-800/50 p-3 rounded-xl border border-gray-700/50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-sm text-gray-200 truncate pr-2">{rival.name}</span>
+                      <span className="text-[10px] px-2 py-0.5 bg-pink-900/40 rounded text-pink-300 border border-pink-800/50 whitespace-nowrap">粉: {rival.pop}</span>
+                    </div>
+                    <div className="w-full bg-gray-900 rounded-full h-1">
+                      <div className="bg-gradient-to-r from-pink-600 to-purple-500 h-1 rounded-full" style={{ width: `${Math.min(100, rival.pop/1.5)}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 辅助组件：行动按钮
+function ActionBtn({ icon, text, sub, onClick, disabled, color = "border-gray-700 hover:bg-gray-800 text-gray-200" }) {
+  return (
+    <button 
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full text-left px-4 py-3 rounded-xl flex justify-between items-center transition border ${color} ${disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <div className="flex items-center">
+        <span className="text-xl mr-3">{icon}</span>
+        <span className="font-bold text-sm">{text}</span>
+      </div>
+      <span className="text-xs opacity-60 font-mono">{sub}</span>
+    </button>
+  );
+}

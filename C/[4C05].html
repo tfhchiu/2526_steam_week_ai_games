@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知識大冒險：智慧小鎮 (教育增強版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'ZCOOL KuaiLe', cursive, "Microsoft JhengHei", sans-serif;
+            background-color: #f0fdf4;
+            overflow: hidden;
+            user-select: none;
+        }
+        .town-bg {
+            background: linear-gradient(to bottom, #87CEEB, #E0F2F1);
+            height: 100vh;
+            position: relative;
+            transition: filter 0.5s ease;
+        }
+        .building {
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+        .gray-scale {
+            filter: grayscale(100%) brightness(0.8);
+        }
+        .modal {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+        }
+        .btn-pop {
+            transition: transform 0.1s;
+        }
+        .btn-pop:active {
+            transform: scale(0.9);
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .bouncing {
+            animation: bounce 2s infinite;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            background: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- 主場景 -->
+    <div id="town" class="town-bg flex flex-col items-center justify-end pb-16">
+        <!-- 頂部狀態欄 -->
+        <div class="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
+            <div class="bg-white/95 p-4 rounded-3xl shadow-xl border-2 border-green-400 pointer-events-auto space-y-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">💧</span> <span class="text-green-700 font-bold" id="waterCount">0</span>
+                    <span class="ml-2 text-xl">✨</span> <span class="text-blue-700 font-bold" id="energyBar">0%</span>
+                </div>
+                <div id="badgeContainer" class="flex flex-wrap gap-1 mt-2">
+                    <!-- 勳章動態顯示 -->
+                </div>
+            </div>
+            <div class="bg-white/95 p-4 rounded-3xl shadow-xl border-2 border-orange-400 pointer-events-auto">
+                <button onclick="toggleParentMode()" class="text-orange-700 font-bold flex items-center gap-2">
+                    📊 家長守護/報告
+                </button>
+            </div>
+        </div>
+
+        <!-- 小鎮建築 -->
+        <div class="flex gap-6 items-end mb-12 px-4 flex-wrap justify-center">
+            <div id="bld-school" class="building gray-scale flex flex-col items-center">
+                <div class="text-5xl">🏫</div>
+                <div class="bg-white px-3 py-1 rounded-full text-xs shadow-sm font-bold">智慧學校</div>
+            </div>
+            <div id="bld-court" class="building gray-scale flex flex-col items-center">
+                <div class="text-6xl">🏛️</div>
+                <div class="bg-white px-3 py-1 rounded-full text-xs shadow-sm font-bold">自律中心</div>
+            </div>
+            <div id="bld-park" class="building gray-scale flex flex-col items-center">
+                <div class="text-5xl">🌳</div>
+                <div class="bg-white px-3 py-1 rounded-full text-xs shadow-sm font-bold">環保公園</div>
+            </div>
+            <div id="bld-lab" class="building gray-scale flex flex-col items-center">
+                <div class="text-5xl">🧪</div>
+                <div class="bg-white px-3 py-1 rounded-full text-xs shadow-sm font-bold">科學實驗室</div>
+            </div>
+        </div>
+
+        <!-- 冒險按鈕 -->
+        <button onclick="startAdventure()" class="btn-pop bg-green-500 hover:bg-green-600 text-white text-3xl px-16 py-5 rounded-full shadow-2xl border-b-8 border-green-700 bouncing flex items-center gap-4">
+            <span>🚀</span> 進入冒險
+        </button>
+
+        <p class="mt-8 text-green-900 bg-white/70 px-8 py-2 rounded-full font-bold shadow-sm">
+            闖關長知識，冒險變聰明！
+        </p>
+    </div>
+
+    <!-- 冒險彈窗 -->
+    <div id="adventureModal" class="modal fixed inset-0 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border-4 border-blue-400">
+            <div id="modalHeader" class="bg-blue-400 p-5 text-white flex justify-between items-center">
+                <span id="questionTag" class="bg-white text-blue-500 px-4 py-1 rounded-full font-bold">知識關卡</span>
+                <span id="categoryLabel" class="font-bold text-lg">載入中...</span>
+            </div>
+            <div class="p-8">
+                <div id="questionText" class="text-2xl mb-8 font-bold text-gray-700 leading-snug">正在準備題目...</div>
+                <div id="optionsGrid" class="grid grid-cols-1 gap-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 學習反饋/講解彈窗 -->
+    <div id="feedbackModal" class="modal fixed inset-0 hidden flex items-center justify-center p-4 z-50">
+        <div id="feedbackBox" class="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 text-center border-8">
+            <div id="feedbackIcon" class="text-8xl mb-6"></div>
+            <h2 id="feedbackTitle" class="text-3xl font-bold mb-4"></h2>
+            <div id="feedbackExplanation" class="text-lg text-gray-600 mb-8 bg-gray-50 p-6 rounded-2xl border-2 border-dashed"></div>
+            <button onclick="closeFeedback()" class="w-full py-4 rounded-2xl shadow-lg text-xl font-bold text-white transition-all active:scale-95" id="feedbackBtn">繼續學習</button>
+        </div>
+    </div>
+
+    <!-- 家長端報告 -->
+    <div id="parentModal" class="modal fixed inset-0 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-md rounded-[2rem] shadow-2xl p-8 border-4 border-orange-400">
+            <h2 class="text-2xl text-orange-600 mb-6 border-b-4 border-orange-100 pb-2 font-bold flex items-center gap-2">
+                📊 探險家成長數據
+            </h2>
+            <div id="reportContent" class="space-y-4 text-gray-700"></div>
+            <div class="mt-6 flex gap-2">
+                <button onclick="toggleParentMode()" class="flex-1 bg-gray-200 py-3 rounded-xl font-bold">返回遊戲</button>
+                <button class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-bold shadow-lg">列印報告</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const state = {
+        water: 0,
+        energy: 0,
+        badges: [],
+        stats: { "學科": 0, "常識": 0, "品格": 0 },
+        currentQ: null
+    };
+
+    const questions = [
+        // 語文/數學/英語 (學科類)
+        { cat: "學科", type: "語文", q: "「草地上的羊群像一朵朵白雲。」這句話使用了哪種修辭？", a: ["比喻", "擬人", "誇張", "排比"], c: 0, exp: "「像」字連接了羊群與白雲，這就是明喻。比喻能讓句子更生動！" },
+        { cat: "學科", type: "數學", q: "小明把一根繩子對折兩次，這根繩子現在變成了幾段？", a: ["2段", "3段", "4段", "8段"], c: 2, exp: "對折一次是2段，再對折一次（2x2）就是4段啦！這就是翻倍規律。" },
+        { cat: "學科", type: "英語", q: "想請別人幫忙時，最禮貌的詞是？", a: ["Give me", "Hurry", "Please", "Look"], c: 2, exp: "Please（請）是國際通用的禮貌詞，能讓對方更樂意幫助你。" },
+        
+        // 常識類
+        { cat: "常識", type: "健康", q: "保護眼睛，看屏幕多久應該休息一下？", a: ["1小時", "20-30分鐘", "3小時", "累了才休息"], c: 1, exp: "遵循『20-20-20』原則：看屏幕20分鐘，向20英尺外望20秒，保護視力！" },
+        { cat: "常識", type: "垃圾分類", q: "喝完的鋁罐飲料瓶屬於哪一類垃圾？", a: ["廚餘垃圾", "有害垃圾", "可回收物", "其他垃圾"], c: 2, exp: "鋁罐、廢紙、塑料瓶都是可以重新加工再利用的『可回收物』哦！" },
+        { cat: "常識", type: "交通安全", q: "過馬路時綠燈閃爍，你還沒開始過，應該？", a: ["快速跑過去", "在路邊停步等候下個綠燈", "跟著大隊走", "慢慢走"], c: 1, exp: "綠燈閃爍表示即將變紅。為了安全，如果還沒出發，請等下一次綠燈。" },
+
+        // 品格類
+        { cat: "品格", type: "友善", q: "看見同學在操場上摔倒了，你應該？", a: ["假裝沒看見", "嘲笑他", "主動上前扶起並詢問傷勢", "等老師來"], c: 2, exp: "幫助他人是美德！你的友善會獲得一份『友善徽章』。", badge: "友善" },
+        { cat: "品格", type: "節約", q: "洗完手後發現水龍頭沒關緊，你應該？", a: ["直接走開", "關緊水龍頭再走", "告訴清潔阿姨", "不關我的事"], c: 1, exp: "每一滴水都很珍貴！節約用水能保護地球資源。", badge: "節約" },
+        { cat: "品格", type: "環保", q: "在郊野公園野餐後產生的垃圾，應該？", a: ["隨地丟棄", "埋在泥土裡", "自己帶走或丟進垃圾桶", "掛在樹上"], c: 2, exp: "『垃圾不落地』，保護大自然環境，人人都有一份責任。", badge: "環保" }
+    ];
+
+    function updateUI() {
+        document.getElementById('waterCount').innerText = state.water;
+        document.getElementById('energyBar').innerText = state.energy + '%';
+        
+        // 建築解鎖邏輯 (根據能量與品格點亮)
+        if (state.energy >= 25) document.getElementById('bld-school').classList.remove('gray-scale');
+        if (state.badges.includes('自律') || state.energy >= 50) document.getElementById('bld-court').classList.remove('gray-scale');
+        if (state.badges.includes('環保') || state.energy >= 75) document.getElementById('bld-park').classList.remove('gray-scale');
+        if (state.energy >= 95) document.getElementById('bld-lab').classList.remove('gray-scale');
+
+        // 勳章顯示
+        const bc = document.getElementById('badgeContainer');
+        bc.innerHTML = '';
+        state.badges.forEach(b => {
+            const span = document.createElement('span');
+            span.className = 'badge text-orange-600 font-bold border-orange-200 bg-orange-50';
+            span.innerText = `🏅 ${b}`;
+            bc.appendChild(span);
+        });
+    }
+
+    function startAdventure() {
+        document.getElementById('adventureModal').classList.remove('hidden');
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        const q = questions[Math.floor(Math.random() * questions.length)];
+        state.currentQ = q;
+        document.getElementById('categoryLabel').innerText = `${q.cat}挑戰：${q.type}`;
+        document.getElementById('questionText').innerText = q.q;
+        
+        const grid = document.getElementById('optionsGrid');
+        grid.innerHTML = '';
+        q.a.forEach((opt, idx) => {
+            const b = document.createElement('button');
+            b.className = "bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 p-5 rounded-[1.5rem] text-xl text-blue-800 transition-all active:scale-95 text-left pl-8 font-medium";
+            b.innerText = `${String.fromCharCode(65 + idx)}. ${opt}`;
+            b.onclick = () => handleAnswer(idx);
+            grid.appendChild(b);
+        });
+    }
+
+    function handleAnswer(idx) {
+        document.getElementById('adventureModal').classList.add('hidden');
+        const q = state.currentQ;
+        const isCorrect = idx === q.c;
+        
+        const fb = document.getElementById('feedbackModal');
+        const box = document.getElementById('feedbackBox');
+        const icon = document.getElementById('feedbackIcon');
+        const title = document.getElementById('feedbackTitle');
+        const exp = document.getElementById('feedbackExplanation');
+        const btn = document.getElementById('feedbackBtn');
+
+        if (isCorrect) {
+            state.water += 20;
+            state.energy = Math.min(100, state.energy + 10);
+            state.stats[q.cat]++;
+            if (q.badge && !state.badges.includes(q.badge)) state.badges.push(q.badge);
+            
+            box.style.borderColor = "#4ade80"; // Green
+            icon.innerText = "🌟";
+            title.innerText = "太棒了！答對了";
+            title.className = "text-3xl font-bold mb-4 text-green-600";
+            btn.className = "w-full py-4 rounded-2xl shadow-lg text-xl font-bold text-white bg-green-500 hover:bg-green-600";
+        } else {
+            box.style.borderColor = "#f87171"; // Red
+            icon.innerText = "💡";
+            title.innerText = "沒關係，學會它！";
+            title.className = "text-3xl font-bold mb-4 text-blue-600";
+            btn.className = "w-full py-4 rounded-2xl shadow-lg text-xl font-bold text-white bg-blue-500 hover:bg-blue-600";
+        }
+        
+        exp.innerText = q.exp;
+        fb.classList.remove('hidden');
+        updateUI();
+    }
+
+    function closeFeedback() {
+        document.getElementById('feedbackModal').classList.add('hidden');
+    }
+
+    function toggleParentMode() {
+        const modal = document.getElementById('parentModal');
+        if (modal.classList.contains('hidden')) {
+            const content = document.getElementById('reportContent');
+            content.innerHTML = `
+                <div class="p-4 bg-green-50 rounded-2xl">
+                    <p class="font-bold">總學習進度：${state.energy}%</p>
+                    <p class="text-sm">孩子目前處於「積極探索」階段。</p>
+                </div>
+                <div class="grid grid-cols-1 gap-2 mt-4">
+                    <div class="flex justify-between border-b pb-1"><span>📚 學科成就:</span> <b>${state.stats['學科']} 題</b></div>
+                    <div class="flex justify-between border-b pb-1"><span>🌍 生活常識:</span> <b>${state.stats['常識']} 題</b></div>
+                    <div class="flex justify-between border-b pb-1"><span>❤️ 品格積分:</span> <b>${state.stats['品格']} 點</b></div>
+                </div>
+                <div class="mt-4">
+                    <p class="font-bold mb-1">獲得勳章：</p>
+                    <div class="flex flex-wrap gap-1">${state.badges.length ? state.badges.map(b=>`<span class='text-xs bg-orange-100 px-2 py-1 rounded'>${b}</span>`).join('') : '暫無，繼續努力！'}</div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        } else {
+            modal.classList.add('hidden');
+        }
+    }
+
+    updateUI();
+</script>
+
+</body>
+</html>

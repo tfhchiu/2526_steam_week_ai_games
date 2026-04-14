@@ -1,0 +1,661 @@
+
+<!DOCTYPE html><script src="/__replco/static/devtools/injected.js"onerror="parent.postMessage({event:'error',payload:'script.onerror: Failed to load '+event.target.src},'https://replit.com')"></script>
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Super Snetris: Neon Blast</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #050010;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', Consolas, monospace;
+    user-select: none;
+    overflow: hidden;
+  }
+  #title {
+    font-size: 1.5rem; font-weight: bold; letter-spacing: .15em;
+    margin-bottom: 8px;
+  }
+  #title .c { color: #00FFFF; text-shadow: 0 0 12px #00FFFF; }
+  #title .m { color: #FF00FF; text-shadow: 0 0 12px #FF00FF; }
+
+  #hud {
+    display: flex; gap: 32px; margin-bottom: 8px;
+    font-size: .95rem; align-items: center; height: 24px;
+  }
+  #hud .score { color: #FFFF00; text-shadow: 0 0 8px #FFFF00; }
+  #hud .lines { color: #00FFFF; text-shadow: 0 0 8px #00FFFF; }
+  #hud .combo { color: #FFD700; text-shadow: 0 0 10px #FFD700; font-weight: bold; display: none; }
+
+  #effect-bar {
+    height: 26px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px; font-size: .85rem;
+  }
+  #effect-name { display: none; }
+  #effect-track {
+    width: 100px; height: 6px; background: #222; border-radius: 3px;
+    overflow: hidden; display: none;
+  }
+  #effect-fill { height: 100%; transition: width .1s linear; }
+
+  #layout { display: flex; gap: 16px; align-items: flex-start; }
+
+  #wrap {
+    position: relative;
+    border: 2px solid #FF00FF;
+    box-shadow: 0 0 24px #FF00FF88, 0 0 48px #FF00FF33;
+  }
+  canvas { display: block; }
+
+  #overlay {
+    position: absolute; inset: 0;
+    background: rgba(5,0,16,.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px;
+  }
+  #overlay .big {
+    font-size: 2rem; font-weight: bold; letter-spacing: .1em;
+  }
+  #overlay .sub {
+    color: #998; font-size: .82rem; text-align: center;
+    line-height: 1.8; max-width: 240px;
+  }
+  #overlay .sub span { color: #FFFF00; }
+  #powerup-guide {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    justify-content: center; max-width: 280px;
+  }
+  .pu-icon { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 1.3rem; }
+  .pu-label { font-size: .65rem; }
+
+  .neon-btn {
+    margin-top: 6px; padding: 10px 32px;
+    background: transparent; border: 2px solid;
+    font-size: 1rem; font-family: inherit; cursor: pointer;
+    letter-spacing: .1em; transition: background .15s;
+  }
+  .neon-btn:hover { background: rgba(255,255,255,.08); }
+
+  #side {
+    width: 120px; display: flex; flex-direction: column; gap: 12px;
+    padding-top: 4px; font-size: .75rem;
+  }
+  #side .side-title { color: #665577; letter-spacing: .1em; }
+  .side-item { display: flex; gap: 6px; align-items: flex-start; }
+  .side-item .em { font-size: 1rem; }
+  .side-item .pu-n { font-weight: bold; font-size: .75rem; }
+  .side-item .pu-d { color: #665577; font-size: .65rem; line-height: 1.3; }
+  #side .hint { margin-top: 8px; color: #443355; font-size: .65rem; line-height: 1.6; }
+
+  #footer { margin-top: 10px; color: #443355; font-size: .72rem; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+
+<div id="title">
+  <span class="c">SUPER SNETRIS</span> <span class="m">NEON BLAST</span>
+</div>
+
+<div id="hud">
+  <span class="score">分数 <strong id="score-val">0</strong></span>
+  <span class="lines">消行 <strong id="lines-val">0</strong></span>
+  <span class="combo" id="combo-el">COMBO ×<span id="combo-val">0</span></span>
+</div>
+
+<div id="effect-bar">
+  <span id="effect-icon"></span>
+  <span id="effect-name"></span>
+  <div id="effect-track"><div id="effect-fill"></div></div>
+</div>
+
+<div id="layout">
+  <div id="wrap">
+    <canvas id="c"></canvas>
+
+    <div id="overlay">
+      <div class="big" style="color:#00FFFF;text-shadow:0 0 20px #00FFFF">SNETRIS</div>
+      <div class="sub">
+        控制蛇填满一整行来消除！<br>
+        拾取道具获得特殊能力<br>
+        <span>↑↓←→ 或 WASD</span> 移动
+      </div>
+      <div id="powerup-guide"></div>
+      <button class="neon-btn" id="start-btn"
+        style="color:#00FFFF;border-color:#00FFFF;box-shadow:0 0 12px #00FFFF;text-shadow:0 0 8px #00FFFF">
+        开始游戏
+      </button>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="side-title">道具说明</div>
+    <div id="side-list"></div>
+    <div class="hint">消行越多<br>速度越快<br>连消有加成</div>
+  </div>
+</div>
+
+<div id="footer">ARROW KEYS / WASD &nbsp;·&nbsp; Fill a full row to clear it</div>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const GS = 28, GW = 20, GH = 25;
+const CW = GW * GS, CH = GH * GS;
+const BASE_SPEED = 200;
+const PU_LIFETIME = 300;
+const PU_SPAWN_CHANCE = 0.0025;
+
+const C = {
+  CYAN:'#00FFFF', MAGENTA:'#FF00FF', YELLOW:'#FFFF00',
+  GREEN:'#00FF88', ORANGE:'#FF8800', PURPLE:'#CC44FF',
+  RED:'#FF2244', GOLD:'#FFD700', BG:'#0A0018', GRID:'#1A0A2A',
+};
+
+const PU_INFO = {
+  SLOW:   { label:'缓速',  color:C.GREEN,   icon:'🐢', desc:'Speed -50%' },
+  TRIM:   { label:'截短',  color:C.ORANGE,  icon:'✂️',  desc:'Cut 30% body' },
+  SCORE2X:{ label:'双倍',  color:C.GOLD,    icon:'⭐', desc:'Score ×2' },
+  GHOST:  { label:'穿透',  color:C.PURPLE,  icon:'👻', desc:'Pass through self' },
+  CLEAR:  { label:'消行',  color:C.RED,     icon:'💥', desc:'Clear fullest row' },
+};
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = CW; canvas.height = CH;
+
+const overlay   = document.getElementById('overlay');
+const startBtn  = document.getElementById('start-btn');
+const scoreEl   = document.getElementById('score-val');
+const linesEl   = document.getElementById('lines-val');
+const comboEl   = document.getElementById('combo-el');
+const comboVal  = document.getElementById('combo-val');
+const effectIcon= document.getElementById('effect-icon');
+const effectName= document.getElementById('effect-name');
+const effectTrack=document.getElementById('effect-track');
+const effectFill= document.getElementById('effect-fill');
+
+// Build powerup guide & side panel
+const puTypes = Object.keys(PU_INFO);
+const guide = document.getElementById('powerup-guide');
+puTypes.forEach(t => {
+  const d = PU_INFO[t];
+  const div = document.createElement('div');
+  div.className = 'pu-icon';
+  div.innerHTML = `<span>${d.icon}</span><span class="pu-label" style="color:${d.color};text-shadow:0 0 6px ${d.color}">${d.label}</span>`;
+  guide.appendChild(div);
+});
+const sideList = document.getElementById('side-list');
+puTypes.forEach(t => {
+  const d = PU_INFO[t];
+  const div = document.createElement('div');
+  div.className = 'side-item';
+  div.innerHTML = `<span class="em">${d.icon}</span><div><div class="pu-n" style="color:${d.color};text-shadow:0 0 6px ${d.color}">${d.label}</div><div class="pu-d">${d.desc}</div></div>`;
+  sideList.appendChild(div);
+});
+
+// ─── Utils ───────────────────────────────────────────────────────────────────
+const rnd = (a,b) => Math.random()*(b-a)+a;
+function randomPos(blocked) {
+  for (let i=0;i<300;i++) {
+    const p = {x:Math.floor(Math.random()*GW), y:Math.floor(Math.random()*GH)};
+    if (!blocked.some(b=>b.x===p.x&&b.y===p.y)) return p;
+  }
+  return {x:0,y:0};
+}
+function roundRect(ctx,x,y,w,h,r) {
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function createBurst(cells, color, count=10) {
+  const out = [];
+  for (const cell of cells) {
+    const cx = cell.x*GS+GS/2, cy = cell.y*GS+GS/2;
+    for (let i=0;i<count;i++) {
+      const angle = (i/count)*Math.PI*2 + rnd(0,.5);
+      const spd = rnd(2,9);
+      out.push({x:cx,y:cy, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-2,
+        color, life:rnd(30,60), maxLife:60, size:rnd(2,5)});
+    }
+  }
+  return out;
+}
+function createStars() {
+  return Array.from({length:80},()=>({
+    x:rnd(0,CW), y:rnd(0,CH), r:rnd(.5,2),
+    speed:rnd(.02,.08), alpha:rnd(.2,.9), twinkle:rnd(0,Math.PI*2),
+  }));
+}
+
+// ─── Game State ──────────────────────────────────────────────────────────────
+let state, stars, lastMove=0, raf=0, running=false;
+
+function initState() {
+  const sx=Math.floor(GW/2), sy=Math.floor(GH/2);
+  const snake=[{x:sx,y:sy},{x:sx,y:sy+1},{x:sx,y:sy+2}];
+  return {
+    snake, dir:'UP', nextDir:'UP',
+    food: randomPos(snake),
+    score:0, lines:0,
+    speed:BASE_SPEED, baseSpeed:BASE_SPEED,
+    particles:[], floats:[],
+    gameOver:false, shakeFrames:0, flashFrames:0, flashColor:'',
+    powerups:[], activeEffect:null, scoreMultiplier:1,
+    combo:0,
+  };
+}
+
+// ─── Powerup Application ─────────────────────────────────────────────────────
+function applyPowerup(type) {
+  const info = PU_INFO[type];
+  if (type==='SLOW') {
+    state.speed = state.baseSpeed*1.8;
+    state.activeEffect = {type, remaining:180, duration:180};
+  } else if (type==='TRIM') {
+    const n = Math.max(0, Math.floor(state.snake.length*.3));
+    if (n>0) {
+      const removed = state.snake.splice(state.snake.length-n, n);
+      state.particles.push(...createBurst(removed, info.color, 6));
+    }
+  } else if (type==='SCORE2X') {
+    state.scoreMultiplier = 2;
+    state.activeEffect = {type, remaining:200, duration:200};
+  } else if (type==='GHOST') {
+    state.activeEffect = {type, remaining:150, duration:150};
+  } else if (type==='CLEAR') {
+    const counts = {};
+    for (const s of state.snake) counts[s.y]=(counts[s.y]||0)+1;
+    const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+    if (best) {
+      const yc = Number(best[0]);
+      const cleared = state.snake.filter(s=>s.y===yc);
+      state.particles.push(...createBurst(cleared, C.RED, 12));
+      state.snake = state.snake.filter(s=>s.y!==yc);
+      ensureMinSnake();
+      state.lines++;
+      state.score += GW*10*state.scoreMultiplier;
+      state.shakeFrames=6; state.flashFrames=8; state.flashColor=C.RED;
+    }
+  }
+  state.floats.push({
+    x:CW/2, y:CH/2,
+    text: info.icon+' '+info.label+'!',
+    color:info.color, life:80, maxLife:80, vy:-1.5,
+  });
+  updateEffectUI();
+}
+
+function ensureMinSnake() {
+  if (state.snake.length<3) {
+    const tail = state.snake[state.snake.length-1]||{x:0,y:0};
+    while(state.snake.length<3)
+      state.snake.push({x:tail.x, y:tail.y+state.snake.length});
+  }
+}
+
+function updateEffectUI() {
+  const eff = state.activeEffect;
+  if (eff) {
+    const info = PU_INFO[eff.type];
+    effectIcon.textContent = info.icon;
+    effectName.textContent = info.label;
+    effectName.style.cssText = `color:${info.color};text-shadow:0 0 8px ${info.color};display:inline`;
+    effectTrack.style.display='block';
+    effectFill.style.background = info.color;
+    effectFill.style.boxShadow = `0 0 6px ${info.color}`;
+    effectFill.style.width = (eff.remaining/eff.duration*100)+'%';
+  } else {
+    effectName.style.display='none';
+    effectTrack.style.display='none';
+    effectIcon.textContent='';
+  }
+}
+
+// ─── Game Loop ────────────────────────────────────────────────────────────────
+function tick(ts) {
+  if (!running) return;
+
+  if (ts - lastMove > state.speed) {
+    lastMove = ts;
+    const dirMap = {UP:{x:0,y:-1},DOWN:{x:0,y:1},LEFT:{x:-1,y:0},RIGHT:{x:1,y:0}};
+    state.dir = state.nextDir;
+    const head = state.snake[0];
+    const d = dirMap[state.dir];
+    const nh = {x:head.x+d.x, y:head.y+d.y};
+
+    // Wall
+    if (nh.x<0||nh.x>=GW||nh.y<0||nh.y>=GH) { endGame(); return; }
+
+    // Self
+    const isGhost = state.activeEffect?.type==='GHOST';
+    if (!isGhost && state.snake.some(s=>s.x===nh.x&&s.y===nh.y)) { endGame(); return; }
+
+    state.snake.unshift(nh);
+
+    // Food
+    if (nh.x===state.food.x && nh.y===state.food.y) {
+      const pts = 10*state.scoreMultiplier;
+      state.score += pts;
+      state.floats.push({x:nh.x*GS+GS/2, y:nh.y*GS,
+        text:`+${pts}`, color:C.YELLOW, life:50, maxLife:50, vy:-1.2});
+      state.food = randomPos([...state.snake,...state.powerups.map(p=>p.pos)]);
+    } else {
+      state.snake.pop();
+    }
+
+    // Powerup pickup
+    for (let i=state.powerups.length-1;i>=0;i--) {
+      const pu = state.powerups[i];
+      if (pu.pos.x===nh.x && pu.pos.y===nh.y) {
+        applyPowerup(pu.type);
+        state.particles.push(...createBurst([pu.pos], PU_INFO[pu.type].color, 15));
+        state.powerups.splice(i,1);
+      }
+    }
+
+    // Powerup tick
+    for (let i=state.powerups.length-1;i>=0;i--) {
+      state.powerups[i].life--;
+      if (state.powerups[i].life<=0) state.powerups.splice(i,1);
+    }
+
+    // Active effect tick
+    if (state.activeEffect) {
+      state.activeEffect.remaining--;
+      if (state.activeEffect.remaining<=0) {
+        if (state.activeEffect.type==='SLOW') state.speed=state.baseSpeed;
+        if (state.activeEffect.type==='SCORE2X') state.scoreMultiplier=1;
+        state.activeEffect=null;
+        updateEffectUI();
+      } else {
+        updateEffectUI();
+      }
+    }
+
+    // Spawn powerup
+    if (state.powerups.length<2 && Math.random()<PU_SPAWN_CHANCE*state.speed) {
+      const t = puTypes[Math.floor(Math.random()*puTypes.length)];
+      state.powerups.push({
+        pos: randomPos([...state.snake,state.food,...state.powerups.map(p=>p.pos)]),
+        type:t, life:PU_LIFETIME, pulse:Math.random()*Math.PI*2,
+      });
+    }
+
+    // Line clear
+    const counts={};
+    for (const s of state.snake) counts[s.y]=(counts[s.y]||0)+1;
+    const full = Object.entries(counts).filter(([,c])=>c===GW).map(([y])=>Number(y));
+    if (full.length>0) {
+      const cleared = state.snake.filter(s=>full.includes(s.y));
+      state.particles.push(...createBurst(cleared, C.MAGENTA, 12));
+      state.snake = state.snake.filter(s=>!full.includes(s.y));
+      ensureMinSnake();
+      state.combo++;
+      const bonus = state.combo>1?state.combo:1;
+      const pts = full.length*GW*10*state.scoreMultiplier*bonus;
+      state.score+=pts; state.lines+=full.length;
+      state.baseSpeed = Math.max(80, state.baseSpeed*Math.pow(.97,full.length));
+      if (state.activeEffect?.type!=='SLOW') state.speed=state.baseSpeed;
+      state.shakeFrames=8; state.flashFrames=10; state.flashColor=C.MAGENTA;
+      state.floats.push({
+        x:CW/2, y:CH/3,
+        text: state.combo>1?`COMBO x${state.combo}! +${pts}`:`LINE! +${pts}`,
+        color: state.combo>1?C.GOLD:C.MAGENTA,
+        life:90, maxLife:90, vy:-.8,
+      });
+      comboVal.textContent = state.combo;
+      comboEl.style.display = state.combo>1?'inline':'none';
+    } else {
+      state.combo=0; comboEl.style.display='none';
+    }
+
+    scoreEl.textContent = state.score;
+    linesEl.textContent = state.lines;
+  }
+
+  // Update particles & floats
+  for (const p of state.particles) { p.x+=p.vx; p.y+=p.vy; p.vy+=.35; p.life--; }
+  state.particles = state.particles.filter(p=>p.life>0);
+  for (const f of state.floats) { f.y+=f.vy; f.life--; }
+  state.floats = state.floats.filter(f=>f.life>0);
+  for (const s of stars) s.twinkle+=s.speed;
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
+  const sx = state.shakeFrames>0?rnd(-6,6):0;
+  const sy2= state.shakeFrames>0?rnd(-6,6):0;
+  if (state.shakeFrames>0) state.shakeFrames--;
+
+  ctx.clearRect(0,0,CW,CH);
+  ctx.save();
+  ctx.translate(sx,sy2);
+
+  // Background
+  const bg = ctx.createLinearGradient(0,0,0,CH);
+  bg.addColorStop(0,'#0A0018'); bg.addColorStop(1,'#0D001E');
+  ctx.fillStyle=bg; ctx.fillRect(-8,-8,CW+16,CH+16);
+
+  // Stars
+  for (const s of stars) {
+    const a = s.alpha*(0.6+0.4*Math.sin(s.twinkle));
+    ctx.save(); ctx.globalAlpha=a; ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
+
+  // Row fill glow
+  const rc={};
+  for (const s of state.snake) rc[s.y]=(rc[s.y]||0)+1;
+  for (let y=0;y<GH;y++) {
+    const fill=(rc[y]||0)/GW;
+    if (fill>0) {
+      ctx.save(); ctx.globalAlpha=fill*.18;
+      ctx.fillStyle = fill>.9?C.MAGENTA:fill>.6?C.CYAN:'#4422AA';
+      ctx.fillRect(0,y*GS,CW,GS); ctx.restore();
+    }
+  }
+
+  // Grid
+  ctx.strokeStyle=C.GRID; ctx.lineWidth=.4;
+  for(let x=0;x<=GW;x++){ctx.beginPath();ctx.moveTo(x*GS,0);ctx.lineTo(x*GS,CH);ctx.stroke();}
+  for(let y=0;y<=GH;y++){ctx.beginPath();ctx.moveTo(0,y*GS);ctx.lineTo(CW,y*GS);ctx.stroke();}
+
+  // Row progress bars (right edge, inside canvas)
+  for (let y=0;y<GH;y++) {
+    const fill=(rc[y]||0)/GW;
+    if (fill>.15) {
+      const bh=GS-4, bx=CW-9, by=y*GS+2, bw=6;
+      ctx.save();
+      ctx.fillStyle='#111'; ctx.fillRect(bx,by,bw,bh);
+      const bc=fill>.85?C.MAGENTA:fill>.6?C.CYAN:C.GREEN;
+      ctx.shadowColor=bc; ctx.shadowBlur=4; ctx.fillStyle=bc;
+      ctx.fillRect(bx, by+bh*(1-fill), bw, bh*fill); ctx.restore();
+    }
+  }
+
+  // Food
+  const fp=.85+Math.sin(ts*.004)*.15;
+  const fr=(GS/2-5)*fp, fcx=state.food.x*GS+GS/2, fcy=state.food.y*GS+GS/2;
+  ctx.save(); ctx.shadowColor=C.YELLOW; ctx.shadowBlur=20;
+  ctx.fillStyle=C.YELLOW;
+  ctx.beginPath(); ctx.arc(fcx,fcy,fr,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#FFFFFFCC'; ctx.beginPath(); ctx.arc(fcx,fcy,3,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Powerups
+  for (const p of state.powerups) {
+    const info=PU_INFO[p.type];
+    const cx=p.pos.x*GS+GS/2, cy=p.pos.y*GS+GS/2;
+    const pulse=Math.sin(ts*.003+p.pulse)*.15+.85;
+    const r=(GS/2-3)*pulse;
+    ctx.save();
+    ctx.shadowColor=info.color; ctx.shadowBlur=20;
+    ctx.strokeStyle=info.color; ctx.lineWidth=2;
+    ctx.globalAlpha=.7+Math.sin(ts*.003)*.3;
+    ctx.beginPath(); ctx.arc(cx,cy,r+2,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=info.color+'33';
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.font=`${Math.round(GS*.55)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(info.icon,cx,cy+1); ctx.restore();
+    // life bar
+    const lr=p.life/PU_LIFETIME, bw=GS-6, bx=cx-bw/2, by=cy+r+4;
+    ctx.save(); ctx.fillStyle='#333'; ctx.fillRect(bx,by,bw,2);
+    ctx.fillStyle=info.color; ctx.shadowColor=info.color; ctx.shadowBlur=4;
+    ctx.fillRect(bx,by,bw*lr,2); ctx.restore();
+  }
+
+  // Snake
+  const isGhost=state.activeEffect?.type==='GHOST';
+  const ga=isGhost?.55:1;
+  for (let i=state.snake.length-1;i>=0;i--) {
+    const s=state.snake[i];
+    const ratio=i/Math.max(state.snake.length-1,1);
+    const r2=Math.round(ratio*180), g=Math.round(255-ratio*200), b=255;
+    const col=`rgb(${r2},${g},${b})`;
+    ctx.save();
+    ctx.globalAlpha=ga;
+    ctx.shadowColor=i===0?C.CYAN:col;
+    ctx.shadowBlur=i===0?20:6+(1-ratio)*8;
+    ctx.fillStyle=col;
+    roundRect(ctx,s.x*GS+1,s.y*GS+1,GS-2,GS-2,4);
+    ctx.fill();
+    ctx.globalAlpha=ga*.25; ctx.fillStyle='#fff';
+    roundRect(ctx,s.x*GS+4,s.y*GS+3,GS-14,4,2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Eyes
+  if (state.snake.length>0) {
+    const h=state.snake[0];
+    const hx=h.x*GS+GS/2, hy=h.y*GS+GS/2;
+    const eyeMap={UP:[-5,-4,5,-4],DOWN:[-5,4,5,4],LEFT:[-4,-4,-4,4],RIGHT:[4,-4,4,4]};
+    const [ex1,ey1,ex2,ey2]=eyeMap[state.dir];
+    ctx.save(); ctx.globalAlpha=ga;
+    ctx.fillStyle='#001A1A';
+    ctx.beginPath();ctx.arc(hx+ex1,hy+ey1,3.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+ex2,hy+ey2,3.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(hx+ex1+1,hy+ey1-1,1.2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(hx+ex2+1,hy+ey2-1,1.2,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Ghost border
+  if (isGhost) {
+    for (let i=0;i<state.snake.length;i++) {
+      const s=state.snake[i];
+      ctx.save();
+      ctx.globalAlpha=.4+Math.sin(ts*.006+i*.3)*.2;
+      ctx.strokeStyle=C.PURPLE; ctx.shadowColor=C.PURPLE; ctx.shadowBlur=10; ctx.lineWidth=1.5;
+      roundRect(ctx,s.x*GS+.5,s.y*GS+.5,GS-1,GS-1,4); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  // Particles
+  for (const p of state.particles) {
+    const a=p.life/p.maxLife;
+    ctx.save(); ctx.globalAlpha=a;
+    ctx.shadowColor=p.color; ctx.shadowBlur=8; ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size*a,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
+
+  // Float texts
+  for (const f of state.floats) {
+    const a=f.life/f.maxLife;
+    ctx.save(); ctx.globalAlpha=a;
+    ctx.shadowColor=f.color; ctx.shadowBlur=12; ctx.fillStyle=f.color;
+    ctx.font=`bold 17px 'Courier New',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(f.text,f.x,f.y); ctx.restore();
+  }
+
+  // Flash
+  if (state.flashFrames>0) {
+    ctx.save(); ctx.globalAlpha=(state.flashFrames/10)*.35;
+    ctx.fillStyle=state.flashColor; ctx.fillRect(0,0,CW,CH);
+    state.flashFrames--; ctx.restore();
+  }
+
+  ctx.restore();
+  raf = requestAnimationFrame(tick);
+}
+
+function endGame() {
+  state.gameOver=true; running=false;
+  overlay.style.display='flex';
+  overlay.innerHTML = `
+    <div class="big" style="color:${C.MAGENTA};text-shadow:0 0 24px ${C.MAGENTA}">GAME OVER</div>
+    <div style="color:${C.CYAN};font-size:1.1rem;text-shadow:0 0 10px ${C.CYAN}">得分: ${state.score}</div>
+    <div style="color:${C.YELLOW};font-size:.9rem">消行: ${state.lines}</div>
+    <button class="neon-btn" id="retry-btn"
+      style="color:${C.YELLOW};border-color:${C.YELLOW};box-shadow:0 0 12px ${C.YELLOW};text-shadow:0 0 8px ${C.YELLOW};margin-top:8px">
+      再来一局
+    </button>`;
+  document.getElementById('retry-btn').addEventListener('click', startGame);
+}
+
+function startGame() {
+  state = initState();
+  stars = createStars();
+  lastMove = 0;
+  running = true;
+  overlay.style.display='none';
+  scoreEl.textContent='0'; linesEl.textContent='0';
+  comboEl.style.display='none';
+  effectName.style.display='none'; effectTrack.style.display='none'; effectIcon.textContent='';
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(tick);
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!running) return;
+  const d=state.dir;
+  const map={
+    ArrowUp:()=>d!=='DOWN'&&(state.nextDir='UP'),
+    w:()=>d!=='DOWN'&&(state.nextDir='UP'),
+    W:()=>d!=='DOWN'&&(state.nextDir='UP'),
+    ArrowDown:()=>d!=='UP'&&(state.nextDir='DOWN'),
+    s:()=>d!=='UP'&&(state.nextDir='DOWN'),
+    S:()=>d!=='UP'&&(state.nextDir='DOWN'),
+    ArrowLeft:()=>d!=='RIGHT'&&(state.nextDir='LEFT'),
+    a:()=>d!=='RIGHT'&&(state.nextDir='LEFT'),
+    A:()=>d!=='RIGHT'&&(state.nextDir='LEFT'),
+    ArrowRight:()=>d!=='LEFT'&&(state.nextDir='RIGHT'),
+    d:()=>d!=='LEFT'&&(state.nextDir='RIGHT'),
+    D:()=>d!=='LEFT'&&(state.nextDir='RIGHT'),
+  };
+  if (map[e.key]) { map[e.key](); e.preventDefault(); }
+});
+
+// Mobile swipe
+let tx0=0,ty0=0;
+canvas.addEventListener('touchstart',e=>{tx0=e.touches[0].clientX;ty0=e.touches[0].clientY;},{passive:true});
+canvas.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx0;
+  const dy=e.changedTouches[0].clientY-ty0;
+  const d=state.dir;
+  if (Math.abs(dx)>Math.abs(dy)) {
+    if (dx>20&&d!=='LEFT') state.nextDir='RIGHT';
+    if (dx<-20&&d!=='RIGHT') state.nextDir='LEFT';
+  } else {
+    if (dy>20&&d!=='UP') state.nextDir='DOWN';
+    if (dy<-20&&d!=='DOWN') state.nextDir='UP';
+  }
+},{passive:true});
+
+startBtn.addEventListener('click', startGame);
+</script>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="f37f4323-4d43-4c46-a170-51801cbdc75c"></script></body>
+</html>

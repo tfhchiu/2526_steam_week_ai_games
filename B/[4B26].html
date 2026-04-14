@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Chronicle: 課後補習物語</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 防止選取文字導致遊戲體驗不佳 */
+        body { user-select: none; -webkit-user-select: none; }
+        .animate-bounce-slow { animation: bounce 1.5s infinite; }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+            50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 overflow-hidden font-sans">
+
+    <!-- 主選單畫面 -->
+    <div id="menu-screen" class="flex items-center justify-center w-full h-screen bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 font-sans transition-opacity duration-500">
+        <div class="text-center p-10 bg-white/80 backdrop-blur-md rounded-3xl shadow-2xl max-w-2xl border-4 border-white mx-4">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-indigo-600 mb-4 tracking-wider">
+                English Chronicle
+            </h1>
+            <h2 class="text-2xl font-bold text-gray-700 mb-8">櫻與露娜的課後補習物語</h2>
+            
+            <div class="flex justify-center gap-6 mb-8">
+                <div class="flex flex-col items-center">
+                    <div class="w-20 h-20 rounded-full bg-pink-200 border-4 border-pink-400 flex items-center justify-center overflow-hidden mb-2 shadow-lg">
+                        <span class="text-3xl">🌸</span>
+                    </div>
+                    <span class="text-pink-600 font-bold">Sakura</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <div class="w-20 h-20 rounded-full bg-indigo-200 border-4 border-indigo-400 flex items-center justify-center overflow-hidden mb-2 shadow-lg">
+                        <span class="text-3xl">🌙</span>
+                    </div>
+                    <span class="text-indigo-600 font-bold">Luna</span>
+                </div>
+            </div>
+
+            <p class="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
+                這是一款結合日漫視覺小說與初中英語教學的遊戲。<br/>
+                透過回答英語問題，幫助少女們通過考試吧！<br/>
+                (包含時態、單字、比較級等核心知識點)
+            </p>
+            <button id="start-btn" class="px-10 py-4 bg-gradient-to-r from-pink-500 to-indigo-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
+                開始遊戲 START
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲畫面 -->
+    <div id="game-screen" class="hidden w-full h-screen relative overflow-hidden flex flex-col font-sans transition-colors duration-1000 bg-gradient-to-b from-orange-200 to-amber-100 cursor-pointer">
+        
+        <!-- 頂部 UI / 分數 -->
+        <div id="score-display" class="absolute top-4 right-4 bg-white/80 backdrop-blur px-4 py-2 rounded-full font-bold text-indigo-800 shadow-md z-20">
+            Score: 0 / 4
+        </div>
+
+        <!-- 角色立繪容器 -->
+        <div id="sprite-container" class="flex-1 relative z-10 w-full max-w-4xl mx-auto">
+            <!-- SVG 將由 JS 動態生成並插入此處 -->
+        </div>
+
+        <!-- 覆蓋層 (選項出現時變暗) -->
+        <div id="overlay" class="hidden absolute inset-0 bg-black/20 z-20 backdrop-blur-sm transition-all"></div>
+
+        <!-- 選項區塊 -->
+        <div id="choices-container" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 w-full max-w-md flex flex-col gap-4 p-4">
+            <!-- 按鈕將由 JS 動態生成 -->
+        </div>
+
+        <!-- 對話框區塊 -->
+        <div class="relative z-20 w-full max-w-5xl mx-auto p-4 pb-8">
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl border-4 border-white/50 shadow-2xl p-6 min-h-[160px] relative flex flex-col justify-center">
+                
+                <!-- 姓名標籤 -->
+                <div id="name-tag" class="hidden absolute -top-6 left-6 px-6 py-1 rounded-full text-lg font-bold text-white shadow-md transition-colors duration-300">
+                    <!-- 姓名 -->
+                </div>
+
+                <!-- 對話文字 -->
+                <div class="text-xl md:text-2xl text-gray-800 leading-relaxed mt-2 font-medium min-h-[80px] flex items-end">
+                    <span id="dialogue-text"></span>
+                    <!-- 閃爍的點擊提示 -->
+                    <span id="click-prompt" class="hidden inline-block w-3 h-3 rounded-full bg-indigo-400 ml-2 animate-bounce-slow mb-2"></span>
+                </div>
+                
+                <!-- 結局重玩按鈕 -->
+                <div id="replay-btn-container" class="hidden mt-6 flex justify-center w-full relative z-40">
+                    <button id="replay-btn" class="px-8 py-3 bg-indigo-600 text-white font-bold rounded-full hover:bg-indigo-700 transition shadow-lg cursor-pointer">
+                        返回主選單 (Play Again)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 遊戲數據與劇本 ---
+        const CHARACTERS = {
+            player: { name: '你', color: 'text-gray-800' },
+            sakura: { name: '櫻 (Sakura)', color: 'text-pink-500', theme: 'pink' },
+            luna: { name: '露娜 (Luna)', color: 'text-indigo-600', theme: 'indigo' },
+            system: { name: '系統', color: 'text-gray-500' }
+        };
+
+        const BACKGROUNDS = {
+            classroom: 'from-orange-200 to-amber-100', // 黃昏教室
+            library: 'from-blue-100 to-slate-200',   // 圖書館
+            ending: 'from-purple-100 to-pink-100'    // 結局
+        };
+
+        const STORY = {
+            start: [
+                { bg: 'classroom', speaker: 'sakura', emotion: 'panic', text: '救命啊！明天的英語考試我死定了！' },
+                { bg: 'classroom', speaker: 'player', text: '怎麼了？又沒看書？' },
+                { bg: 'classroom', speaker: 'sakura', emotion: 'sad', text: '對啊... 那些單字和文法就像外星語一樣。你能幫我複習嗎？' },
+                { 
+                    bg: 'classroom', speaker: 'player', text: '（要幫她嗎？）',
+                    choices: [
+                        { text: '沒問題，包在我身上！', next: 'q1', score: 0 },
+                        { text: '真拿妳沒辦法，就一會兒喔。', next: 'q1', score: 0 }
+                    ]
+                }
+            ],
+            q1: [
+                { bg: 'classroom', speaker: 'sakura', emotion: 'happy', text: '太好了！那麼第一題... 「我總是搭巴士上學」的英文怎麼說？' },
+                { 
+                    bg: 'classroom', speaker: 'sakura', emotion: 'normal', text: '請選擇正確的句子：',
+                    choices: [
+                        { text: 'A) I always go to school by bus.', next: 'q1_correct', score: 1, type: 'quiz' },
+                        { text: 'B) I usually to school by bus.', next: 'q1_wrong', score: 0, type: 'quiz' },
+                        { text: 'C) I always goes to school by bus.', next: 'q1_wrong', score: 0, type: 'quiz' }
+                    ]
+                }
+            ],
+            q1_correct: [
+                { bg: 'classroom', speaker: 'sakura', emotion: 'happy', text: '哇！你好厲害！原來主詞是 I 的時候，動詞不用加 s 呀。' },
+                { bg: 'classroom', speaker: 'system', text: '答對了！(獲得 1 分)' },
+                { bg: 'classroom', text: '', next: 'enter_luna' }
+            ],
+            q1_wrong: [
+                { bg: 'classroom', speaker: 'sakura', emotion: 'sad', text: '咦...是這樣嗎？總覺得哪裡怪怪的...' },
+                { bg: 'classroom', speaker: 'system', text: '答錯了。正確答案是 A。主詞 I 搭配原形動詞，always 放動詞前。' },
+                { bg: 'classroom', text: '', next: 'enter_luna' }
+            ],
+            enter_luna: [
+                { bg: 'classroom', speaker: 'luna', emotion: 'angry', text: '哼，這種基礎的問題都能猶豫，難怪成績墊底。' },
+                { bg: 'classroom', speaker: 'sakura', emotion: 'panic', text: '啊！是英語部部長，露娜學姐！' },
+                { bg: 'classroom', speaker: 'luna', emotion: 'normal', text: '讓我來教教你們什麼叫真正的英語。聽好這題時態題。' },
+                { 
+                    bg: 'classroom', speaker: 'luna', emotion: 'normal', text: '填空題："When I called him, he ______ TV." (當我打給他的時候，他正在看電視。)',
+                    choices: [
+                        { text: 'A) watched', next: 'q2_wrong', score: 0, type: 'quiz' },
+                        { text: 'B) was watching', next: 'q2_correct', score: 1, type: 'quiz' },
+                        { text: 'C) is watching', next: 'q2_wrong', score: 0, type: 'quiz' }
+                    ]
+                }
+            ],
+            q2_correct: [
+                { bg: 'classroom', speaker: 'luna', emotion: 'happy', text: '哦？看來你還不算無可救藥。沒錯，過去某個時間點正在發生的動作，要用過去進行式 (was/were + V-ing)。' },
+                { bg: 'classroom', speaker: 'system', text: '答對了！(獲得 1 分)' },
+                { bg: 'classroom', text: '', next: 'to_library' }
+            ],
+            q2_wrong: [
+                { bg: 'classroom', speaker: 'luna', emotion: 'angry', text: '錯了。當過去某個瞬間發生另一件事時，正在進行的動作要用「過去進行式」(was/were + V-ing)。' },
+                { bg: 'classroom', speaker: 'system', text: '答錯了。正確答案是 B。' },
+                { bg: 'classroom', text: '', next: 'to_library' }
+            ],
+            to_library: [
+                { bg: 'classroom', speaker: 'luna', emotion: 'normal', text: '教室太吵了，走吧，去圖書館繼續特訓。' },
+                { bg: 'library', speaker: 'sakura', emotion: 'happy', text: '哇，圖書館好安靜。感覺智商都提高了！' },
+                { bg: 'library', speaker: 'luna', emotion: 'normal', text: '既然到了圖書館，就考你們一個相關單字。' },
+                { 
+                    bg: 'library', speaker: 'luna', emotion: 'normal', text: '請問「圖書館員」的英文單字是什麼？',
+                    choices: [
+                        { text: 'A) Librarian', next: 'q3_correct', score: 1, type: 'quiz' },
+                        { text: 'B) Libraryer', next: 'q3_wrong', score: 0, type: 'quiz' },
+                        { text: 'C) Bookkeeper', next: 'q3_wrong', score: 0, type: 'quiz' }
+                    ]
+                }
+            ],
+            q3_correct: [
+                { bg: 'library', speaker: 'luna', emotion: 'happy', text: '非常好。字尾加 -ian 通常表示「某種職業或身分的人」。' },
+                { bg: 'library', speaker: 'system', text: '答對了！(獲得 1 分)' },
+                { bg: 'library', text: '', next: 'final_q' }
+            ],
+            q3_wrong: [
+                { bg: 'library', speaker: 'luna', emotion: 'sad', text: '不對...雖然很多職業是加 -er，但圖書館員是 Librarian。' },
+                { bg: 'library', speaker: 'system', text: '答錯了。正確答案是 A。' },
+                { bg: 'library', text: '', next: 'final_q' }
+            ],
+            final_q: [
+                { bg: 'library', speaker: 'sakura', emotion: 'panic', text: '腦袋...腦袋要爆炸了...' },
+                { bg: 'library', speaker: 'luna', emotion: 'normal', text: '最後一題了。如果這題答對，我就承認你們的努力。' },
+                { 
+                    bg: 'library', speaker: 'luna', emotion: 'normal', text: '翻譯：「這本書比那本書有趣」',
+                    choices: [
+                        { text: 'A) This book is more interesting than that one.', next: 'q4_correct', score: 1, type: 'quiz' },
+                        { text: 'B) This book is interestinger than that one.', next: 'q4_wrong', score: 0, type: 'quiz' },
+                        { text: 'C) This book is most interesting than that one.', next: 'q4_wrong', score: 0, type: 'quiz' }
+                    ]
+                }
+            ],
+            q4_correct: [
+                { bg: 'library', speaker: 'luna', emotion: 'happy', text: 'Perfect! interesting 是多音節形容詞，比較級要在前面加 more。' },
+                { bg: 'library', speaker: 'sakura', emotion: 'happy', text: '我懂了！因為它太長了，所以不能直接加 er！' },
+                { bg: 'library', speaker: 'system', text: '答對了！(獲得 1 分)' },
+                { bg: 'library', text: '', next: 'check_ending' }
+            ],
+            q4_wrong: [
+                { bg: 'library', speaker: 'luna', emotion: 'angry', text: '唉... interesting 是多音節形容詞，比較級必須在前面加 more，不能加 er。' },
+                { bg: 'library', speaker: 'system', text: '答錯了。正確答案是 A。' },
+                { bg: 'library', text: '', next: 'check_ending' }
+            ],
+            check_ending: [
+                { bg: 'ending', speaker: 'system', text: '測驗結束。正在計算成績...', isEndingTrigger: true }
+            ],
+            ending_perfect: [
+                { bg: 'ending', speaker: 'sakura', emotion: 'happy', text: '太棒了！所有題目都答對了！明天的考試我一定沒問題！' },
+                { bg: 'ending', speaker: 'luna', emotion: 'happy', text: '哼，表現得還算差強人意啦。以後...如果還想學習，隨時可以來英語部找我。' },
+                { bg: 'ending', speaker: 'system', text: '【結局：完美學霸】恭喜你，英語大師！' }
+            ],
+            ending_normal: [
+                { bg: 'ending', speaker: 'sakura', emotion: 'normal', text: '雖然錯了幾題，但感覺比以前懂多了！謝謝你！' },
+                { bg: 'ending', speaker: 'luna', emotion: 'normal', text: '還需要多加練習呢。別鬆懈了。' },
+                { bg: 'ending', speaker: 'system', text: '【結局：繼續努力】你的英語水平還有進步空間！' }
+            ],
+            ending_bad: [
+                { bg: 'ending', speaker: 'luna', emotion: 'angry', text: '太慘了...你們兩個明天放學後，給我來英語部進行地獄式補習！' },
+                { bg: 'ending', speaker: 'sakura', emotion: 'panic', text: '不——！！！我不想留校啊！！！' },
+                { bg: 'ending', speaker: 'system', text: '【結局：地獄補習班】看來你需要從字母開始重新學起了...' }
+            ]
+        };
+
+        // --- 狀態變量 ---
+        let currentSceneKey = 'start';
+        let dialogueIndex = 0;
+        let score = 0;
+        let isTyping = false;
+        let typeTimeout = null;
+        let fullTextToType = "";
+        let currentLine = null;
+
+        // --- DOM 元素獲取 ---
+        const menuScreen = document.getElementById('menu-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const startBtn = document.getElementById('start-btn');
+        const scoreDisplay = document.getElementById('score-display');
+        const spriteContainer = document.getElementById('sprite-container');
+        const overlay = document.getElementById('overlay');
+        const choicesContainer = document.getElementById('choices-container');
+        const nameTag = document.getElementById('name-tag');
+        const dialogueText = document.getElementById('dialogue-text');
+        const clickPrompt = document.getElementById('click-prompt');
+        const replayBtnContainer = document.getElementById('replay-btn-container');
+        const replayBtn = document.getElementById('replay-btn');
+
+        // --- 初始化與事件綁定 ---
+        startBtn.addEventListener('click', startGame);
+        gameScreen.addEventListener('click', handleScreenClick);
+        replayBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menuScreen.classList.remove('hidden');
+            gameScreen.classList.add('hidden');
+        });
+
+        // --- 核心邏輯 ---
+        function startGame() {
+            menuScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            currentSceneKey = 'start';
+            dialogueIndex = 0;
+            score = 0;
+            scoreDisplay.innerText = `Score: ${score} / 4`;
+            renderLine();
+        }
+
+        function renderLine() {
+            currentLine = STORY[currentSceneKey][dialogueIndex];
+            if (!currentLine) return;
+
+            // 處理背景
+            const bgClass = BACKGROUNDS[currentLine.bg] || BACKGROUNDS.classroom;
+            gameScreen.className = `w-full h-screen relative overflow-hidden flex flex-col font-sans transition-colors duration-1000 bg-gradient-to-b ${bgClass} cursor-pointer`;
+
+            // 處理立繪
+            spriteContainer.innerHTML = generateSVG(currentLine.speaker, currentLine.emotion);
+
+            // 處理 UI 顯示/隱藏
+            overlay.classList.add('hidden');
+            choicesContainer.classList.add('hidden');
+            choicesContainer.innerHTML = '';
+            clickPrompt.classList.add('hidden');
+            replayBtnContainer.classList.add('hidden');
+
+            // 處理姓名標籤
+            if (currentLine.speaker && currentLine.speaker !== 'player' && currentLine.speaker !== 'system') {
+                const speakerData = CHARACTERS[currentLine.speaker];
+                nameTag.innerText = speakerData.name;
+                nameTag.className = `absolute -top-6 left-6 px-6 py-1 rounded-full text-lg font-bold text-white shadow-md transition-colors duration-300 ${
+                    speakerData.theme === 'pink' ? 'bg-pink-500' : 
+                    speakerData.theme === 'indigo' ? 'bg-indigo-600' : 'bg-gray-600'
+                }`;
+                nameTag.classList.remove('hidden');
+            } else if (currentLine.speaker === 'system') {
+                nameTag.innerText = '系統';
+                nameTag.className = 'absolute -top-6 left-6 px-6 py-1 rounded-full text-lg font-bold text-white shadow-md transition-colors duration-300 bg-gray-500';
+                nameTag.classList.remove('hidden');
+            } else {
+                nameTag.classList.add('hidden');
+            }
+
+            // 打字機效果
+            fullTextToType = currentLine.text || "";
+            dialogueText.innerText = "";
+            isTyping = true;
+            if (typeTimeout) clearTimeout(typeTimeout);
+            
+            let i = 0;
+            function typeChar() {
+                if (i < fullTextToType.length) {
+                    dialogueText.innerText += fullTextToType.charAt(i);
+                    i++;
+                    typeTimeout = setTimeout(typeChar, 30);
+                } else {
+                    finishTyping();
+                }
+            }
+            typeChar();
+        }
+
+        function finishTyping() {
+            isTyping = false;
+            dialogueText.innerText = fullTextToType;
+            if (typeTimeout) clearTimeout(typeTimeout);
+
+            // 顯示選項 (如果有)
+            if (currentLine.choices) {
+                overlay.classList.remove('hidden');
+                choicesContainer.classList.remove('hidden');
+                
+                currentLine.choices.forEach((choice, idx) => {
+                    const btn = document.createElement('button');
+                    const isQuiz = choice.type === 'quiz';
+                    const baseStyle = "px-6 py-4 rounded-xl text-lg font-bold shadow-xl transition-all duration-200 cursor-pointer ";
+                    const typeStyle = isQuiz 
+                        ? "bg-white text-gray-800 border-2 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-500 hover:scale-105 z-40 relative" 
+                        : "bg-white/90 text-gray-800 border-2 border-pink-200 hover:bg-pink-50 hover:border-pink-500 hover:scale-105 z-40 relative";
+                    
+                    btn.className = baseStyle + typeStyle;
+                    btn.innerText = choice.text;
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        handleChoice(choice);
+                    });
+                    choicesContainer.appendChild(btn);
+                });
+            } else if (currentLine.isEndingTrigger) {
+                 // 不顯示 click prompt，直接判斷結局 (由點擊畫面觸發)
+            } else {
+                // 如果是結局場景的最後，顯示重玩按鈕
+                if (currentSceneKey.startsWith('ending_') && dialogueIndex === STORY[currentSceneKey].length - 1) {
+                    replayBtnContainer.classList.remove('hidden');
+                } else {
+                    clickPrompt.classList.remove('hidden'); // 顯示等待點擊提示
+                }
+            }
+        }
+
+        function handleScreenClick() {
+            if (!currentLine) return;
+
+            // 1. 如果正在打字，瞬間完成
+            if (isTyping) {
+                finishTyping();
+                return;
+            }
+
+            // 2. 如果有選項正在顯示，阻擋點擊螢幕推進
+            if (currentLine.choices) return;
+
+            // 3. 處理結局觸發
+            if (currentLine.isEndingTrigger) {
+                if (score === 4) currentSceneKey = 'ending_perfect';
+                else if (score >= 2) currentSceneKey = 'ending_normal';
+                else currentSceneKey = 'ending_bad';
+                dialogueIndex = 0;
+                renderLine();
+                return;
+            }
+
+            // 4. 正常推進劇情
+            if (currentLine.next) {
+                currentSceneKey = currentLine.next;
+                dialogueIndex = 0;
+                renderLine();
+            } else if (dialogueIndex < STORY[currentSceneKey].length - 1) {
+                dialogueIndex++;
+                renderLine();
+            }
+        }
+
+        function handleChoice(choice) {
+            if (choice.score) {
+                score += choice.score;
+                scoreDisplay.innerText = `Score: ${score} / 4`;
+            }
+            currentSceneKey = choice.next;
+            dialogueIndex = 0;
+            renderLine();
+        }
+
+        // --- 動漫風角色 SVG 生成器 ---
+        function generateSVG(character, emotion) {
+            if (!character || character === 'player' || character === 'system') return '';
+
+            const isSakura = character === 'sakura';
+            
+            const colors = {
+                hairStart: isSakura ? '#fbcfe8' : '#818cf8',
+                hairEnd: isSakura ? '#db2777' : '#312e81',
+                eye: isSakura ? '#be185d' : '#312e81',
+                collar: isSakura ? '#831843' : '#1e3a8a',
+                accessory: isSakura ? '#ef4444' : '#fbbf24',
+                skinStart: '#fff1f2',
+                skinEnd: '#ffe4e6',
+                skinShadow: '#fecdd3'
+            };
+
+            let leftEyebrow = `<path d="M 140 205 Q 160 195 180 205" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+            let rightEyebrow = `<path d="M 220 205 Q 240 195 260 205" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+            let leftEye = '', rightEye = '', mouth = '', sweatDrop = '';
+
+            if (emotion === 'happy') {
+                leftEyebrow = `<path d="M 140 195 Q 160 185 180 195" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                rightEyebrow = `<path d="M 220 195 Q 240 185 260 195" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                leftEye = `<path d="M 140 230 Q 160 210 180 230" fill="none" stroke="#1f2937" stroke-width="5" stroke-linecap="round" />`;
+                rightEye = `<path d="M 220 230 Q 240 210 260 230" fill="none" stroke="#1f2937" stroke-width="5" stroke-linecap="round" />`;
+                mouth = `<path d="M 190 265 Q 200 290 210 265 Z" fill="#ef4444" stroke="#991b1b" stroke-width="2" stroke-linejoin="round" />`;
+            } else if (emotion === 'sad') {
+                leftEyebrow = `<path d="M 140 200 Q 160 210 180 200" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                rightEyebrow = `<path d="M 220 200 Q 240 210 260 200" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                leftEye = `
+                    <g>
+                        <path d="M 140 235 Q 160 220 180 235" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" />
+                        <ellipse cx="160" cy="245" rx="12" ry="15" fill="${colors.eye}" opacity="0.8" />
+                        <ellipse cx="160" cy="240" rx="4" ry="6" fill="white" />
+                    </g>`;
+                rightEye = `
+                    <g>
+                        <path d="M 220 235 Q 240 220 260 235" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" />
+                        <ellipse cx="240" cy="245" rx="12" ry="15" fill="${colors.eye}" opacity="0.8" />
+                        <ellipse cx="240" cy="240" rx="4" ry="6" fill="white" />
+                    </g>`;
+                mouth = `<path d="M 190 275 Q 200 265 210 275" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" />`;
+            } else if (emotion === 'angry') {
+                leftEyebrow = `<path d="M 140 210 L 180 195" fill="none" stroke="${colors.hairEnd}" stroke-width="4" stroke-linecap="round" />`;
+                rightEyebrow = `<path d="M 260 210 L 220 195" fill="none" stroke="${colors.hairEnd}" stroke-width="4" stroke-linecap="round" />`;
+                leftEye = `
+                    <g>
+                        <path d="M 135 225 L 180 215" fill="none" stroke="#1f2937" stroke-width="5" stroke-linecap="round" />
+                        <ellipse cx="158" cy="235" rx="10" ry="12" fill="${colors.eye}" />
+                        <circle cx="155" cy="230" r="3" fill="white" />
+                    </g>`;
+                rightEye = `
+                    <g>
+                        <path d="M 265 225 L 220 215" fill="none" stroke="#1f2937" stroke-width="5" stroke-linecap="round" />
+                        <ellipse cx="242" cy="235" rx="10" ry="12" fill="${colors.eye}" />
+                        <circle cx="245" cy="230" r="3" fill="white" />
+                    </g>`;
+                mouth = `<path d="M 190 270 L 210 265" fill="none" stroke="#4b5563" stroke-width="3" stroke-linecap="round" />`;
+            } else if (emotion === 'panic') {
+                leftEyebrow = `<path d="M 140 190 Q 160 180 180 190" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                rightEyebrow = `<path d="M 220 190 Q 240 180 260 190" fill="none" stroke="${colors.hairEnd}" stroke-width="3" stroke-linecap="round" />`;
+                leftEye = `
+                    <g>
+                        <circle cx="160" cy="230" r="18" fill="white" stroke="#1f2937" stroke-width="3" />
+                        <circle cx="160" cy="230" r="4" fill="${colors.eye}" />
+                    </g>`;
+                rightEye = `
+                    <g>
+                        <circle cx="240" cy="230" r="18" fill="white" stroke="#1f2937" stroke-width="3" />
+                        <circle cx="240" cy="230" r="4" fill="${colors.eye}" />
+                    </g>`;
+                mouth = `<ellipse cx="200" cy="275" rx="8" ry="12" fill="#ef4444" stroke="#991b1b" stroke-width="2" />`;
+                sweatDrop = `<path d="M 265 180 Q 275 190 275 205 Q 275 215 265 215 Q 255 215 255 205 Q 255 190 265 180 Z" fill="#bae6fd" opacity="0.8" />`;
+            } else {
+                // Normal
+                leftEye = `
+                    <g>
+                        <ellipse cx="160" cy="235" rx="18" ry="22" fill="white" />
+                        <path d="M 135 235 Q 160 205 185 235" fill="none" stroke="#1f2937" stroke-width="6" stroke-linecap="round" />
+                        <ellipse cx="160" cy="235" rx="12" ry="18" fill="${colors.eye}" />
+                        <ellipse cx="155" cy="225" rx="5" ry="8" fill="white" />
+                        <circle cx="165" cy="245" r="3" fill="white" opacity="0.6" />
+                    </g>`;
+                rightEye = `
+                    <g>
+                        <ellipse cx="240" cy="235" rx="18" ry="22" fill="white" />
+                        <path d="M 215 235 Q 240 205 265 235" fill="none" stroke="#1f2937" stroke-width="6" stroke-linecap="round" />
+                        <ellipse cx="240" cy="235" rx="12" ry="18" fill="${colors.eye}" />
+                        <ellipse cx="235" cy="225" rx="5" ry="8" fill="white" />
+                        <circle cx="245" cy="245" r="3" fill="white" opacity="0.6" />
+                    </g>`;
+                mouth = `<path d="M 195 270 Q 200 275 205 270" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" />`;
+            }
+
+            const blushOpacity = (emotion === 'panic' || emotion === 'happy') ? "0.8" : "0.4";
+
+            return `
+            <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[90%] max-w-[500px] h-[75vh] flex items-end justify-center drop-shadow-2xl transition-all duration-300 pointer-events-none">
+                <svg width="100%" height="100%" viewBox="0 0 400 500" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="hairGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="${colors.hairStart}" />
+                            <stop offset="100%" stop-color="${colors.hairEnd}" />
+                        </linearGradient>
+                        <linearGradient id="skinGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="${colors.skinStart}" />
+                            <stop offset="100%" stop-color="${colors.skinEnd}" />
+                        </linearGradient>
+                        <linearGradient id="uniformGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff" />
+                            <stop offset="100%" stop-color="#e2e8f0" />
+                        </linearGradient>
+                    </defs>
+
+                    <!-- 1. 後方頭髮 -->
+                    ${isSakura 
+                        ? `<path d="M 200 100 C 50 100 50 350 100 450 C 120 490 280 490 300 450 C 350 350 350 100 200 100 Z" fill="url(#hairGrad)" />`
+                        : `<path d="M 130 150 L 80 500 L 320 500 L 270 150 Z" fill="url(#hairGrad)" />`
+                    }
+
+                    <!-- 2. 身體與制服 -->
+                    <g id="body">
+                        <rect x="185" y="290" width="30" height="40" fill="${colors.skinShadow}" />
+                        <path d="M 170 320 Q 120 340 100 500 L 300 500 Q 280 340 230 320 Z" fill="url(#uniformGrad)" stroke="#cbd5e1" stroke-width="2" />
+                        <path d="M 170 320 L 200 400 L 230 320 L 280 340 L 200 430 L 120 340 Z" fill="${colors.collar}" />
+                        <path d="M 135 345 L 200 415 L 265 345" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.8" />
+                        
+                        ${isSakura 
+                            ? `
+                            <g transform="translate(0, 10)">
+                                <path d="M 185 390 L 140 430 L 200 410 L 260 430 L 215 390 Z" fill="${colors.accessory}" stroke="#b91c1c" stroke-width="2" stroke-linejoin="round" />
+                                <circle cx="200" cy="405" r="10" fill="#fca5a5" stroke="#b91c1c" stroke-width="2" />
+                            </g>`
+                            : `
+                            <g transform="translate(0, 5)">
+                                <polygon points="190,390 210,390 215,460 200,480 185,460" fill="${colors.accessory}" stroke="#d97706" stroke-width="2" stroke-linejoin="round" />
+                                <polygon points="190,390 210,390 205,405 195,405" fill="#fcd34d" />
+                            </g>`
+                        }
+                    </g>
+
+                    <!-- 3. 頭部與臉部 -->
+                    <g id="head">
+                        <ellipse cx="125" cy="245" rx="12" ry="20" fill="${colors.skinShadow}" />
+                        <ellipse cx="275" cy="245" rx="12" ry="20" fill="${colors.skinShadow}" />
+                        
+                        <path d="M 130 200 Q 130 290 200 320 Q 270 290 270 200 Z" fill="url(#skinGrad)" stroke="${colors.skinShadow}" stroke-width="2" />
+                        
+                        <ellipse cx="150" cy="260" rx="15" ry="8" fill="#fca5a5" opacity="${blushOpacity}" />
+                        <ellipse cx="250" cy="260" rx="15" ry="8" fill="#fca5a5" opacity="${blushOpacity}" />
+
+                        ${leftEyebrow} ${rightEyebrow}
+                        ${leftEye} ${rightEye}
+                        ${mouth} ${sweatDrop}
+                    </g>
+
+                    <!-- 4. 前方頭髮 -->
+                    <g id="front-hair">
+                        ${isSakura 
+                            ? `
+                            <path d="M 115 210 Q 140 120 200 130 Q 260 120 285 210 Q 260 140 200 160 Q 140 140 115 210 Z" fill="url(#hairGrad)" />
+                            <path d="M 115 190 Q 100 280 135 310 Q 145 250 140 190 Z" fill="url(#hairGrad)" />
+                            <path d="M 285 190 Q 300 280 265 310 Q 255 250 260 190 Z" fill="url(#hairGrad)" />
+                            <path d="M 200 130 Q 230 40 260 80 Q 230 60 205 130 Z" fill="url(#hairGrad)" />`
+                            : `
+                            <path d="M 120 200 L 120 150 Q 200 130 280 150 L 280 200 L 250 170 L 200 180 L 150 170 Z" fill="url(#hairGrad)" />
+                            <path d="M 120 170 L 110 300 L 135 300 L 140 170 Z" fill="url(#hairGrad)" />
+                            <path d="M 280 170 L 290 300 L 265 300 L 260 170 Z" fill="url(#hairGrad)" />`
+                        }
+                    </g>
+                </svg>
+            </div>`;
+        }
+    </script>
+</body>
+</html>

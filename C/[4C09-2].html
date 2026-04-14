@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>鬼屋魔影：德西托的夢魘 (FPS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, serif; user-select: none; }
+        #game-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* 復古電影顆粒與濾鏡 */
+        .film-grain {
+            position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0.12;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        .vignette {
+            position: absolute; inset: 0; pointer-events: none; z-index: 7;
+            background: radial-gradient(circle, rgba(0,0,0,0) 30%, rgba(10,5,0,0.95) 100%);
+        }
+        #damage-overlay {
+            position: absolute; inset: 0; pointer-events: none; z-index: 8;
+            box-shadow: inset 0 0 0px rgba(180, 0, 0, 0); transition: box-shadow 0.3s;
+        }
+
+        .shake { animation: shake 0.2s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 2px, 0) rotate(-1deg); }
+            20%, 80% { transform: translate3d(4px, -2px, 0) rotate(1deg); }
+            30%, 50%, 70% { transform: translate3d(-6px, 4px, 0) rotate(-2deg); }
+            40%, 60% { transform: translate3d(6px, -4px, 0) rotate(2deg); }
+        }
+
+        .typewriter h1 { overflow: hidden; white-space: nowrap; margin: 0 auto; letter-spacing: 0.15em; animation: typing 2s steps(20, end); }
+        @keyframes typing { from { width: 0 } to { width: 100% } }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="game-container"></div>
+    <div class="film-grain"></div>
+    <div class="vignette"></div>
+    <div id="damage-overlay"></div>
+
+    <!-- HUD 介面 -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none hidden flex-col justify-between z-20 p-6">
+        <div class="flex justify-between items-start">
+            <div class="bg-[#1a110a]/80 border-2 border-[#4a3018] p-4 text-[#d4c4a8] shadow-lg">
+                <p class="text-xl font-bold mb-1">殘篇收集: <span id="pagesEl" class="text-yellow-600">0</span> / 3</p>
+                <p class="text-sm">尋找《死靈之書》以開啟大門</p>
+            </div>
+            
+            <div class="bg-[#1a110a]/80 border-2 border-[#4a3018] p-4 text-right min-w-[150px]">
+                <p class="text-3xl font-bold text-gray-300">
+                    <span id="ammoEl">6</span> <span class="text-sm text-gray-500">/ 6</span>
+                </p>
+                <p class="text-xs text-yellow-700 font-bold mt-1">.38 轉輪手槍</p>
+            </div>
+        </div>
+
+        <!-- 十字準心 -->
+        <div id="crosshair" class="absolute top-1/2 left-1/2 w-1 h-1 bg-white/70 rounded-full transform -translate-x-1/2 -translate-y-1/2 z-30 shadow-[0_0_4px_black]"></div>
+        
+        <!-- 互動提示 -->
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 mt-10">
+            <div id="interactPrompt" class="text-lg font-bold text-white opacity-0 transition-opacity bg-black/60 px-4 py-1 border border-gray-600 rounded">
+                [E] 互動
+            </div>
+        </div>
+
+        <!-- 血量與體力 -->
+        <div class="w-full flex flex-col items-center mb-4 gap-2">
+            <div class="w-1/3 bg-black/80 border border-red-900 h-3 relative">
+                <div class="absolute inset-0 flex items-center justify-center text-[10px] text-red-200 z-10 font-bold">生命值</div>
+                <div id="healthBar" class="h-full bg-red-700 transition-all duration-300 w-full"></div>
+            </div>
+            <div class="w-1/3 bg-black/80 border border-green-900 h-2">
+                <div id="staminaBar" class="h-full bg-green-700 transition-all duration-75 w-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 暫停選單 -->
+    <div id="resumeScreen" class="absolute inset-0 bg-black/80 z-[45] hidden flex flex-col items-center justify-center cursor-pointer backdrop-blur-sm">
+        <h2 class="text-4xl font-bold text-[#d4c4a8] mb-4 tracking-widest">暫 停</h2>
+        <p class="text-gray-500">點擊畫面繼續調查</p>
+    </div>
+
+    <!-- 文件閱讀介面 -->
+    <div id="noteUI" class="absolute inset-0 bg-black/90 z-40 hidden flex items-center justify-center">
+        <div class="bg-[#e0d6b8] text-[#2b241a] p-10 max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,1)] relative border-4 border-[#8b7355]">
+            <div class="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noise%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noise)%22/%3E%3C/svg%3E')]"></div>
+            <h3 class="text-3xl font-bold mb-6 border-b-2 border-[#5a4a35] pb-2 text-center" id="noteTitle">手稿</h3>
+            <p id="noteContent" class="text-lg leading-relaxed mb-8 whitespace-pre-wrap font-bold"></p>
+            <p class="text-sm text-center text-[#5a4a35] border-t border-[#5a4a35] pt-4">按 [E] 闔上</p>
+        </div>
+    </div>
+
+    <!-- 標題畫面 -->
+    <div id="startScreen" class="absolute inset-0 flex items-center justify-center bg-black z-50 overflow-hidden">
+        <img src="https://m.media-amazon.com/images/I/41MvLSDeZpL._AC_UF894,1000_QL80_.jpg" class="absolute inset-0 w-full h-full object-cover opacity-40 filter grayscale brightness-50" alt="Alone in the Dark Background">
+        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black"></div>
+        <div class="text-center relative z-10 p-8 bg-black/60 border border-[#4a3018] backdrop-blur-sm">
+            <div class="typewriter mb-4">
+                <h1 class="text-4xl md:text-6xl font-black text-[#d4c4a8] tracking-widest text-shadow-lg">鬼屋魔影</h1>
+            </div>
+            <h2 class="text-[#8b1c1c] text-xl font-bold mb-8 tracking-widest">德西托的夢魘</h2>
+            
+            <div class="text-left bg-black/80 p-6 border border-[#332211] mb-8 text-gray-400 text-sm">
+                <p class="mb-4 text-[#d4c4a8] text-center font-bold border-b border-[#332211] pb-2">操作指南</p>
+                <div class="grid grid-cols-2 gap-y-3 gap-x-8 mb-4">
+                    <div><span class="text-white font-bold">[W A S D]</span> 移動</div>
+                    <div><span class="text-white font-bold">[滑鼠]</span> 轉動視角</div>
+                    <div><span class="text-white font-bold">[空白鍵]</span> 跳躍</div>
+                    <div><span class="text-white font-bold">[左鍵]</span> 射擊</div>
+                    <div><span class="text-white font-bold">[Shift]</span> 奔跑</div>
+                    <div><span class="text-white font-bold">[E]</span> 調查 / 拾取</div>
+                </div>
+                <p class="text-[#8b1c1c] font-bold mt-4">你扮演私家偵探坎比。尋找莊園內的 3 張殘篇以逃離。<br>你的子彈有限，黑暗中的「那個東西」無法被殺死，只能被擊退。</p>
+            </div>
+            <button id="startBtn" class="px-12 py-3 bg-[#4a3018] hover:bg-[#6b4423] text-[#d4c4a8] transition-colors tracking-widest text-xl font-bold shadow-[0_0_15px_rgba(74,48,24,0.5)]">
+                進 入 莊 園
+            </button>
+        </div>
+    </div>
+
+    <!-- 死亡畫面 -->
+    <div id="deathScreen" class="absolute inset-0 z-[100] hidden flex-col justify-center items-center bg-black">
+        <img src="https://m.media-amazon.com/images/I/41MvLSDeZpL._AC_UF894,1000_QL80_.jpg" class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-difference" alt="Death">
+        <div class="absolute inset-0 bg-red-900/40 mix-blend-color-burn"></div>
+        <h1 class="text-6xl font-black text-red-600 tracking-widest z-10 mb-8" style="text-shadow: 0 0 20px black;">你 被 吞 噬 了</h1>
+        <button id="retryBtn" class="py-3 px-10 border-2 border-red-800 bg-black/80 text-red-500 hover:bg-red-900 hover:text-white font-bold tracking-widest transition-colors z-10 text-xl">重 新 調 查</button>
+    </div>
+
+    <!-- 勝利畫面 -->
+    <div id="winScreen" class="absolute inset-0 z-50 hidden flex flex-col items-center justify-center bg-black">
+        <h1 class="text-5xl font-black text-[#d4c4a8] mb-6 tracking-[0.3em]">封 印 解 除</h1>
+        <p class="text-gray-400 mb-12 text-lg text-center max-w-xl">你集齊了殘篇，推開沉重的德西托莊園大門，逃入了冰冷的夜雨中。<br>但你知道，那些黑暗中的低語將永遠伴隨著你...</p>
+        <button id="winBtn" class="py-3 px-10 border border-[#d4c4a8] text-[#d4c4a8] hover:bg-[#d4c4a8] hover:text-black transition-colors tracking-widest">返 回 標 題</button>
+    </div>
+
+    <script>
+        // --- 遊戲資料與劇情 ---
+        const gameData = {
+            notes: [
+                { id: 1, title: "傑瑞米的最後日記", text: "它就在牆壁裡。我能聽見那些黏稠的滑動聲。\n我的伯父試圖用那本該死的書來控制它，但他失敗了。\n我把《死靈之書》的殘篇撕下藏在莊園各處，希望沒有人能再次打開那扇大門。" },
+                { id: 2, title: "發黃的羊皮紙 (殘篇 I)", text: "「在那沉睡的拉萊耶，克蘇魯候汝入夢...」\n（你找到了一張儀式殘篇，紙張散發著刺鼻的海腥味。）", isTarget: true },
+                { id: 3, title: "僕人的紙條", text: "地下室的水管又破了，長出了奇怪的綠色真菌。\n而且老爺不准我們去二樓的圖書室。\n昨晚，我看到有東西從圖書室的門縫裡流出來..." },
+                { id: 4, title: "染血的羊皮紙 (殘篇 II)", text: "「無名之城中，唯有瘋狂是唯一的救贖...」\n（你找到了第二張殘篇，邊緣有被燒焦的痕跡。）", isTarget: true },
+                { id: 5, title: "警方的調查報告", text: "案號：1924-A\n死者：傑瑞米·哈特伍德。死因判定為閣樓自縊。\n現場沒有破壞痕跡，但在他的胃裡發現了不屬於人類的黑色毛髮。" },
+                { id: 6, title: "黑色的羊皮紙 (殘篇 III)", text: "「猶格·索托斯知曉大門所在...」\n（你找到了最後一張殘篇。現在大門的封印可以解除了！）", isTarget: true }
+            ]
+        };
+
+        // --- DOM 元素 ---
+        const ui = {
+            start: document.getElementById('startScreen'), death: document.getElementById('deathScreen'), win: document.getElementById('winScreen'),
+            hud: document.getElementById('ui-layer'), resume: document.getElementById('resumeScreen'),
+            pages: document.getElementById('pagesEl'), ammo: document.getElementById('ammoEl'), 
+            health: document.getElementById('healthBar'), stamina: document.getElementById('staminaBar'),
+            prompt: document.getElementById('interactPrompt'), crosshair: document.getElementById('crosshair'),
+            noteUI: document.getElementById('noteUI'), noteTitle: document.getElementById('noteTitle'), noteContent: document.getElementById('noteContent'),
+            damage: document.getElementById('damage-overlay')
+        };
+
+        // --- 遊戲狀態 ---
+        let state = { 
+            running: false, paused: false, inModal: false, 
+            pagesCollected: 0, ammo: 6, maxAmmo: 6, health: 100, stamina: 100,
+            lastTime: 0, currentInteractable: null,
+            velocityY: 0, isGrounded: true, canShoot: true
+        };
+        let input = { forward: false, backward: false, left: false, right: false, sprint: false };
+
+        // --- 音效系統 (Web Audio API) ---
+        let audioCtx, masterGain, droneOsc;
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain(); masterGain.gain.value = 0.6; masterGain.connect(audioCtx.destination);
+            
+            // 環境低頻音效
+            droneOsc = audioCtx.createOscillator(); droneOsc.type = 'triangle'; droneOsc.frequency.value = 40;
+            const droneGain = audioCtx.createGain(); droneGain.gain.value = 0.3;
+            droneOsc.connect(droneGain); droneGain.connect(masterGain);
+            droneOsc.start();
+        }
+
+        function playGunshot() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            
+            // 白噪音爆炸聲
+            const bufferSize = audioCtx.sampleRate * 0.5; // 0.5秒
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+            const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type = 'lowpass'; noiseFilter.frequency.value = 1000;
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(1, t); noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+            
+            noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(masterGain);
+            noise.start(t);
+            
+            // 低音撞擊聲 (增加手槍的厚實感)
+            const osc = audioCtx.createOscillator(); osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, t); osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+            const oscGain = audioCtx.createGain();
+            oscGain.gain.setValueAtTime(2, t); oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            
+            osc.connect(oscGain); oscGain.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.4);
+        }
+
+        function playMonsterHit() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator(); osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, t); osc.frequency.exponentialRampToValueAtTime(50, t + 0.5);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.8, t); gain.gain.linearRampToValueAtTime(0, t + 0.5);
+            osc.connect(gain); gain.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playPlayerHurt() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator(); osc.type = 'square';
+            osc.frequency.setValueAtTime(100, t); osc.frequency.linearRampToValueAtTime(60, t + 0.2);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.5, t); gain.gain.linearRampToValueAtTime(0, t + 0.2);
+            osc.connect(gain); gain.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        // --- Three.js 核心 ---
+        let scene, camera, renderer, raycaster;
+        let yawObject, pitchObject, gunGroup, muzzleFlash;
+        let monster, monsterLight;
+        let collidableWalls = [], interactables = [], enemies = [];
+        let mainDoorMesh;
+
+        function generateVintageTexture(baseColor, isWood=false) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = baseColor; ctx.fillRect(0, 0, 256, 256);
+            const imgData = ctx.getImageData(0,0,256,256); const data = imgData.data;
+            for(let i=0; i<data.length; i+=4) {
+                if(Math.random() < 0.5) {
+                    const noise = (Math.random() - 0.5) * 30;
+                    data[i] += noise; data[i+1] += noise; data[i+2] += noise;
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+            if (isWood) {
+                ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                for(let j=0; j<256; j+=15) { ctx.fillRect(j, 0, Math.random()*4+1, 256); }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x030202);
+            scene.fog = new THREE.FogExp2(0x030202, 0.035); // 深邃的黑暗迷霧
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+            raycaster = new THREE.Raycaster();
+
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0x110e0a, 0.5)); // 昏黃幽暗的環境光
+
+            createPlayer();
+            buildMansion();
+            spawnMonster();
+            setupControls();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function createPlayer() {
+            pitchObject = new THREE.Group(); pitchObject.position.y = 5.5; pitchObject.add(camera);
+            yawObject = new THREE.Group(); yawObject.position.set(0, 0, 30); yawObject.add(pitchObject);
+            scene.add(yawObject);
+
+            // 復古提燈光源 (綁定在玩家身上)
+            const lantern = new THREE.PointLight(0xffaa55, 1.2, 40);
+            lantern.position.set(0, 0, 0); lantern.castShadow = true;
+            pitchObject.add(lantern);
+
+            // 構建簡單的 3D 左輪手槍模型在視野右下方
+            gunGroup = new THREE.Group();
+            gunGroup.position.set(0.4, -0.3, -0.6); // 位於畫面右下方
+            
+            const barrelMat = new THREE.MeshStandardMaterial({color: 0x222222, metalness: 0.8, roughness: 0.2});
+            const woodMat = new THREE.MeshStandardMaterial({color: 0x4a2e15, roughness: 0.9});
+            
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), barrelMat);
+            barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -0.1);
+            
+            const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.2, 6), barrelMat);
+            cylinder.rotation.x = Math.PI / 2; cylinder.position.set(0, -0.05, 0.1);
+            
+            const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.1), woodMat);
+            grip.rotation.x = Math.PI / 4; grip.position.set(0, -0.15, 0.2);
+
+            gunGroup.add(barrel); gunGroup.add(cylinder); gunGroup.add(grip);
+            pitchObject.add(gunGroup);
+
+            // 槍口閃焰光源
+            muzzleFlash = new THREE.PointLight(0xffdd66, 0, 15);
+            muzzleFlash.position.set(0, 0, -0.5);
+            gunGroup.add(muzzleFlash);
+        }
+
+        function addBox(w, h, d, x, y, z, mat, isWall=true) {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            mesh.position.set(x, y, z);
+            if(isWall) { mesh.castShadow = true; mesh.receiveShadow = true; collidableWalls.push(mesh); }
+            else { mesh.receiveShadow = true; }
+            scene.add(mesh); return mesh;
+        }
+
+        function buildMansion() {
+            const matWall = new THREE.MeshStandardMaterial({ map: generateVintageTexture('#2a1f18', true) });
+            const matFloor = new THREE.MeshStandardMaterial({ map: generateVintageTexture('#1c130e', true) });
+            const matCeil = new THREE.MeshStandardMaterial({ color: 0x0a0705 });
+
+            // 莊園大廳與走廊
+            addBox(60, 1, 80, 0, -0.5, 0, matFloor, false); // 地板
+            addBox(60, 1, 80, 0, 12, 0, matCeil, false);    // 天花板
+            
+            addBox(1, 12, 80, -30, 6, 0, matWall); // 左牆
+            addBox(1, 12, 80, 30, 6, 0, matWall);  // 右牆
+            addBox(60, 12, 1, 0, 6, 40, matWall);  // 後牆
+            
+            // 正前方的大門 (勝利目標)
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x3a1f10, roughness: 0.9 });
+            mainDoorMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 2), doorMat);
+            mainDoorMesh.position.set(0, 5, -40); collidableWalls.push(mainDoorMesh); scene.add(mainDoorMesh);
+            interactables.push({ mesh: mainDoorMesh, type: 'main_door' });
+
+            // 產生隔間與物品
+            createRoom(15, 0, 10, matWall, gameData.notes[0]);
+            createRoom(-15, 0, -10, matWall, gameData.notes[1]); // 殘篇1
+            createRoom(15, 0, -25, matWall, gameData.notes[2], true); // 給點彈藥
+            createRoom(-15, 0, 25, matWall, gameData.notes[3]); // 殘篇2
+            createRoom(0, 0, 0, matWall, gameData.notes[4]);
+            createRoom(0, 0, -20, matWall, gameData.notes[5]); // 殘篇3
+        }
+
+        function createRoom(x, y, z, wallMat, noteData, hasAmmo=false) {
+            // 簡單障礙物/桌子
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 3), new THREE.MeshStandardMaterial({color: 0x2c1a0e}));
+            desk.position.set(x, y+1.5, z); desk.castShadow = true; desk.receiveShadow = true;
+            collidableWalls.push(desk); scene.add(desk);
+
+            // 放置文件
+            if (noteData) {
+                const doc = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6), new THREE.MeshBasicMaterial({color: 0xddccaa}));
+                doc.position.set(x, y+3.05, z); doc.rotation.x = -Math.PI/2; doc.rotation.z = Math.random();
+                scene.add(doc);
+                
+                // 文件提示光
+                const pLight = new THREE.PointLight(noteData.isTarget ? 0xaa4444 : 0xaa8855, 1, 5);
+                pLight.position.set(x, y+4, z); scene.add(pLight);
+                
+                interactables.push({ mesh: doc, type: 'note', data: noteData, light: pLight });
+            }
+
+            // 放置彈藥盒
+            if (hasAmmo || Math.random() > 0.6) {
+                const bx = x + (Math.random()*2 - 1); const bz = z + (Math.random()*2 - 1);
+                const ammoBox = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.6), new THREE.MeshStandardMaterial({color: 0x113311}));
+                ammoBox.position.set(bx, y+3.2, bz);
+                scene.add(ammoBox);
+                interactables.push({ mesh: ammoBox, type: 'ammo' });
+            }
+        }
+
+        function spawnMonster() {
+            // 創建一個洛夫克拉夫特風格的黑色觸手/煙霧球體
+            const geo = new THREE.SphereGeometry(2, 16, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x050000, wireframe: true, transparent: true, opacity: 0.8 });
+            monster = new THREE.Mesh(geo, mat);
+            monster.position.set(0, 4, -20);
+            scene.add(monster);
+
+            monsterLight = new THREE.PointLight(0xff0000, 2, 15);
+            monster.add(monsterLight);
+            
+            // 外圍的光環/黑霧
+            const spriteMat = new THREE.SpriteMaterial({ 
+                map: generateVintageTexture('#330000'), 
+                color: 0x550000, transparent: true, blending: THREE.AdditiveBlending 
+            });
+            const aura = new THREE.Sprite(spriteMat);
+            aura.scale.set(8, 8, 1);
+            monster.add(aura);
+            
+            enemies.push({ mesh: monster, hp: 3, active: true });
+        }
+
+        // --- 控制與互動邏輯 ---
+        function setupControls() {
+            document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
+            document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock;
+
+            ui.start.querySelector('#startBtn').addEventListener('click', () => { 
+                initAudio(); document.body.requestPointerLock();
+                ui.start.classList.add('hidden'); ui.hud.style.display = 'flex';
+                state.running = true; state.lastTime = performance.now();
+                animateLoop();
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                if(state.health <= 0 || ui.win.style.display === 'flex') return;
+                if (document.pointerLockElement === document.body) {
+                    if (state.running && !state.inModal) { state.paused = false; ui.resume.classList.add('hidden'); }
+                } else {
+                    if (state.running && !state.inModal) { state.paused = true; ui.resume.classList.remove('hidden'); }
+                }
+            });
+
+            ui.resume.addEventListener('click', () => { if(state.running && !state.inModal) document.body.requestPointerLock(); });
+
+            document.addEventListener('mousemove', (e) => {
+                if(!state.running || state.paused || document.pointerLockElement !== document.body) return;
+                yawObject.rotation.y -= (e.movementX || 0) * 0.002;
+                pitchObject.rotation.x -= (e.movementY || 0) * 0.002;
+                pitchObject.rotation.x = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitchObject.rotation.x));
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (!state.running) return;
+                if (state.inModal && (e.code === 'KeyE' || e.code === 'Escape')) { closeNote(); return; }
+                if (state.paused) return;
+                
+                switch(e.code) {
+                    case 'KeyW': input.forward = true; break;
+                    case 'KeyS': input.backward = true; break;
+                    case 'KeyA': input.left = true; break;
+                    case 'KeyD': input.right = true; break;
+                    case 'ShiftLeft': input.sprint = true; break;
+                    case 'KeyE': handleInteract(); break;
+                    case 'Space': 
+                        if (state.isGrounded) { state.velocityY = 12.0; state.isGrounded = false; }
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                switch(e.code) {
+                    case 'KeyW': input.forward = false; break;
+                    case 'KeyS': input.backward = false; break;
+                    case 'KeyA': input.left = false; break;
+                    case 'KeyD': input.right = false; break;
+                    case 'ShiftLeft': input.sprint = false; break;
+                }
+            });
+
+            // 射擊事件
+            document.addEventListener('mousedown', (e) => {
+                if(e.button === 0 && state.running && !state.paused && !state.inModal) shootGun();
+            });
+
+            document.getElementById('retryBtn').addEventListener('click', () => location.reload());
+            document.getElementById('winBtn').addEventListener('click', () => location.reload());
+        }
+
+        function shootGun() {
+            if (!state.canShoot || state.ammo <= 0) return;
+            state.ammo--; ui.ammo.innerText = state.ammo;
+            state.canShoot = false;
+            
+            playGunshot();
+            
+            // 視覺後座力與閃焰
+            gunGroup.rotation.x += 0.3;
+            muzzleFlash.intensity = 2;
+            document.body.classList.add('shake');
+            
+            setTimeout(() => { muzzleFlash.intensity = 0; document.body.classList.remove('shake'); }, 50);
+            setTimeout(() => { state.canShoot = true; }, 600); // 射擊間隔
+
+            // 射線檢測怪物
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects([monster]);
+            if (hits.length > 0 && enemies[0].active) {
+                playMonsterHit();
+                enemies[0].hp--;
+                monster.scale.setScalar(0.5); // 被擊中縮小
+                setTimeout(() => monster.scale.setScalar(1), 200);
+
+                if (enemies[0].hp <= 0) {
+                    // 擊退怪物，隨機傳送到遠處
+                    enemies[0].active = false;
+                    monster.visible = false;
+                    setTimeout(() => {
+                        enemies[0].active = true;
+                        enemies[0].hp = 3;
+                        monster.visible = true;
+                        monster.position.set(yawObject.position.x + (Math.random()*40 - 20), 4, yawObject.position.z + (Math.random()*40 - 20));
+                    }, 5000); // 5秒後重生
+                }
+            }
+        }
+
+        function checkInteractions() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(interactables.map(i => i.mesh));
+
+            if (hits.length > 0 && hits[0].distance < 8) {
+                const obj = interactables.find(i => i.mesh === hits[0].object);
+                state.currentInteractable = obj;
+                ui.prompt.style.opacity = '1';
+                
+                if (obj.type === 'note') ui.prompt.innerText = "[E] 閱讀手稿";
+                else if (obj.type === 'ammo') ui.prompt.innerText = "[E] 拾取 .38 彈藥";
+                else if (obj.type === 'main_door') ui.prompt.innerText = state.pagesCollected >= 3 ? "[E] 逃離莊園" : "[E] 門被封印了 (需要3張殘篇)";
+                
+                ui.crosshair.style.backgroundColor = '#ffcc00';
+            } else {
+                state.currentInteractable = null;
+                ui.prompt.style.opacity = '0';
+                ui.crosshair.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+            }
+        }
+
+        function handleInteract() {
+            if (!state.currentInteractable) return;
+            const obj = state.currentInteractable;
+
+            if (obj.type === 'note') {
+                state.inModal = true; state.paused = true; document.exitPointerLock();
+                ui.noteTitle.innerText = obj.data.title; ui.noteContent.innerText = obj.data.text;
+                ui.noteUI.classList.remove('hidden');
+                
+                if (obj.data.isTarget) {
+                    state.pagesCollected++; ui.pages.innerText = state.pagesCollected;
+                    obj.data.isTarget = false; // 避免重複收集
+                    obj.light.color.setHex(0x555555); // 燈光變暗
+                }
+            } else if (obj.type === 'ammo') {
+                state.ammo = Math.min(state.maxAmmo, state.ammo + 3);
+                ui.ammo.innerText = state.ammo;
+                // 移除彈藥
+                scene.remove(obj.mesh);
+                interactables = interactables.filter(i => i !== obj);
+                state.currentInteractable = null; ui.prompt.style.opacity = '0';
+            } else if (obj.type === 'main_door' && state.pagesCollected >= 3) {
+                triggerWin();
+            }
+        }
+
+        function closeNote() {
+            ui.noteUI.classList.add('hidden');
+            state.inModal = false; document.body.requestPointerLock();
+        }
+
+        function playerTakeDamage(amount) {
+            if(state.health <= 0) return;
+            state.health -= amount;
+            ui.health.style.width = `${state.health}%`;
+            
+            playPlayerHurt();
+            ui.damage.style.boxShadow = `inset 0 0 100px rgba(255, 0, 0, 0.8)`;
+            setTimeout(() => ui.damage.style.boxShadow = `inset 0 0 0px rgba(180, 0, 0, 0)`, 300);
+
+            if (state.health <= 0) {
+                triggerDeath();
+            } else {
+                // 怪物造成傷害後暫時後退
+                monster.position.x += (Math.random() - 0.5) * 10;
+                monster.position.z += (Math.random() - 0.5) * 10;
+            }
+        }
+
+        function triggerDeath() {
+            document.exitPointerLock(); state.running = false;
+            ui.hud.style.display = 'none';
+            ui.death.style.display = 'flex';
+            if (masterGain) masterGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
+        }
+
+        function triggerWin() {
+            document.exitPointerLock(); state.running = false;
+            ui.hud.style.display = 'none';
+            ui.win.style.display = 'flex';
+            if (masterGain) masterGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2);
+        }
+
+        // --- 遊戲主迴圈 ---
+        function animateLoop() {
+            if (!state.running) return;
+            requestAnimationFrame(animateLoop);
+            
+            const time = performance.now();
+            const delta = Math.min((time - state.lastTime) / 1000, 0.05);
+            state.lastTime = time;
+
+            if (!state.paused && !state.inModal) {
+                handleMovement(delta, time);
+                checkInteractions();
+                updateMonster(delta, time);
+                
+                // 槍枝後座力恢復
+                if (gunGroup.rotation.x > 0) gunGroup.rotation.x = Math.max(0, gunGroup.rotation.x - 2 * delta);
+            }
+            renderer.render(scene, camera);
+        }
+
+        function handleMovement(delta, time) {
+            let speed = 0, strafe = 0;
+            if (input.forward) speed = (input.sprint && state.stamina > 0) ? 14 : 7;
+            else if (input.backward) speed = -5;
+            if (input.left) strafe = -5;
+            if (input.right) strafe = 5;
+
+            if (input.sprint && input.forward && state.stamina > 0) state.stamina -= 25 * delta;
+            else state.stamina = Math.min(100, state.stamina + 15 * delta);
+            ui.stamina.style.width = `${state.stamina}%`;
+
+            const rot = yawObject.rotation.y;
+            
+            // 修正：調整了計算平移時的正負號，確保 A 是往左，D 是往右
+            const moveX = -Math.sin(rot) * speed * delta + Math.cos(rot) * strafe * delta;
+            const moveZ = -Math.cos(rot) * speed * delta - Math.sin(rot) * strafe * delta;
+
+            const nextX = yawObject.position.x + moveX;
+            const nextZ = yawObject.position.z + moveZ;
+            let hitX = false, hitZ = false;
+
+            // 碰撞檢測
+            for(let wall of collidableWalls) {
+                if(!wall.geometry.boundingBox) wall.geometry.computeBoundingBox();
+                const box = new THREE.Box3().setFromObject(wall);
+                if (nextX + 1.2 > box.min.x && nextX - 1.2 < box.max.x && yawObject.position.z + 1.2 > box.min.z && yawObject.position.z - 1.2 < box.max.z) hitX = true;
+                if (yawObject.position.x + 1.2 > box.min.x && yawObject.position.x - 1.2 < box.max.x && nextZ + 1.2 > box.min.z && nextZ - 1.2 < box.max.z) hitZ = true;
+            }
+
+            if(!hitX) yawObject.position.x = nextX;
+            if(!hitZ) yawObject.position.z = nextZ;
+
+            // 重力與跳躍
+            state.velocityY -= 35.0 * delta; 
+            yawObject.position.y += state.velocityY * delta;
+            if (yawObject.position.y <= 0) {
+                yawObject.position.y = 0; state.velocityY = 0; state.isGrounded = true;
+            }
+
+            // 視野晃動 (走路)
+            if (state.isGrounded && (speed !== 0 || strafe !== 0)) {
+                pitchObject.position.y = 5.5 + Math.sin(time * 0.008) * 0.15;
+                // 槍枝隨走路輕微晃動
+                gunGroup.position.y = -0.3 + Math.sin(time * 0.008) * 0.02;
+            } else {
+                pitchObject.position.y += (5.5 - pitchObject.position.y) * 0.1;
+                gunGroup.position.y += (-0.3 - gunGroup.position.y) * 0.1;
+            }
+        }
+
+        function updateMonster(delta, time) {
+            if (!enemies[0].active) return;
+            
+            // 怪物本體蠕動動畫
+            monster.rotation.y += 1 * delta;
+            monster.rotation.x += 0.5 * delta;
+            monster.position.y = 4 + Math.sin(time * 0.003);
+
+            // 追逐玩家
+            const target = yawObject.position.clone(); target.y = 4;
+            const dir = new THREE.Vector3().subVectors(target, monster.position);
+            const dist = dir.length();
+            
+            if (dist > 1) {
+                dir.normalize();
+                // 隨收集殘篇數量增加，怪物速度變快
+                const speed = 2.5 + (state.pagesCollected * 1.5);
+                monster.position.add(dir.multiplyScalar(speed * delta));
+            }
+
+            // 傷害判定 (距離小於3)
+            if (dist < 3.0) {
+                playerTakeDamage(30); // 扣血
+            }
+        }
+
+        init3D();
+    </script>
+</body>
+</html>

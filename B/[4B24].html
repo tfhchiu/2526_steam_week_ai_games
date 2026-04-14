@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyber Hacker: Typing Protocol</title>
+  
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 引入 FontAwesome 圖示 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- 引入字型 -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+TC:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* 全域字型設定 */
+    body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+    .cyber-font { font-family: 'Orbitron', 'Noto Sans TC', sans-serif; }
+    .pixel-font { font-family: 'Noto Sans TC', sans-serif; font-weight: 700; letter-spacing: 1px; }
+
+    /* 霓虹文字特效 */
+    .neon-text-cyan { text-shadow: 0 0 5px #00f3ff, 0 0 10px #00f3ff, 0 0 20px #00f3ff; color: #fff; }
+    .neon-text-pink { text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff, 0 0 20px #ff00ff; color: #fff; }
+    .neon-text-yellow { text-shadow: 0 0 5px #facc15, 0 0 10px #facc15; color: #fff; }
+    .neon-text-red { text-shadow: 0 0 5px #ef4444, 0 0 10px #ef4444; color: #fff; }
+    
+    /* 賽博龐克按鈕 */
+    .cyber-button {
+      position: relative;
+      background: transparent;
+      border: 2px solid #00f3ff;
+      color: #00f3ff;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3) inset, 0 0 10px rgba(0, 243, 255, 0.3);
+      cursor: pointer;
+    }
+    .cyber-button:hover {
+      background: #00f3ff;
+      color: #000;
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.8) inset, 0 0 20px rgba(0, 243, 255, 0.8);
+    }
+    .cyber-button.pink {
+      border-color: #ff00ff; color: #ff00ff;
+      box-shadow: 0 0 10px rgba(255, 0, 255, 0.3) inset, 0 0 10px rgba(255, 0, 255, 0.3);
+    }
+    .cyber-button.pink:hover {
+      background: #ff00ff; color: #fff;
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.8) inset, 0 0 20px rgba(255, 0, 255, 0.8);
+    }
+    .cyber-button.yellow {
+      border-color: #facc15; color: #facc15;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.3) inset, 0 0 10px rgba(250, 204, 21, 0.3);
+    }
+    .cyber-button.yellow:hover {
+      background: #facc15; color: #000;
+      box-shadow: 0 0 20px rgba(250, 204, 21, 0.8) inset, 0 0 20px rgba(250, 204, 21, 0.8);
+    }
+    .cyber-button:disabled {
+      opacity: 0.5; cursor: not-allowed; pointer-events: none;
+    }
+
+    /* 背景特效 */
+    .bg-grid {
+      background-image: 
+        linear-gradient(rgba(0, 243, 255, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 243, 255, 0.15) 1px, transparent 1px);
+      background-size: 40px 40px;
+      background-position: center center;
+    }
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    /* 動畫 */
+    .glitch-anim { animation: glitch 1s linear infinite; }
+    @keyframes glitch {
+      2%, 64% { transform: translate(2px,0) skew(0deg); }
+      4%, 60% { transform: translate(-2px,0) skew(0deg); }
+      62% { transform: translate(0,0) skew(5deg); }
+    }
+    .emp-flash-anim { animation: empFlash 0.2s ease-out; }
+    @keyframes empFlash {
+      0% { background-color: rgba(255, 255, 255, 0.9); }
+      100% { background-color: transparent; }
+    }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    
+    .bot-avatar { filter: drop-shadow(0 0 10px #00f3ff); }
+    
+    /* 自訂捲軸 */
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 243, 255, 0.1); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.5); }
+
+    /* 隱藏畫面區塊用的 class */
+    .screen { display: none; }
+    .screen.active { display: flex; }
+  </style>
+</head>
+<body>
+
+  <!-- 滿版黑邊容器 -->
+  <div class="w-screen h-screen bg-black flex items-center justify-center overflow-hidden font-sans select-none">
+    
+    <!-- 遊戲主體 - 強制 4:3 -->
+    <div id="game-container" class="relative bg-gray-900 text-white overflow-hidden shadow-[0_0_30px_rgba(0,243,255,0.1)] border-x border-cyan-900/30"
+         style="width: 100%; height: 100%; max-width: calc(100vh * (4 / 3)); max-height: 100vh; aspect-ratio: 4 / 3;">
+      
+      <!-- 背景特效 -->
+      <div class="absolute inset-0 bg-grid z-0"></div>
+      <div class="scanlines"></div>
+      
+      <div class="relative z-10 w-full h-full flex flex-col items-center justify-center">
+
+        <!-- ================= 開始畫面 ================= -->
+        <div id="screen-start" class="screen flex-col items-center space-y-10 fade-in w-full h-full justify-center active">
+          <div class="text-center">
+            <h1 class="cyber-font text-6xl md:text-7xl neon-text-pink mb-4 glitch-anim tracking-wider leading-tight">CYBER<br/>TYPER</h1>
+            <p class="text-lg md:text-xl text-cyan-400 tracking-widest cyber-font">覆寫協定 // 打字訓練</p>
+          </div>
+          <div class="flex flex-col space-y-5 w-64 md:w-72">
+            <button onclick="setScreen('difficulty')" class="cyber-button py-3 px-6 text-xl cyber-font flex items-center justify-center gap-3 font-bold">
+              <i class="fa-solid fa-play"></i> 開始駭入
+            </button>
+            <button onclick="setScreen('tutorial')" class="cyber-button yellow py-3 px-6 text-xl cyber-font flex items-center justify-center gap-3 font-bold">
+              <i class="fa-solid fa-info-circle"></i> 操作指南
+            </button>
+            <button onclick="setScreen('leaderboard')" class="cyber-button pink py-3 px-6 text-xl cyber-font flex items-center justify-center gap-3 font-bold">
+              <i class="fa-solid fa-trophy"></i> 排行榜
+            </button>
+          </div>
+        </div>
+
+        <!-- ================= 教學畫面 ================= -->
+        <div id="screen-tutorial" class="screen flex-col items-center w-[90%] max-w-2xl p-6 md:p-8 bg-gray-900/95 border-2 border-cyan-500/50 rounded-xl shadow-[0_0_30px_rgba(0,243,255,0.2)] backdrop-blur-md z-20 fade-in">
+          <h2 class="cyber-font text-3xl md:text-4xl neon-text-cyan mb-6 tracking-widest flex items-center gap-4">
+            <div id="tutorial-avatar" class="bot-avatar"></div>
+            <span>導航員 0x99</span>
+          </h2>
+          <div class="bg-black/60 p-5 md:p-6 rounded border-l-4 border-cyan-400 mb-8 w-full text-left cyber-font">
+            <p class="text-gray-300 text-base md:text-lg mb-6 leading-relaxed">
+              「聽好，特務。你的任務是攔截傳入的危險資料封包。<span class="text-pink-400 font-bold">輸入畫面上的單字</span>以摧毀它們，別讓它們突破最後的防火牆。」
+            </p>
+            <ul class="text-gray-400 space-y-5 ml-1 text-sm md:text-base">
+              <li class="flex items-start gap-3">
+                <i class="fa-solid fa-heart text-pink-500 mt-1"></i>
+                <span>漏掉單字會損害系統完整性。愛心歸零即代表系統崩潰。</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <i class="fa-solid fa-bomb text-yellow-400 mt-1"></i>
+                <span>遇到危險？按下 <strong class="text-yellow-400 border border-yellow-400/50 px-2 py-0.5 rounded bg-yellow-400/10">空白鍵 (SPACE)</strong> 觸發 EMP 炸彈，瞬間清除畫面上所有單字（每局 3 次）。</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <i class="fa-solid fa-keyboard text-cyan-400 mt-1"></i>
+                <span>按下 <strong class="text-cyan-400 border border-cyan-400/50 px-2 py-0.5 rounded bg-cyan-400/10">ESC 鍵</strong> 暫停防護協定。</span>
+              </li>
+            </ul>
+          </div>
+          <button onclick="setScreen('start')" class="cyber-button py-3 px-10 text-xl flex items-center gap-2 font-bold">
+            <i class="fa-solid fa-chevron-left"></i> 了解指令
+          </button>
+        </div>
+
+        <!-- ================= 難度選擇畫面 ================= -->
+        <div id="screen-difficulty" class="screen flex-col items-center justify-center space-y-8 fade-in w-full h-full px-4">
+          <h2 class="cyber-font text-3xl md:text-4xl neon-text-cyan mb-4 tracking-widest text-center">選擇協定難度</h2>
+          <div class="grid grid-cols-1 gap-6 w-[80%] max-w-sm">
+            <button onclick="startGame('easy')" class="cyber-button py-4 text-xl flex flex-col items-center group">
+              <span class="cyber-font group-hover:text-black font-bold text-2xl">簡單模式</span>
+              <span class="text-sm opacity-80 group-hover:text-black mt-2">單字短 / 速度慢</span>
+            </button>
+            <button onclick="startGame('normal')" class="cyber-button yellow py-4 text-xl flex flex-col items-center group">
+              <span class="cyber-font group-hover:text-black font-bold text-2xl">普通模式</span>
+              <span class="text-sm opacity-80 group-hover:text-black mt-2">單字中等 / 速度適中</span>
+            </button>
+            <button onclick="startGame('hard')" class="cyber-button pink py-4 text-xl flex flex-col items-center group">
+              <span class="cyber-font group-hover:text-white font-bold text-2xl">困難模式</span>
+              <span class="text-sm opacity-80 group-hover:text-white mt-2">單字長 / 速度極快</span>
+            </button>
+          </div>
+          <button onclick="setScreen('start')" class="mt-8 text-gray-400 hover:text-white flex items-center gap-2 transition-colors cyber-font">
+            <i class="fa-solid fa-chevron-left"></i> 返回主選單
+          </button>
+        </div>
+
+        <!-- ================= 倒數畫面 ================= -->
+        <div id="screen-countdown" class="screen flex-col items-center justify-center w-full h-full fade-in">
+          <h2 id="countdown-text" class="cyber-font text-[150px] neon-text-pink animate-pulse leading-none">3</h2>
+          <p class="mt-10 text-xl text-cyan-400 cyber-font tracking-widest text-center animate-pulse">系統正在載入單字庫...</p>
+        </div>
+
+        <!-- ================= 遊戲進行畫面 ================= -->
+        <div id="screen-playing" class="screen flex-col relative w-full h-full fade-in">
+          
+          <!-- 暫停遮罩層 -->
+          <div id="pause-overlay" class="hidden absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/85 backdrop-blur-md">
+            <h2 class="cyber-font text-5xl md:text-6xl neon-text-yellow mb-10 tracking-widest text-center animate-pulse">系統已暫停</h2>
+            <div class="flex flex-col space-y-5 w-64">
+              <button onclick="resumeGame()" class="cyber-button py-3 px-6 text-xl cyber-font flex items-center justify-center gap-3 font-bold">
+                <i class="fa-solid fa-play"></i> 繼續
+              </button>
+              <button onclick="abortGame()" class="cyber-button pink py-3 px-6 text-xl cyber-font flex items-center justify-center gap-3 font-bold">
+                <i class="fa-solid fa-skull"></i> 放棄任務
+              </button>
+            </div>
+          </div>
+
+          <!-- EMP 閃爍層 -->
+          <div id="emp-flash" class="hidden absolute inset-0 z-40 bg-white emp-flash-anim pointer-events-none"></div>
+
+          <!-- 頂部狀態列 -->
+          <div class="flex justify-between items-center p-4 md:p-5 bg-gray-900/90 border-b-2 border-cyan-500/40 backdrop-blur-sm z-20">
+            <div class="flex flex-col gap-2">
+              <div id="lives-container" class="flex items-center gap-1.5 text-pink-500">
+                <!-- Hearts will be injected here -->
+              </div>
+              <div class="flex items-center gap-1.5 text-yellow-400">
+                <div id="emps-container" class="flex gap-1.5">
+                  <!-- Bombs will be injected here -->
+                </div>
+                <span class="text-[10px] md:text-xs text-gray-400 ml-1 cyber-font tracking-wider">EMP(空白鍵)</span>
+              </div>
+            </div>
+            
+            <div class="flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
+              <span class="text-[10px] md:text-xs text-gray-400 mb-1 tracking-widest cyber-font">當前鎖定目標</span>
+              <div class="h-10 md:h-12 px-6 rounded bg-cyan-950/40 border-2 border-cyan-500/50 flex items-center justify-center min-w-[180px] md:min-w-[220px]">
+                <span id="input-display" class="text-xl md:text-2xl cyber-font text-cyan-300 tracking-wider">
+                  <span class="opacity-30">_</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="flex gap-4 md:gap-8 text-right">
+              <div class="text-center">
+                <div class="text-[10px] md:text-xs text-gray-400 tracking-widest cyber-font mb-1">時間</div>
+                <div id="time-display" class="cyber-font text-2xl md:text-3xl text-cyan-400">60s</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[10px] md:text-xs text-gray-400 tracking-widest cyber-font mb-1">分數</div>
+                <div id="score-display" class="cyber-font text-2xl md:text-3xl neon-text-yellow">0</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 遊戲單字掉落區 -->
+          <div class="flex-1 relative overflow-hidden" id="game-board">
+            <!-- 危險邊界線 -->
+            <div class="absolute bottom-0 w-full h-4 bg-gradient-to-t from-red-600/40 to-transparent"></div>
+            <div class="absolute bottom-0 w-full border-b-2 border-red-500/60 border-dashed"></div>
+            <!-- 單字容器 -->
+            <div id="words-container"></div>
+          </div>
+          
+          <!-- 二次元像素導航員 UI -->
+          <div class="absolute bottom-5 right-5 z-50 flex items-end gap-3 max-w-[260px] md:max-w-sm pointer-events-none">
+            <div id="bot-dialog" class="bg-black/90 px-3 py-2 border-2 flex-1 relative border-cyan-500 shadow-[4px_4px_0_rgba(0,243,255,0.5)]">
+              <div id="bot-dialog-arrow" class="absolute -right-2 bottom-3 w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-cyan-500"></div>
+              <p id="bot-message" class="pixel-font text-[11px] md:text-[13px] leading-relaxed text-cyan-400">
+                等待輸入指令...
+              </p>
+            </div>
+            <div id="bot-avatar-bg" class="p-1.5 bg-gray-900 border-2 flex-shrink-0 border-cyan-500">
+              <div id="bot-avatar" class="block"></div>
+            </div>
+          </div>
+
+          <div class="py-1.5 text-center text-[10px] md:text-xs text-gray-400 bg-black/80 z-20 cyber-font tracking-widest">
+            使用鍵盤直接輸入目標單字。按下 ESC 鍵可暫停。
+          </div>
+        </div>
+
+        <!-- ================= 遊戲結算畫面 ================= -->
+        <div id="screen-gameover" class="screen flex-col items-center bg-gray-900/95 p-8 md:p-12 rounded-xl border-2 border-pink-500/60 shadow-[0_0_40px_rgba(255,0,255,0.2)] backdrop-blur-md z-20 w-[90%] max-w-lg fade-in">
+          <h2 id="gameover-title" class="cyber-font text-5xl md:text-6xl neon-text-red mb-2 text-center">系統崩潰</h2>
+
+          <div id="gameover-bot" class="flex items-center gap-4 bg-black/80 p-4 border-2 mt-6 mb-8 w-full">
+            <div id="gameover-bot-bg" class="bg-gray-900 p-2 border-2 flex-shrink-0">
+              <div id="gameover-avatar"></div>
+            </div>
+            <p id="gameover-message" class="pixel-font text-xs md:text-sm leading-relaxed"></p>
+          </div>
+          
+          <div class="flex items-center gap-4 mb-8">
+            <span class="text-xl md:text-2xl text-gray-300 cyber-font">最終分數 :</span>
+            <span id="gameover-score" class="cyber-font text-5xl md:text-6xl neon-text-yellow">0</span>
+          </div>
+
+          <form id="score-form" class="flex flex-col items-center w-full max-w-sm space-y-5">
+            <div class="w-full">
+              <label class="block text-xs text-cyan-400 mb-2 ml-1 cyber-font tracking-widest">輸入特務代號</label>
+              <input type="text" id="player-name" maxlength="10" placeholder="AGENT_NAME" autocomplete="off"
+                class="w-full bg-black/60 border-2 border-cyan-500 text-cyan-300 px-4 py-3 cyber-font text-lg outline-none focus:border-pink-500 focus:shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-all uppercase" autofocus />
+            </div>
+            <button type="submit" id="submit-score-btn" class="cyber-button w-full py-3 text-xl font-bold" disabled>上傳紀錄</button>
+          </form>
+
+          <button onclick="setScreen('start')" class="mt-6 text-sm text-gray-500 hover:text-cyan-400 transition-colors cyber-font">跳過並返回主選單</button>
+        </div>
+
+        <!-- ================= 排行榜畫面 ================= -->
+        <div id="screen-leaderboard" class="screen flex-col items-center w-[90%] max-w-2xl bg-gray-900/90 p-6 md:p-10 rounded-xl border-2 border-cyan-500/40 z-20 h-[80vh] overflow-hidden shadow-[0_0_30px_rgba(0,243,255,0.15)] fade-in">
+          <div class="flex items-center gap-4 mb-8">
+            <i class="fa-solid fa-trophy text-4xl text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]"></i>
+            <h2 class="cyber-font text-3xl md:text-4xl neon-text-yellow text-center">頂尖特務排行榜</h2>
+          </div>
+          
+          <div class="w-full flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <table class="w-full text-left border-collapse" id="leaderboard-table">
+              <thead>
+                <tr class="border-b-2 border-cyan-500/50 text-cyan-400 cyber-font text-sm md:text-base">
+                  <th class="py-3 px-2">排名</th>
+                  <th class="py-3 px-2">代號</th>
+                  <th class="py-3 px-2">分數</th>
+                  <th class="py-3 px-2 hidden md:table-cell">難度</th>
+                  <th class="py-3 px-2 text-right">日期</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboard-body">
+                <!-- Data will be injected here -->
+              </tbody>
+            </table>
+            <div id="leaderboard-empty" class="text-center text-gray-500 mt-20 cyber-font text-lg hidden">目前尚無紀錄。成為第一個突破系統的特務吧！</div>
+          </div>
+
+          <button onclick="setScreen('start')" class="cyber-button mt-8 py-3 px-10 text-xl text-center font-bold">返回系統選單</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+/** * ========================================================
+ * 音效系統 (Web Audio API)
+ * ========================================================
+ */
+let audioCtx = null;
+
+const initAudio = () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+};
+
+const playSound = (type) => {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  osc.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  
+  switch (type) {
+    case 'type':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.05);
+      gainNode.gain.setValueAtTime(0.05, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.start(now); osc.stop(now + 0.05);
+      break;
+    case 'success':
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.setValueAtTime(800, now + 0.1);
+      gainNode.gain.setValueAtTime(0.1, now);
+      gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+      osc.start(now); osc.stop(now + 0.2);
+      break;
+    case 'damage':
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+      gainNode.gain.setValueAtTime(0.2, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now); osc.stop(now + 0.3);
+      break;
+    case 'gameover':
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(10, now + 1.5);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.linearRampToValueAtTime(0, now + 1.5);
+      osc.start(now); osc.stop(now + 1.5);
+      break;
+    case 'emp':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(10, now + 0.6);
+      gainNode.gain.setValueAtTime(0.5, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+      osc.start(now); osc.stop(now + 0.6);
+      break;
+    case 'click':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+      gainNode.gain.setValueAtTime(0.1, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.start(now); osc.stop(now + 0.1);
+      break;
+  }
+};
+
+/** * ========================================================
+ * 二次元像素 AI 少女產生器
+ * ========================================================
+ */
+function getAvatarSVG(mood = 'normal', size = 64) {
+  let pupil = '#00f3ff';
+  if (mood === 'sad') pupil = '#ef4444';
+  else if (mood === 'alert') pupil = '#facc15';
+  else if (mood === 'happy') pupil = '#ff00ff';
+
+  const colors = {
+    T: 'transparent',
+    H: '#ff77cc', D: '#cc4499', S: '#ffeadd', s: '#ffaaaa',
+    E: '#ffffff', P: pupil,     M: '#ff5555', m: '#ff99aa',
+    C: '#2a2a35', A: '#00f3ff'
+  };
+
+  const frames = {
+    normal: [
+      "TTTTTTTTTTTTTTTT","TTTTTHHHHHHTTTTT","TTTHHHHHHHHHHTTT","TTHHHDSSSSDHHHTT",
+      "TTHHSSSSSSSSHHHT","TTHHSEESSEESHHHT","THHHSPEESPEESHHH","THHHsSSSSSSsHHHT",
+      "THHSSSSSmsSSSHHT","TTHHSSSSSSSSHHHT","TTHHHHSSSSHHHHTT","TTTHHCCCCCCCHTTT",
+      "TTTTTCAAAACCTTTT","TTTCAAAAAAAACTTT","TTCCCCCCCCCCCCTT","TTTCCCCCCCCCCTTT"
+    ],
+    happy: [
+      "TTTTTTTTTTTTTTTT","TTTTTHHHHHHTTTTT","TTTHHHHHHHHHHTTT","TTHHHDSSSSDHHHTT",
+      "TTHHSSSSSSSSHHHT","TTHHSSSSSSSSHHHT","THHHDSSSSDSSSHHH","THHHsSSSSSSsHHHT",
+      "THHSSSSSmsSSSHHT","TTHHSSSSSSSSHHHT","TTHHHHSSSSHHHHTT","TTTHHCCCCCCCHTTT",
+      "TTTTTCAAAACCTTTT","TTTCAAAAAAAACTTT","TTCCCCCCCCCCCCTT","TTTCCCCCCCCCCTTT"
+    ],
+    sad: [
+      "TTTTTTTTTTTTTTTT","TTTTTHHHHHHTTTTT","TTTHHHHHHHHHHTTT","TTHHHDSSSSDHHHTT",
+      "TTHHSSSSSSSSHHHT","TTHHSSEESSESHHHT","THHHSPEESPESSHHH","THHHsSSSSSSsHHHT",
+      "THHSSSSSMSSSSHHT","TTHHSSSSSSSSHHHT","TTHHHHSSSSHHHHTT","TTTHHCCCCCCCHTTT",
+      "TTTTTCAAAACCTTTT","TTTCAAAAAAAACTTT","TTCCCCCCCCCCCCTT","TTTCCCCCCCCCCTTT"
+    ],
+    alert: [
+      "TTTTTTTTTTTTTTTT","TTTTTHHHHHHTTTTT","TTTHHHHHHHHHHTTT","TTHHHDSSSSDHHHTT",
+      "TTHHSEEEEEEESHHT","TTHHPEEEEEPESHHT","THHHSSEESSEESHHH","THHHsSSSSSSsHHHT",
+      "THHSSSSSMSSSSHHT","TTHHSSSSSSSSHHHT","TTHHHHSSSSHHHHTT","TTTHHCCCCCCCHTTT",
+      "TTTTTCAAAACCTTTT","TTTCAAAAAAAACTTT","TTCCCCCCCCCCCCTT","TTTCCCCCCCCCCTTT"
+    ]
+  };
+
+  const grid = frames[mood] || frames['normal'];
+  let rects = '';
+  grid.forEach((row, y) => {
+    row.split('').forEach((char, x) => {
+      if (char !== 'T') {
+        rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[char]}" />`;
+      }
+    });
+  });
+
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" shape-rendering="crispEdges">${rects}</svg>`;
+}
+
+/** * ========================================================
+ * 遊戲常數與狀態
+ * ========================================================
+ */
+const WORD_LISTS = {
+  easy: ['bit', 'bug', 'cpu', 'data', 'file', 'link', 'mac', 'ram', 'usb', 'web', 'app', 'byte', 'code', 'disk', 'icon', 'port', 'user', 'net', 'key', 'tag'],
+  normal: ['backup', 'click', 'folder', 'hacker', 'memory', 'mouse', 'online', 'router', 'screen', 'search', 'server', 'system', 'update', 'window', 'device', 'format', 'input', 'output', 'pixel', 'virus'],
+  hard: ['algorithm', 'bandwidth', 'bluetooth', 'cyberspace', 'database', 'download', 'encryption', 'firewall', 'hardware', 'interface', 'keyboard', 'motherboard', 'password', 'processor', 'software', 'network', 'internet', 'document', 'function']
+};
+
+const DIFFICULTY_SETTINGS = {
+  easy: { speed: 6, spawnRate: 3500, label: '簡單模式' },   
+  normal: { speed: 9, spawnRate: 2800, label: '普通模式' }, 
+  hard: { speed: 11, spawnRate: 2300, label: '困難模式' }    
+};
+
+let state = {
+  screen: 'start', // start, tutorial, difficulty, countdown, playing, gameover, leaderboard
+  difficulty: 'normal',
+  score: 0,
+  lives: 5,
+  words: [],
+  inputText: '',
+  countdown: 3,
+  timeLeft: 60,
+  emps: 3,
+  isPaused: false
+};
+
+// 計時器參考
+let gameLoopInterval;
+let timerInterval;
+let spawnInterval;
+let botTimeout;
+
+/** * ========================================================
+ * 畫面與 UI 更新函式
+ * ========================================================
+ */
+function setScreen(screenName) {
+  initAudio();
+  if(screenName !== 'playing' && screenName !== 'countdown') playSound('click');
+  
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  document.getElementById(`screen-${screenName}`).classList.add('active');
+  state.screen = screenName;
+  
+  if (screenName === 'leaderboard') renderLeaderboard();
+}
+
+function updateHUD() {
+  // Lives
+  let livesHTML = '';
+  for (let i = 0; i < 5; i++) {
+    if (i < state.lives) {
+      livesHTML += `<i class="fa-solid fa-heart text-2xl fill-current neon-text-pink"></i>`;
+    } else {
+      livesHTML += `<i class="fa-solid fa-heart text-2xl text-gray-700"></i>`;
+    }
+  }
+  document.getElementById('lives-container').innerHTML = livesHTML;
+
+  // EMPs
+  let empsHTML = '';
+  for (let i = 0; i < 3; i++) {
+    if (i < state.emps) {
+      empsHTML += `<i class="fa-solid fa-bomb text-lg neon-text-yellow"></i>`;
+    } else {
+      empsHTML += `<i class="fa-solid fa-bomb text-lg text-gray-700 opacity-50"></i>`;
+    }
+  }
+  document.getElementById('emps-container').innerHTML = empsHTML;
+
+  // Texts
+  document.getElementById('score-display').innerText = state.score;
+  
+  const timeEl = document.getElementById('time-display');
+  timeEl.innerText = state.timeLeft + 's';
+  if (state.timeLeft <= 10) {
+    timeEl.className = 'cyber-font text-2xl md:text-3xl neon-text-red animate-pulse';
+  } else {
+    timeEl.className = 'cyber-font text-2xl md:text-3xl text-cyan-400';
+  }
+
+  document.getElementById('input-display').innerHTML = state.inputText || '<span class="opacity-30">_</span>';
+}
+
+function updateWordsDOM() {
+  const container = document.getElementById('words-container');
+  let html = '';
+  state.words.forEach(word => {
+    const isMatching = state.inputText && word.text.startsWith(state.inputText);
+    const matchedPart = isMatching ? word.text.substring(0, state.inputText.length) : '';
+    const remainingPart = isMatching ? word.text.substring(state.inputText.length) : word.text;
+
+    html += `<div class="absolute text-2xl md:text-3xl cyber-font whitespace-nowrap transition-transform duration-75" 
+                  style="left: ${word.x}%; top: ${word.y}%; transform: translate(-50%, -50%)">`;
+    if (isMatching) {
+      html += `<span class="neon-text-pink">${matchedPart}</span><span class="text-cyan-200/50">${remainingPart}</span>`;
+    } else {
+      html += `<span class="neon-text-cyan">${word.text}</span>`;
+    }
+    html += `</div>`;
+  });
+  container.innerHTML = html;
+}
+
+function showBotMessage(msg, mood = 'normal', duration = 2000) {
+  const msgEl = document.getElementById('bot-message');
+  const dialogEl = document.getElementById('bot-dialog');
+  const arrowEl = document.getElementById('bot-dialog-arrow');
+  const bgEl = document.getElementById('bot-avatar-bg');
+  const avatarEl = document.getElementById('bot-avatar');
+
+  msgEl.innerText = msg;
+  avatarEl.innerHTML = getAvatarSVG(mood, 56);
+  
+  // Update colors based on mood
+  const themes = {
+    normal: { border: 'border-cyan-500', shadow: 'shadow-[4px_4px_0_rgba(0,243,255,0.5)]', text: 'text-cyan-400' },
+    happy:  { border: 'border-pink-500', shadow: 'shadow-[4px_4px_0_rgba(255,0,255,0.5)]', text: 'text-pink-400' },
+    sad:    { border: 'border-red-500', shadow: 'shadow-[4px_4px_0_rgba(239,68,68,0.5)]', text: 'text-red-400' },
+    alert:  { border: 'border-yellow-400', shadow: 'shadow-[4px_4px_0_rgba(250,204,21,0.5)]', text: 'text-yellow-400' }
+  };
+  const t = themes[mood];
+  
+  dialogEl.className = `bg-black/90 px-3 py-2 border-2 flex-1 relative ${t.border} ${t.shadow}`;
+  arrowEl.className = `absolute -right-2 bottom-3 w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-${t.border.split('-')[1]}-500`;
+  if(mood === 'alert') arrowEl.classList.add('border-l-yellow-400'); // Tailwind JIT override fix
+  bgEl.className = `p-1.5 bg-gray-900 border-2 flex-shrink-0 ${t.border}`;
+  msgEl.className = `pixel-font text-[11px] md:text-[13px] leading-relaxed ${t.text}`;
+  
+  if (mood === 'alert') avatarEl.classList.add('animate-pulse');
+  else avatarEl.classList.remove('animate-pulse');
+
+  clearTimeout(botTimeout);
+  if (duration > 0) {
+    botTimeout = setTimeout(() => {
+      if (!msgEl.innerText.includes("做得好") && !msgEl.innerText.includes("不要灰心")) {
+        showBotMessage('等待輸入指令...', 'normal', 0);
+      }
+    }, duration);
+  }
+}
+
+/** * ========================================================
+ * 遊戲核心邏輯
+ * ========================================================
+ */
+function startGame(diff) {
+  initAudio(); playSound('click');
+  state.difficulty = diff;
+  state.countdown = 3;
+  setScreen('countdown');
+  
+  document.getElementById('countdown-text').innerText = state.countdown;
+  
+  const cntInterval = setInterval(() => {
+    state.countdown--;
+    if (state.countdown > 0) {
+      playSound('click');
+      document.getElementById('countdown-text').innerText = state.countdown;
+    } else {
+      clearInterval(cntInterval);
+      playSound('success');
+      startPlaying();
+    }
+  }, 1000);
+}
+
+function startPlaying() {
+  state.score = 0;
+  state.lives = 5;
+  state.emps = 3;
+  state.timeLeft = 60;
+  state.words = [];
+  state.inputText = '';
+  state.isPaused = false;
+  
+  setScreen('playing');
+  updateHUD();
+  showBotMessage("防護協定啟動。摧毀所有目標！", "alert", 3000);
+  
+  spawnWord();
+  resumeLoops();
+}
+
+function resumeLoops() {
+  const diffSetting = DIFFICULTY_SETTINGS[state.difficulty];
+  
+  gameLoopInterval = setInterval(() => {
+    let lostLives = 0;
+    state.words = state.words.map(w => {
+      w.y += (diffSetting.speed * 0.05);
+      return w;
+    }).filter(w => {
+      if (w.y >= 100) { lostLives++; return false; }
+      return true;
+    });
+
+    if (lostLives > 0) {
+      playSound('damage');
+      state.lives = Math.max(0, state.lives - lostLives);
+      showBotMessage("警告！偵測到系統入侵！", "sad", 2000);
+      updateHUD();
+      if (state.lives <= 0) gameOver(false);
+    }
+    updateWordsDOM();
+  }, 50);
+
+  timerInterval = setInterval(() => {
+    state.timeLeft--;
+    updateHUD();
+    if (state.timeLeft <= 0) gameOver(true);
+  }, 1000);
+
+  spawnInterval = setInterval(spawnWord, diffSetting.spawnRate);
+}
+
+function stopLoops() {
+  clearInterval(gameLoopInterval);
+  clearInterval(timerInterval);
+  clearInterval(spawnInterval);
+}
+
+function spawnWord() {
+  const list = WORD_LISTS[state.difficulty];
+  const text = list[Math.floor(Math.random() * list.length)];
+  const x = Math.floor(Math.random() * 80) + 10; 
+  state.words.push({ id: Math.random().toString(36).substr(2, 9), text, x, y: 0 });
+}
+
+function togglePause() {
+  if (state.screen !== 'playing') return;
+  initAudio(); playSound('click');
+  
+  state.isPaused = !state.isPaused;
+  const overlay = document.getElementById('pause-overlay');
+  
+  if (state.isPaused) {
+    stopLoops();
+    overlay.classList.remove('hidden');
+  } else {
+    overlay.classList.add('hidden');
+    resumeLoops();
+  }
+}
+
+function resumeGame() {
+  togglePause();
+}
+
+function abortGame() {
+  stopLoops();
+  document.getElementById('pause-overlay').classList.add('hidden');
+  setScreen('start');
+}
+
+function gameOver(isWin) {
+  stopLoops();
+  playSound('gameover');
+  setScreen('gameover');
+  
+  const title = document.getElementById('gameover-title');
+  const msg = document.getElementById('gameover-message');
+  const botBg = document.getElementById('gameover-bot-bg');
+  const botBox = document.getElementById('gameover-bot');
+  
+  document.getElementById('gameover-score').innerText = state.score;
+  document.getElementById('gameover-avatar').innerHTML = getAvatarSVG(isWin ? 'happy' : 'sad', 64);
+  
+  if (isWin) {
+    title.innerText = "存活成功";
+    title.className = "cyber-font text-5xl md:text-6xl neon-text-pink mb-2 text-center";
+    msg.innerText = "存活完成。做得好，特務。你成功守護了系統。";
+    msg.className = "pixel-font text-xs md:text-sm leading-relaxed text-pink-400";
+    botBox.className = "flex items-center gap-4 bg-black/80 p-4 border-2 border-pink-500 mt-6 mb-8 w-full shadow-[4px_4px_0_rgba(255,0,255,0.4)]";
+    botBg.className = "bg-gray-900 p-2 border-2 flex-shrink-0 border-pink-500";
+  } else {
+    title.innerText = "系統崩潰";
+    title.className = "cyber-font text-5xl md:text-6xl neon-text-red mb-2 text-center";
+    msg.innerText = "防禦被突破了。不要灰心，特務。重啟系統再試一次。";
+    msg.className = "pixel-font text-xs md:text-sm leading-relaxed text-red-400";
+    botBox.className = "flex items-center gap-4 bg-black/80 p-4 border-2 border-red-500 mt-6 mb-8 w-full shadow-[4px_4px_0_rgba(239,68,68,0.4)]";
+    botBg.className = "bg-gray-900 p-2 border-2 flex-shrink-0 border-red-500";
+  }
+  
+  document.getElementById('player-name').value = '';
+  document.getElementById('submit-score-btn').disabled = true;
+}
+
+/** * ========================================================
+ * 鍵盤輸入事件
+ * ========================================================
+ */
+window.addEventListener('keydown', (e) => {
+  // 處理 ESC 暫停
+  if (e.key === 'Escape') {
+    if (state.screen === 'playing' || state.screen === 'paused') { // Allow pause while playing or paused state handled via screen
+       if(!state.isPaused && state.screen === 'playing'){
+           togglePause();
+       } else if (state.isPaused && state.screen === 'playing'){
+           togglePause();
+       }
+    }
+    return;
+  }
+
+  if (state.screen !== 'playing' || state.isPaused) return;
+
+  // 處理 EMP
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (state.emps > 0) {
+      initAudio(); playSound('emp');
+      state.emps--;
+      state.words = [];
+      state.inputText = '';
+      
+      const flash = document.getElementById('emp-flash');
+      flash.classList.remove('hidden');
+      setTimeout(() => flash.classList.add('hidden'), 200);
+      
+      showBotMessage("EMP 已引爆！區域清除！", "alert", 2000);
+      updateHUD();
+      updateWordsDOM();
+    }
+    return;
+  }
+
+  // 處理打字
+  if (e.key === 'Backspace') {
+    initAudio(); playSound('type');
+    state.inputText = state.inputText.slice(0, -1);
+    updateHUD(); updateWordsDOM();
+  } else if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+    initAudio();
+    const nextInput = state.inputText + e.key.toLowerCase();
+    
+    const matchIndex = state.words.findIndex(w => w.text === nextInput);
+    if (matchIndex !== -1) {
+      playSound('success');
+      const matchedWord = state.words[matchIndex];
+      state.score += matchedWord.text.length * 10;
+      state.words.splice(matchIndex, 1);
+      state.inputText = '';
+      
+      const encouragements = ["打得好！", "繼續保持！", "系統安全！", "太棒了！", "完美擊中！", "威脅已清除！"];
+      showBotMessage(encouragements[Math.floor(Math.random() * encouragements.length)], "happy", 1500);
+    } else {
+      playSound('type');
+      if (nextInput.length <= 15) {
+        state.inputText = nextInput;
+      }
+    }
+    updateHUD(); updateWordsDOM();
+  }
+});
+
+/** * ========================================================
+ * 排行榜邏輯
+ * ========================================================
+ */
+document.getElementById('player-name').addEventListener('input', (e) => {
+  document.getElementById('submit-score-btn').disabled = e.target.value.trim().length === 0;
+});
+
+document.getElementById('score-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const nameInput = document.getElementById('player-name').value.trim();
+  if (!nameInput) return;
+  
+  initAudio(); playSound('click');
+
+  const newRecord = {
+    name: nameInput || 'ANONYMOUS',
+    score: state.score,
+    difficulty: DIFFICULTY_SETTINGS[state.difficulty].label,
+    date: new Date().toLocaleDateString()
+  };
+
+  let leaderboard = [];
+  try { leaderboard = JSON.parse(localStorage.getItem('cyberTyperLeaderboard')) || []; } catch(e){}
+  
+  leaderboard.push(newRecord);
+  leaderboard.sort((a, b) => b.score - a.score);
+  leaderboard = leaderboard.slice(0, 10);
+  
+  localStorage.setItem('cyberTyperLeaderboard', JSON.stringify(leaderboard));
+  setScreen('leaderboard');
+});
+
+function renderLeaderboard() {
+  let leaderboard = [];
+  try { leaderboard = JSON.parse(localStorage.getItem('cyberTyperLeaderboard')) || []; } catch(e){}
+  
+  const tbody = document.getElementById('leaderboard-body');
+  const table = document.getElementById('leaderboard-table');
+  const empty = document.getElementById('leaderboard-empty');
+
+  if (leaderboard.length === 0) {
+    table.classList.add('hidden');
+    empty.classList.remove('hidden');
+  } else {
+    table.classList.remove('hidden');
+    empty.classList.add('hidden');
+    
+    tbody.innerHTML = leaderboard.map((entry, index) => `
+      <tr class="border-b border-gray-800 hover:bg-white/5 transition-colors">
+        <td class="py-4 px-2 cyber-font text-gray-400 text-lg">
+          ${index === 0 ? '<span class="text-yellow-400 font-bold">#1</span>' : 
+            index === 1 ? '<span class="text-gray-300 font-bold">#2</span>' : 
+            index === 2 ? '<span class="text-amber-600 font-bold">#3</span>' : 
+            `#${index + 1}`}
+        </td>
+        <td class="py-4 px-2 font-bold text-pink-400 uppercase tracking-wider cyber-font text-lg">${entry.name}</td>
+        <td class="py-4 px-2 cyber-font text-yellow-300 text-xl">${entry.score}</td>
+        <td class="py-4 px-2 text-gray-400 text-sm hidden md:table-cell cyber-font">${entry.difficulty}</td>
+        <td class="py-4 px-2 text-gray-500 text-xs text-right cyber-font">${entry.date}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+// 初始化教學畫面的頭像
+document.getElementById('tutorial-avatar').innerHTML = getAvatarSVG('normal', 48);
+</script>
+
+</body>
+</html>

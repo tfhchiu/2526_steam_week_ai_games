@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梦幻少女美发沙龙 - 高级定制</title>
+    <style>
+        :root {
+            --primary-pink: #ff85a1;
+            --soft-blue: #a2d2ff;
+            --cream: #fff5f8;
+            --accent: #ff4d6d;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #fce4ec 0%, #e1f5fe 100%);
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            margin: 20px 0;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .header h1 {
+            color: var(--accent);
+            font-size: 32px;
+            margin: 0;
+            text-shadow: 2px 2px 0px #fff;
+        }
+
+        /* 主容器 */
+        #salon-container {
+            position: relative;
+            width: 1000px;
+            height: 700px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            display: flex;
+            backdrop-filter: blur(10px);
+            border: 8px solid #fff;
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            width: 150px;
+            background: #fff;
+            border-right: 2px solid #eee;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            gap: 12px;
+            overflow-y: auto;
+            border-radius: 32px 0 0 32px;
+        }
+
+        .tool {
+            width: 100%;
+            padding: 12px 0;
+            background: #fdfdfd;
+            border: 2px solid #f0f0f0;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            color: #555;
+            font-weight: 500;
+        }
+
+        .tool:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px var(--shadow);
+            border-color: var(--primary-pink);
+        }
+
+        .tool.active {
+            background: var(--primary-pink);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .tool-icon {
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        /* 理发主区 */
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        #main-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            cursor: none; /* 使用自定义光标 */
+        }
+
+        /* 少女角色 */
+        .character-container {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 450px;
+            height: 600px;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* UI 组件 */
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .color-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            background: white;
+            padding: 12px;
+            border-radius: 24px;
+            box-shadow: 0 4px 20px var(--shadow);
+        }
+
+        .color-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 1px #ddd;
+            transition: transform 0.2s;
+        }
+
+        .color-dot:hover { transform: scale(1.2); }
+        .color-dot.active { box-shadow: 0 0 0 3px var(--accent); }
+
+        /* 自定义光标 */
+        #custom-cursor {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 40px;
+            display: none;
+            transform: translate(-50%, -50%);
+            filter: drop-shadow(2px 2px 5px rgba(0,0,0,0.2));
+        }
+
+        .hidden { display: none !important; }
+
+        .btn-reset {
+            background: #ffecf2;
+            color: var(--accent);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>✨ 梦幻次元少女美发店 ✨</h1>
+    </div>
+
+    <div id="salon-container">
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <div class="tool" onclick="setTool('comb')" id="tool-comb">
+                <span class="tool-icon">🪮</span>理顺
+            </div>
+            <div class="tool" onclick="setTool('wash')" id="tool-wash">
+                <span class="tool-icon">🧼</span>泡沫
+            </div>
+            <div class="tool" onclick="setTool('shower')" id="tool-shower">
+                <span class="tool-icon">🚿</span>花洒
+            </div>
+            <div class="tool" onclick="setTool('dry')" id="tool-dry">
+                <span class="tool-icon">🌬️</span>吹干
+            </div>
+            <div class="tool" onclick="setTool('cut')" id="tool-cut">
+                <span class="tool-icon">✂️</span>修剪
+            </div>
+            <div class="tool" onclick="setTool('curl')" id="tool-curl">
+                <span class="tool-icon">🌀</span>卷发
+            </div>
+            <div class="tool" onclick="setTool('dye')" id="tool-dye">
+                <span class="tool-icon">🎨</span>染发
+            </div>
+            <div class="tool" onclick="setTool('grow')" id="tool-grow">
+                <span class="tool-icon">🧪</span>魔液
+            </div>
+            <button class="btn-reset" onclick="initGame()">重新开始</button>
+        </div>
+
+        <!-- 游戏区域 -->
+        <div class="canvas-area">
+            <!-- 角色绘制（采用SVG以获得高清边缘） -->
+            <div class="character-container">
+                <svg width="100%" height="100%" viewBox="0 0 400 500">
+                    <!-- 身体/脖子 -->
+                    <path d="M160 380 Q200 390 240 380 L250 500 L150 500 Z" fill="#ffe0bd" />
+                    <!-- 衣服 -->
+                    <path d="M120 420 Q200 450 280 420 L320 500 L80 500 Z" fill="#ffccd5" />
+                    <!-- 脸部 -->
+                    <path d="M130 200 Q130 100 200 100 Q270 100 270 200 Q270 320 200 320 Q130 320 130 200" fill="#ffebee" />
+                    <path d="M130 200 Q130 330 200 330 Q270 330 270 200" fill="#ffe0bd" />
+                    <!-- 腮红 -->
+                    <circle cx="160" cy="250" r="15" fill="#ffb7c5" opacity="0.4" />
+                    <circle cx="240" cy="250" r="15" fill="#ffb7c5" opacity="0.4" />
+                    <!-- 眼睛 -->
+                    <g id="eyes">
+                        <ellipse cx="175" cy="215" rx="18" ry="22" fill="white" />
+                        <circle cx="175" cy="215" r="12" fill="#5c4033" />
+                        <circle cx="178" cy="210" r="5" fill="white" />
+                        
+                        <ellipse cx="225" cy="215" rx="18" ry="22" fill="white" />
+                        <circle cx="225" cy="215" r="12" fill="#5c4033" />
+                        <circle cx="228" cy="210" r="5" fill="white" />
+                    </g>
+                    <!-- 嘴巴 -->
+                    <path d="M185 285 Q200 295 215 285" fill="none" stroke="#ff4d6d" stroke-width="3" stroke-linecap="round" />
+                </svg>
+            </div>
+
+            <canvas id="main-canvas"></canvas>
+
+            <div class="ui-overlay">
+                <div class="color-selector hidden" id="dye-options">
+                    <div class="color-dot active" style="background: #4b3a32;" onclick="setColor('#4b3a32')"></div>
+                    <div class="color-dot" style="background: #ffd3b6;" onclick="setColor('#ffd3b6')"></div>
+                    <div class="color-dot" style="background: #ff85a1;" onclick="setColor('#ff85a1')"></div>
+                    <div class="color-dot" style="background: #a2d2ff;" onclick="setColor('#a2d2ff')"></div>
+                    <div class="color-dot" style="background: #b9fbc0;" onclick="setColor('#b9fbc0')"></div>
+                    <div class="color-dot" style="background: #cfbaf0;" onclick="setColor('#cfbaf0')"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义图标光标 -->
+    <div id="custom-cursor">🪮</div>
+
+<script>
+    const canvas = document.getElementById('main-canvas');
+    const ctx = canvas.getContext('2d');
+    const cursor = document.getElementById('custom-cursor');
+    const dyeOptions = document.getElementById('dye-options');
+
+    canvas.width = 850;
+    canvas.height = 700;
+
+    let currentTool = 'comb';
+    let currentColor = '#4b3a32';
+    let isDrawing = false;
+    let hairs = [];
+    let bubbles = []; // 泡沫粒子
+    let waterDrops = []; // 水滴粒子
+
+    const characterCenter = { x: 425, y: 250 };
+
+    class HairStrand {
+        constructor(x, y, angle) {
+            this.originX = x;
+            this.originY = y;
+            this.angle = angle;
+            this.length = 150 + Math.random() * 50;
+            this.segments = 15;
+            this.color = '#4b3a32';
+            this.isCurly = false;
+            this.isWet = false;
+            this.points = [];
+            this.bubbleCount = 0; // 当前附着的泡沫量
+            this.update();
+        }
+
+        update() {
+            this.points = [];
+            for (let i = 0; i <= this.segments; i++) {
+                let segmentLen = (i / this.segments) * this.length;
+                let wave = this.isCurly ? Math.sin(i * 0.8) * 12 : 0;
+                
+                let px = this.originX + Math.cos(this.angle) * segmentLen + Math.cos(this.angle + Math.PI/2) * wave;
+                let py = this.originY + Math.sin(this.angle) * segmentLen + Math.sin(this.angle + Math.PI/2) * wave;
+                
+                // 重力微调
+                py += (i * i) * 0.05;
+                
+                this.points.push({ x: px, y: py });
+            }
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = this.isWet ? 5 : 4;
+            
+            // 湿发颜色深一点
+            ctx.strokeStyle = this.isWet ? this.getDarkerColor() : this.color;
+
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+            for (let j = 1; j < this.points.length; j++) {
+                ctx.lineTo(this.points[j].x, this.points[j].y);
+            }
+            ctx.stroke();
+
+            // 绘制附着的泡沫
+            if (this.bubbleCount > 0) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                for(let k=0; k<this.bubbleCount; k++) {
+                    let p = this.points[Math.floor(Math.random()*this.points.length)];
+                    ctx.beginPath();
+                    ctx.arc(p.x + (Math.random()-0.5)*10, p.y + (Math.random()-0.5)*10, 3 + Math.random()*4, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        getDarkerColor() {
+            return "rgba(0,0,0,0.4)";
+        }
+    }
+
+    function initGame() {
+        hairs = [];
+        bubbles = [];
+        waterDrops = [];
+        // 在头顶生成一圈发丝
+        for (let a = Math.PI * 0.9; a < Math.PI * 2.1; a += 0.02) {
+            let radius = 95;
+            let x = characterCenter.x + Math.cos(a) * radius;
+            let y = characterCenter.y + Math.sin(a) * radius;
+            hairs.push(new HairStrand(x, y, a));
+        }
+        setTool('comb');
+        requestAnimationFrame(gameLoop);
+    }
+
+    function setTool(tool) {
+        currentTool = tool;
+        document.querySelectorAll('.tool').forEach(el => el.classList.remove('active'));
+        document.getElementById('tool-' + tool).classList.add('active');
+        
+        const icons = {
+            comb: '🪮', wash: '🧼', shower: '🚿', dry: '🌬️', 
+            cut: '✂️', curl: '🌀', dye: '🎨', grow: '🧪'
+        };
+        cursor.innerText = icons[tool];
+        dyeOptions.classList.toggle('hidden', tool !== 'dye');
+    }
+
+    function setColor(c) {
+        currentColor = c;
+        document.querySelectorAll('.color-dot').forEach(el => el.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+
+    // 交互监听
+    canvas.addEventListener('mousedown', () => isDrawing = true);
+    window.addEventListener('mouseup', () => isDrawing = false);
+    canvas.addEventListener('mouseenter', () => cursor.style.display = 'block');
+    canvas.addEventListener('mouseleave', () => cursor.style.display = 'none');
+    
+    window.addEventListener('mousemove', (e) => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+
+        if (!isDrawing) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        handleTools(mx, my);
+    });
+
+    function handleTools(mx, my) {
+        hairs.forEach(h => {
+            const lastIdx = h.points.length - 1;
+            const endP = h.points[lastIdx];
+            const dToEnd = Math.hypot(mx - endP.x, my - endP.y);
+            const dToStart = Math.hypot(mx - h.originX, my - h.originY);
+
+            switch(currentTool) {
+                case 'comb':
+                    if (dToEnd < 40) { h.isCurly = false; h.update(); }
+                    break;
+                case 'wash':
+                    if (dToEnd < 50) {
+                        h.isWet = true;
+                        h.bubbleCount = Math.min(h.bubbleCount + 0.5, 15);
+                        // 生成漂浮泡沫粒子
+                        if (Math.random() > 0.7) createBubble(mx, my);
+                    }
+                    break;
+                case 'shower':
+                    if (dToEnd < 60) {
+                        h.bubbleCount = Math.max(h.bubbleCount - 1, 0);
+                        createWater(mx, my);
+                    }
+                    break;
+                case 'dry':
+                    if (dToEnd < 50) h.isWet = false;
+                    break;
+                case 'cut':
+                    if (dToEnd < 20 && h.length > 20) {
+                        h.length -= 3;
+                        h.update();
+                    }
+                    break;
+                case 'curl':
+                    if (dToEnd < 40) { h.isCurly = true; h.update(); }
+                    break;
+                case 'dye':
+                    if (dToEnd < 40) h.color = currentColor;
+                    break;
+                case 'grow':
+                    if (dToStart < 40 && h.length < 300) {
+                        h.length += 5;
+                        h.update();
+                        if(Math.random() > 0.8) createMagicSpark(mx, my);
+                    }
+                    break;
+            }
+        });
+    }
+
+    // 粒子系统
+    function createBubble(x, y) {
+        bubbles.push({
+            x, y, 
+            vx: (Math.random()-0.5)*2, 
+            vy: -Math.random()*2, 
+            size: 5 + Math.random()*10,
+            life: 1.0
+        });
+    }
+
+    function createWater(x, y) {
+        for(let i=0; i<3; i++) {
+            waterDrops.push({
+                x, y,
+                vx: (Math.random()-0.5)*2,
+                vy: 5 + Math.random()*5,
+                life: 1.0
+            });
+        }
+    }
+
+    function createMagicSpark(x, y) {
+        // 魔力生发粒子
+        bubbles.push({
+            x, y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4,
+            size: 3, life: 1.0, isSpark: true
+        });
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 绘制头发
+        hairs.forEach(h => h.draw());
+
+        // 绘制粒子
+        ctx.save();
+        bubbles.forEach((b, i) => {
+            b.x += b.vx;
+            b.y += b.vy;
+            b.life -= 0.01;
+            ctx.globalAlpha = b.life;
+            if (b.isSpark) {
+                ctx.fillStyle = "#fff";
+                ctx.fillText("✨", b.x, b.y);
+            } else {
+                ctx.fillStyle = "#fff";
+                ctx.strokeStyle = "rgba(200,200,255,0.5)";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+            }
+            if (b.life <= 0) bubbles.splice(i, 1);
+        });
+
+        waterDrops.forEach((w, i) => {
+            w.x += w.vx;
+            w.y += w.vy;
+            w.life -= 0.02;
+            ctx.strokeStyle = `rgba(173, 216, 230, ${w.life})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(w.x, w.y);
+            ctx.lineTo(w.x + w.vx, w.y + w.vy*2);
+            ctx.stroke();
+            if (w.life <= 0) waterDrops.splice(i, 1);
+        });
+        ctx.restore();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    initGame();
+</script>
+</body>
+</html>

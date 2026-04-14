@@ -1,0 +1,392 @@
+import React, { useState, useEffect } from 'react';
+import { Monitor, RefreshCw, Trophy, BookOpen, X, CheckCircle, AlertCircle } from 'lucide-react';
+
+// 遊戲單字庫 (精選國中程度的電腦與網路相關單字)
+const VOCAB_LIST = [
+  { id: 1, en: 'Keyboard', zh: '鍵盤' },
+  { id: 2, en: 'Mouse', zh: '滑鼠' },
+  { id: 3, en: 'Monitor', zh: '螢幕' },
+  { id: 4, en: 'Software', zh: '軟體' },
+  { id: 5, en: 'Hardware', zh: '硬體' },
+  { id: 6, en: 'Browser', zh: '瀏覽器' },
+  { id: 7, en: 'Password', zh: '密碼' },
+  { id: 8, en: 'Network', zh: '網路' },
+  { id: 9, en: 'Download', zh: '下載' },
+  { id: 10, en: 'Server', zh: '伺服器' }
+];
+
+const MAX_MOVES_R1 = 25; // 第一回合最大翻牌次數
+const MAX_MOVES_R2 = 40; // 第二回合最大翻牌次數
+
+// 陣列洗牌函數 (Fisher-Yates Shuffle)
+const shuffleArray = (array) => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+export default function App() {
+  const [cards, setCards] = useState([]);
+  const [flippedIndices, setFlippedIndices] = useState([]);
+  const [matchedPairs, setMatchedPairs] = useState([]);
+  const [moves, setMoves] = useState(0);
+  const [score, setScore] = useState(30);
+  const [isWon, setIsWon] = useState(false);
+  const [isLost, setIsLost] = useState(false);
+  const [showVocabModal, setShowVocabModal] = useState(false);
+  const [round, setRound] = useState(1);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // 根據當前回合決定最大次數
+  const currentMaxMoves = round === 1 ? MAX_MOVES_R1 : MAX_MOVES_R2;
+
+  // 初始化遊戲
+  const initializeGame = () => {
+    // 建立卡片堆：每個單字產生一張英文卡和一張中文卡
+    const deck = [];
+    VOCAB_LIST.forEach((vocab) => {
+      deck.push({ uniqueId: `en-${vocab.id}`, pairId: vocab.id, text: vocab.en, type: 'en' });
+      deck.push({ uniqueId: `zh-${vocab.id}`, pairId: vocab.id, text: vocab.zh, type: 'zh' });
+    });
+
+    setCards(shuffleArray(deck));
+    setFlippedIndices([]);
+    setMatchedPairs([]);
+    setMoves(0);
+    setScore(30);
+    setIsWon(false);
+    setIsLost(false);
+    setRound(1);
+  };
+
+  // 啟動第二回合
+  const startRoundTwo = () => {
+    const deck = [];
+    VOCAB_LIST.forEach((vocab) => {
+      // 加上 -r2 標記確保 React Key 在重置時是唯一的
+      deck.push({ uniqueId: `en-${vocab.id}-r2`, pairId: vocab.id, text: vocab.en, type: 'en' });
+      deck.push({ uniqueId: `zh-${vocab.id}-r2`, pairId: vocab.id, text: vocab.zh, type: 'zh' });
+    });
+    setCards(shuffleArray(deck));
+    setFlippedIndices([]);
+    setMatchedPairs([]);
+    setMoves(0);
+    setScore(50); // 第二回合初始分數為 50
+    setRound(2);
+  };
+
+  // 初始載入時啟動遊戲
+  useEffect(() => {
+    initializeGame();
+  }, []);
+
+  // 處理卡片點擊
+  const handleCardClick = (index) => {
+    // 如果已經翻開兩張卡片，或點擊的卡片已經翻開/已配對，或是遊戲正在過場/已結束，則不動作
+    if (
+      flippedIndices.length === 2 ||
+      flippedIndices.includes(index) ||
+      matchedPairs.includes(cards[index].pairId) ||
+      isWon ||
+      isLost ||
+      isTransitioning
+    ) {
+      return;
+    }
+
+    const newFlippedIndices = [...flippedIndices, index];
+    setFlippedIndices(newFlippedIndices);
+
+    // 當翻開兩張卡片時進行檢查
+    if (newFlippedIndices.length === 2) {
+      const currentMoves = moves + 1;
+      setMoves(currentMoves);
+      const firstCard = cards[newFlippedIndices[0]];
+      const secondCard = cards[newFlippedIndices[1]];
+
+      // 判斷當前難度 (第二回合為困難模式，蓋牌速度變快)
+      const isHardMode = round === 2;
+      const flipDelay = isHardMode ? 400 : 1000;
+
+      if (firstCard.pairId === secondCard.pairId) {
+        // 配對成功
+        const newScore = score + 10;
+        setScore(newScore);
+
+        setMatchedPairs((prev) => {
+          const newMatched = [...prev, firstCard.pairId];
+          
+          if (round === 1) {
+            // 第一回合：分數達到 50 分，或全部配對完成 -> 進入第二回合
+            if (newScore >= 50 || newMatched.length === VOCAB_LIST.length) {
+              setTimeout(() => {
+                setIsTransitioning(true);
+                setTimeout(() => {
+                  startRoundTwo();
+                  setIsTransitioning(false);
+                }, 2500); // 顯示 2.5 秒的過場動畫
+              }, 500);
+            } else if (currentMoves >= currentMaxMoves) {
+              setTimeout(() => setIsLost(true), 500);
+            }
+          } else {
+            // 第二回合：分數達到 100 分，或全部配對完成 -> 通關成功
+            if (newScore >= 100 || newMatched.length === VOCAB_LIST.length) {
+              setTimeout(() => setIsWon(true), 500);
+            } else if (currentMoves >= currentMaxMoves) {
+              setTimeout(() => setIsLost(true), 500);
+            }
+          }
+          
+          return newMatched;
+        });
+        setFlippedIndices([]);
+      } else {
+        // 配對失敗，扣 5 分 (最低 0 分)
+        const newScore = Math.max(0, score - 5);
+        setScore(newScore);
+
+        // 檢查失敗條件：分數歸零，或是次數用盡
+        if (newScore <= 0) {
+          setTimeout(() => setIsLost(true), 500); // 分數歸零提早失敗
+        } else if (currentMoves >= currentMaxMoves) {
+          setTimeout(() => setIsLost(true), flipDelay);
+        }
+
+        setTimeout(() => {
+          setFlippedIndices([]);
+        }, flipDelay);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 py-8 px-4 font-sans text-slate-800">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* 標題區塊 */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-3 mb-4 md:mb-0">
+            <div className="bg-blue-500 p-3 rounded-xl text-white shadow-sm">
+              <Monitor size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">電腦單字記憶大挑戰</h1>
+              <p className="text-sm text-slate-500">找出英文單字與對應的中文解釋</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="text-center px-3 py-2 bg-slate-50 rounded-lg border border-slate-100 transition-colors">
+              <span className="block text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">難度</span>
+              <span className={`block text-lg sm:text-xl font-bold ${round === 2 ? 'text-red-500' : 'text-blue-500'}`}>
+                Lv.{round}
+              </span>
+            </div>
+            <div className="text-center px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="block text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">分數</span>
+              <span className={`block text-lg sm:text-xl font-bold ${round === 2 ? 'text-red-500' : 'text-amber-500'}`}>{score}</span>
+            </div>
+            <div className="text-center px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="block text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">剩餘</span>
+              <span className={`block text-lg sm:text-xl font-bold ${currentMaxMoves - moves <= 5 ? 'text-red-500' : 'text-blue-600'}`}>
+                {currentMaxMoves - moves}
+              </span>
+            </div>
+            <div className="text-center px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="block text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">配對</span>
+              <span className="block text-lg sm:text-xl font-bold text-green-500">{matchedPairs.length}/10</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 動作按鈕 */}
+        <div className="flex justify-center gap-4 mb-8">
+          <button 
+            onClick={() => setShowVocabModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 font-semibold rounded-full hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-200"
+          >
+            <BookOpen size={18} />
+            考前複習單字表
+          </button>
+          <button 
+            onClick={initializeGame}
+            className="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 font-semibold rounded-full hover:bg-slate-50 transition-colors shadow-sm border border-slate-200"
+          >
+            <RefreshCw size={18} />
+            重新開始遊戲
+          </button>
+        </div>
+
+        {/* 遊戲勝利畫面 */}
+        {isWon && (
+          <div className="mb-8 p-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-2xl shadow-lg text-white text-center transform transition-all animate-bounce-short">
+            <Trophy size={48} className="mx-auto mb-4 text-yellow-300" />
+            <h2 className="text-3xl font-bold mb-2">太厲害了！通關成功！</h2>
+            <div className="bg-white/20 rounded-xl p-5 mb-6 inline-block backdrop-blur-sm">
+              <p className="text-emerald-50 mb-2">你總共嘗試了 {moves} 次</p>
+              <p className="text-4xl font-bold text-yellow-200 drop-shadow-md mt-2">最終得分： {score >= 100 ? 100 : score}</p>
+              {score >= 100 && <p className="text-sm text-yellow-100 mt-2 font-semibold">★ 分數達到 100 分提早通關！ ★</p>}
+            </div>
+            <br />
+            <button 
+              onClick={initializeGame}
+              className="px-8 py-3 bg-white text-emerald-600 font-bold rounded-full hover:bg-emerald-50 shadow-md transition-transform hover:scale-105"
+            >
+              再玩一次
+            </button>
+          </div>
+        )}
+
+        {/* 遊戲失敗畫面 */}
+        {isLost && !isWon && (
+          <div className="mb-8 p-8 bg-gradient-to-r from-red-400 to-orange-500 rounded-2xl shadow-lg text-white text-center transform transition-all animate-bounce-short">
+            <AlertCircle size={48} className="mx-auto mb-4 text-orange-100" />
+            <h2 className="text-3xl font-bold mb-2">挑戰失敗！</h2>
+            <p className="text-orange-50 mb-6">
+              {score <= 0 ? "你的分數已經歸零了。" : `你已經用盡了 ${currentMaxMoves} 次機會。`}
+              不要氣餒，再試一次吧！
+            </p>
+            <button 
+              onClick={initializeGame}
+              className="px-8 py-3 bg-white text-orange-600 font-bold rounded-full hover:bg-orange-50 shadow-md transition-transform hover:scale-105"
+            >
+              重新挑戰
+            </button>
+          </div>
+        )}
+
+        {/* 回合過場動畫 */}
+        {isTransitioning && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-up">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 text-center animate-bounce-short w-full max-w-sm border-4 border-indigo-400">
+              <h2 className="text-3xl font-bold text-indigo-600 mb-4">第一回合完成！</h2>
+              <p className="text-lg text-slate-700 mb-2">即將開啟 <span className="text-red-500 font-bold">第二回合 (Lv.2)</span></p>
+              <p className="text-sm text-slate-500 mb-4">記憶時間將縮短，請準備好！</p>
+              <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+          </div>
+        )}
+
+        {/* 卡片網格 */}
+        <div className="grid grid-cols-4 md:grid-cols-5 gap-3 md:gap-4 perspective-1000">
+          {cards.map((card, index) => {
+            const isFlipped = flippedIndices.includes(index);
+            const isMatched = matchedPairs.includes(card.pairId);
+
+            return (
+              <div 
+                key={card.uniqueId}
+                onClick={() => handleCardClick(index)}
+                className={`relative w-full aspect-square cursor-pointer transition-transform duration-500`}
+                style={{ 
+                  perspective: '1000px',
+                  transformStyle: 'preserve-3d'
+                }}
+              >
+                {/* 翻轉動畫的外層容器 */}
+                <div 
+                  className="w-full h-full duration-500 ease-in-out relative rounded-xl shadow-sm"
+                  style={{
+                    transformStyle: 'preserve-3d',
+                    transform: isFlipped || isMatched ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                  }}
+                >
+                  {/* 卡片背面 (未翻開時顯示的圖案) */}
+                  <div 
+                    className={`absolute w-full h-full backface-hidden rounded-xl border-2 flex items-center justify-center
+                      ${isMatched ? 'opacity-0' : 'bg-gradient-to-br from-blue-400 to-indigo-500 border-indigo-600 hover:from-blue-500 hover:to-indigo-600'}
+                    `}
+                    style={{ backfaceVisibility: 'hidden' }}
+                  >
+                    <Monitor className="text-white opacity-40" size={32} />
+                  </div>
+
+                  {/* 卡片正面 (翻開時顯示的文字) */}
+                  <div 
+                    className={`absolute w-full h-full backface-hidden rounded-xl border-2 flex flex-col items-center justify-center p-2 text-center
+                      ${isMatched 
+                        ? 'bg-green-50 border-green-300 text-green-700' 
+                        : 'bg-white border-slate-200 text-slate-800'
+                      }
+                      ${card.type === 'en' ? 'font-medium font-serif' : 'font-bold font-sans'}
+                    `}
+                    style={{ 
+                      backfaceVisibility: 'hidden',
+                      transform: 'rotateY(180deg)'
+                    }}
+                  >
+                    {isMatched && <CheckCircle size={16} className="text-green-400 absolute top-2 right-2" />}
+                    <span className={`break-words ${card.type === 'en' ? 'text-sm md:text-base text-blue-700' : 'text-base md:text-lg text-slate-700'}`}>
+                      {card.text}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+      </div>
+
+      {/* 單字複習彈出視窗 (Modal) */}
+      {showVocabModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-up">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <BookOpen className="text-indigo-500" />
+                單字總覽 (Vocabulary)
+              </h3>
+              <button 
+                onClick={() => setShowVocabModal(false)}
+                className="p-1 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <ul className="space-y-3">
+                {VOCAB_LIST.map(vocab => (
+                  <li key={vocab.id} className="flex justify-between items-center p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
+                    <span className="text-lg font-semibold text-blue-700 w-1/2">{vocab.en}</span>
+                    <span className="text-slate-600 font-medium w-1/2 text-right">{vocab.zh}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 text-center">
+              <button 
+                onClick={() => setShowVocabModal(false)}
+                className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-full hover:bg-indigo-700 transition-colors"
+              >
+                我準備好挑戰了！
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 簡單的自訂動畫 CSS */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fade-in-up {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.3s ease-out forwards;
+        }
+        @keyframes bounce-short {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-short {
+          animation: bounce-short 1s ease-in-out infinite;
+        }
+      `}} />
+    </div>
+  );
+}

@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Type the Word Game</title>
+    <style>
+        /* CSS: Styling the game to look like a retro computer terminal */
+        body {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+        }
+
+        h1 { margin-bottom: 10px; }
+
+        #game-container {
+            width: 600px;
+            max-width: 95vw;
+            height: 500px;
+            background-color: #000;
+            border: 3px solid #00ff00;
+            position: relative;
+            overflow: hidden;
+            border-radius: 5px;
+            box-shadow: 0 0 15px #00ff0055;
+        }
+
+        .word {
+            position: absolute;
+            font-size: 20px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .word.danger {
+            color: #ff0000;
+            text-shadow: 0 0 10px #ff0000;
+        }
+
+        .word.bonus {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .word.freeze {
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff00;
+        }
+
+        #ui-bar {
+            width: 600px;
+            max-width: 95vw;
+            display: flex;
+            justify-content: space-between;
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        #type-input {
+            width: 600px;
+            max-width: 95vw;
+            font-size: 24px;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #000;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            text-align: center;
+            outline: none;
+            font-family: 'Courier New', Courier, monospace;
+            box-sizing: border-box;
+        }
+
+        #type-input:focus { box-shadow: 0 0 10px #00ff00; }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border: 2px solid red;
+            color: red;
+            display: none;
+            width: 80%;
+            box-sizing: border-box;
+        }
+
+        #level-transition {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            display: none;
+            width: 80%;
+            box-sizing: border-box;
+        }
+
+        .warning-text {
+            color: #ff0000;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        button {
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        
+        button:hover { background-color: #00cc00; }
+        button:disabled { background-color: #333; color: #666; cursor: not-allowed; border: 1px solid #555; }
+
+        /* NEW CSS FOR MENUS */
+        .diff-selector { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .diff-btn { background-color: #005500; border: 1px solid #00ff00; color: #00ff00; padding: 5px 15px; cursor: pointer; font-size: 16px; flex: 1; }
+        .diff-btn.selected { background-color: #00ff00; color: #000; font-weight: bold; }
+        
+        .screen { display: none; flex-direction: column; align-items: center; width: 100%; }
+        .screen.active { display: flex; }
+        
+        .menu-box {
+            width: 600px;
+            max-width: 95vw;
+            background-color: #000;
+            border: 3px solid #00ff00;
+            border-radius: 5px;
+            padding: 30px;
+            box-shadow: 0 0 15px #00ff0055;
+            text-align: center;
+            box-sizing: border-box;
+            margin-top: 20px;
+        }
+
+        .menu-btn { width: 80%; margin: 10px auto; display: block; }
+        
+        .upgrade-item {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
+        }
+        .upgrade-item button { margin-top: 10px; font-size: 14px; padding: 5px 10px; width: 100%; }
+        
+        .stat-bar { font-size: 18px; margin-bottom: 20px; color: #00ffff; }
+        .leaderboard-list { text-align: left; font-size: 16px; list-style-type: decimal; padding-left: 40px; }
+        .lb-item { margin-bottom: 5px; }
+
+        /* DICTIONARY STYLES */
+        .dict-container { max-height: 300px; overflow-y: auto; text-align: left; border: 1px solid #00ff00; padding: 10px; margin-bottom: 15px; background: #002200; width: 100%; box-sizing: border-box;}
+        .dict-item { margin-bottom: 10px; font-size: 15px; border-bottom: 1px solid #005500; padding-bottom: 5px; }
+        .dict-word { color: #00ffff; font-weight: bold; text-transform: uppercase; }
+        .dict-def { color: #aaa; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>TERMINAL TYPER</h1>
+    
+    <!-- MAIN MENU -->
+    <div id="main-menu" class="screen active">
+        <div class="menu-box">
+            <h2>MAIN MENU (主菜单)</h2>
+            <div class="stat-bar">Data Fragments (数据碎片): <span id="menu-currency">0</span></div>
+            <div style="margin-bottom: 15px;">
+                <input type="text" id="player-name-input" placeholder="ENTER ALIAS (输入代号)..." maxlength="12" autocomplete="off" style="padding: 8px; font-family: inherit; background: #000; color: #00ff00; border: 1px solid #00ff00; text-align: center; font-size: 16px; width: 80%; outline: none;">
+            </div>
+            <div class="diff-selector">
+                <button class="diff-btn" data-diff="easy">EASY 简单 (0.5x)</button>
+                <button class="diff-btn selected" data-diff="medium">MEDIUM 中等 (1x)</button>
+                <button class="diff-btn" data-diff="hard">HARD 困难 (2x)</button>
+            </div>
+            <button class="menu-btn" id="btn-play">INITIALIZE SYSTEM 启动系统 (PLAY)</button>
+            <button class="menu-btn" id="btn-dictionary">TERM DICTIONARY (术语字典)</button>
+            <button class="menu-btn" id="btn-leaderboard">LEADERBOARD (排行榜)</button>
+        </div>
+    </div>
+
+    <!-- DICTIONARY MENU -->
+    <div id="dictionary-menu" class="screen">
+        <div class="menu-box">
+            <h2>SYSTEM DICTIONARY (系统字典)</h2>
+            <div class="dict-container" id="dict-list">
+                <!-- Populated by JS -->
+            </div>
+            <button class="menu-btn" id="btn-back-dict">BACK TO MENU (返回主菜单)</button>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD MENU -->
+    <div id="leaderboard-menu" class="screen">
+        <div class="menu-box">
+            <h2>LEADERBOARD (排行榜)</h2>
+            <p>Highest Final Scores (最高分 = 得分 x 倍数)</p>
+            <ol class="leaderboard-list" id="lb-list">
+                <!-- Populated by JS -->
+            </ol>
+            <button class="menu-btn" id="btn-back-lb">BACK TO MENU (返回主菜单)</button>
+        </div>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="screen">
+        <div id="ui-bar">
+            <span>Score: <span id="score">0</span></span>
+            <span>Diff: <span id="diff-display" style="color:#00ffff;">EASY</span></span>
+            <span>Level: <span id="level">1</span></span>
+            <span>Lives: <span id="lives">5</span></span>
+        </div>
+
+        <div id="game-container">
+            <!-- Words will be spawned here by JavaScript -->
+            <div id="level-transition">
+                <h2 id="level-title">LEVEL 2</h2>
+                <p id="level-message">System upgraded. Take a breath.</p>
+                <button id="next-level-btn">CONTINUE</button>
+            </div>
+            <div id="game-over">
+                <h2>SYSTEM FAILURE</h2>
+                <p id="game-over-reason">A word breached your defenses.</p>
+                <button id="reboot-btn">RETURN TO MENU</button>
+            </div>
+        </div>
+
+        <input type="text" id="type-input" placeholder="Type falling words here..." autocomplete="off" autofocus>
+    </div>
+
+    <script>
+        // JavaScript: The game logic
+        const wordsByLevel = [
+            // Level 1: 2-3 letters (Very Easy)
+            ['it', 'pc', 'os', 'ip', 'cd', 'ai', 'ui', 'ux', 'mac', 'ram', 'cpu', 'bug', 'bit', 'bot', 'web', 'app', 'log', 'tag', 'hub', 'api', 'net', 'run'],
+            // Level 2: 4 letters (Easy)
+            ['data', 'file', 'node', 'code', 'byte', 'boot', 'host', 'port', 'link', 'ping', 'root', 'tech', 'user', 'sync', 'disk', 'chip'],
+            // Level 3: 5 letters (Easy-Med)
+            ['pixel', 'logic', 'macro', 'cache', 'array', 'mouse', 'board', 'cloud', 'linux', 'token', 'input', 'query', 'stack', 'virus', 'patch'],
+            // Level 4: 6 letters (Medium)
+            ['server', 'domain', 'router', 'client', 'script', 'system', 'hacker', 'binary', 'update', 'window', 'memory', 'socket'],
+            // Level 5: 7 letters
+            ['network', 'monitor', 'compile', 'boolean', 'malware', 'gateway', 'command', 'console', 'offline', 'desktop'],
+            // Level 6: 8 letters
+            ['hardware', 'software', 'variable', 'function', 'database', 'protocol', 'terminal', 'compiler', 'frontend', 'firewall'],
+            // Level 7: 9 letters
+            ['algorithm', 'processor', 'bandwidth', 'framework', 'parameter', 'interface', 'debugging', 'directory'],
+            // Level 8: 10 letters
+            ['encryption', 'javascript', 'repository', 'cyberpunk', 'stylesheet', 'networking', 'resolution'],
+            // Level 9: 11 letters
+            ['motherboard', 'environment', 'programming', 'application', 'performance', 'development', 'concurrency', 'abstraction', 'scalability'],
+            // Level 10: 12 letters
+            ['cryptography', 'architecture', 'optimization', 'asynchronous', 'polymorphism', 'vulnerability'],
+            // Level 11: 13 letters
+            ['configuration', 'microservices', 'serialization', 'multithreading'],
+            // Level 12+ (Master): 14+ letters
+            ['authentication', 'virtualization', 'loadbalancing', 'containerization', 'interoperability', 'objectoriented', 'telecommunications', 'troubleshooting']
+        ];
+
+        const gameContainer = document.getElementById('game-container');
+        const typeInput = document.getElementById('type-input');
+        const scoreDisplay = document.getElementById('score');
+        const levelDisplay = document.getElementById('level');
+        const livesDisplay = document.getElementById('lives');
+        const gameOverScreen = document.getElementById('game-over');
+        const gameOverReason = document.getElementById('game-over-reason');
+        const rebootBtn = document.getElementById('reboot-btn');
+        const levelTransitionScreen = document.getElementById('level-transition');
+        const levelTitle = document.getElementById('level-title');
+        const levelMessage = document.getElementById('level-message');
+        const nextLevelBtn = document.getElementById('next-level-btn');
+
+        let score = 0;
+        let level = 1;
+        let lives = 5;
+        let activeWords = [];
+        let isGameOver = false;
+        let isTransitioning = false;
+        let recentWords = []; // Keeps track of the last 3 words
+        let currentDifficulty = 'medium'; // Default to medium now
+        let diffMultiplier = 1;
+        let wordLevelOffset = 0;
+        let isFrozen = false;
+        let freezeTimer = null;
+        
+        // --- NEW FEATURES DATA ---
+        let gameData = JSON.parse(localStorage.getItem('terminalTyperData')) || {
+            currency: 0,
+            leaderboard: []
+        };
+        
+        let loopCount = 0;
+        let recordedLevel30 = false;
+        let spawnTimer = null;
+
+        // --- WORD DICTIONARY ---
+        const wordDefinitions = {
+            'it': 'Information Technology (信息技术)', 
+            'pc': 'Personal Computer (个人电脑)', 
+            'os': 'Operating System (操作系统)', 
+            'ip': 'Internet Protocol (互联网协议)', 
+            'cd': 'Change Directory / Compact Disc (更改目录 / 光盘)', 
+            'ai': 'Artificial Intelligence (人工智能)', 
+            'ui': 'User Interface (用户界面)', 
+            'ux': 'User Experience (用户体验)', 
+            'mac': 'Macintosh Operating System (麦金塔操作系统)', 
+            'ram': 'Random Access Memory (随机存取存储器)', 
+            'cpu': 'Central Processing Unit (中央处理器)', 
+            'bug': 'An error or flaw in software (软件中的错误或缺陷 - Bug)', 
+            'bit': 'The smallest unit of data (数据的最小单位 - 比特)', 
+            'bot': 'An automated software application (自动化软件应用程序 - 机器人)', 
+            'web': 'The World Wide Web (万维网)', 
+            'app': 'Application software (应用软件)', 
+            'log': 'A record of events or transactions (事件或交易的记录 - 日志)', 
+            'tag': 'A label or keyword (标签或关键字)', 
+            'hub': 'A central connection point for devices (设备的中心连接点 - 集线器)', 
+            'api': 'Application Programming Interface (应用程序编程接口)', 
+            'net': 'Network (网络)', 
+            'run': 'Execute a program (执行程序 - 运行)',
+            'data': 'Information processed or stored by a computer (计算机处理或存储的信息 - 数据)', 
+            'file': 'A collection of data stored under a single name (以单一名称存储的数据集合 - 文件)', 
+            'node': 'A connection point in a network (网络中的连接点 - 节点)', 
+            'code': 'Instructions written in a programming language (用编程语言编写的指令 - 代码)', 
+            'byte': 'A group of 8 bits (8个比特的集合 - 字节)', 
+            'boot': 'The process of starting a computer (启动计算机的过程 - 引导/开机)', 
+            'host': 'A device connected to a network (连接到网络的设备 - 主机)', 
+            'port': 'A communication endpoint (通信端点 - 端口)', 
+            'link': 'A reference to data or another document (对数据或其他文档的引用 - 链接)', 
+            'ping': 'A utility to test network reachability (测试网络可达性的实用程序 - Ping)', 
+            'root': 'The highest level or superuser directory/account (最高级别或超级用户目录/帐户 - 根目录/超级用户)', 
+            'tech': 'Technology (技术)', 
+            'user': 'A person operating a computer (操作计算机的人 - 用户)', 
+            'sync': 'Synchronize data (同步数据)', 
+            'disk': 'Storage medium (存储介质 - 磁盘)', 
+            'chip': 'An integrated circuit (集成电路 - 芯片)',
+            'pixel': 'The smallest unit of a digital image (数字图像的最小单位 - 像素)', 
+            'logic': 'The fundamental principles of computer operations (计算机操作的基本原则 - 逻辑)', 
+            'macro': 'A single instruction that expands into a set of instructions (扩展为一组指令的单一指令 - 宏)', 
+            'cache': 'High-speed data storage layer (高速数据存储层 - 缓存)', 
+            'array': 'A data structure consisting of a collection of elements (由元素集合组成的数据结构 - 数组)', 
+            'mouse': 'A hand-held pointing device (手持指点设备 - 鼠标)', 
+            'board': 'A printed circuit board (e.g., Motherboard) (印刷电路板 - 板)', 
+            'cloud': 'Servers accessed over the internet (通过互联网访问的服务器 - 云计算)', 
+            'linux': 'An open-source Unix-like operating system (开源的类Unix操作系统 - Linux)', 
+            'token': 'A unit of data for authentication or parsing (用于身份验证或解析的数据单元 - 令牌)', 
+            'input': 'Data provided to a computer system (提供给计算机系统的数据 - 输入)', 
+            'query': 'A request for data from a database (对数据库中数据的请求 - 查询)', 
+            'stack': 'A last-in, first-out data structure (后进先出的数据结构 - 栈)', 
+            'virus': 'Malicious software that replicates itself (自我复制的恶意软件 - 病毒)', 
+            'patch': 'A software update designed to fix issues (旨在修复问题的软件更新 - 补丁)',
+            'server': 'A computer that provides data to other computers (为其他计算机提供数据的计算机 - 服务器)', 
+            'domain': 'An identification string defining an administrative realm (定义管理领域的标识字符串 - 域名)', 
+            'router': 'A networking device that forwards data packets (转发数据包的网络设备 - 路由器)', 
+            'client': 'Hardware or software that accesses a service (访问服务的硬件或软件 - 客户端)', 
+            'script': 'A program or sequence of instructions (程序或指令序列 - 脚本)', 
+            'system': 'A set of interacting or interdependent components (一组相互作用或相互依赖的组件 - 系统)', 
+            'hacker': 'Someone who uses technical skills to achieve a goal (利用技术技能实现目标的人 - 黑客)', 
+            'binary': 'A system of numerical notation to the base 2 (以2为底的记数系统 - 二进制)', 
+            'update': 'A newer version of software or data (软件或数据的较新版本 - 更新)', 
+            'window': 'A graphical viewing area on a display (显示器上的图形查看区域 - 窗口)', 
+            'memory': 'The physical devices used to store programs or data (用于存储程序或数据的物理设备 - 内存)', 
+            'socket': 'An endpoint for sending or receiving data (发送或接收数据的端点 - 套接字)',
+            'network': 'A group of interconnected computer systems (互连的计算机系统组 - 网络)', 
+            'monitor': 'An output device that displays information (显示信息的输出设备 - 显示器)', 
+            'compile': 'Convert source code into executable code (将源代码转换为可执行代码 - 编译)', 
+            'boolean': 'A data type with two possible values (true or false) (具有两个可能值的数据类型 - 布尔值)', 
+            'malware': 'Software intentionally designed to cause damage (故意设计用于造成损害的软件 - 恶意软件)', 
+            'gateway': 'A node serving as an entrance to another network (作为另一个网络入口的节点 - 网关)', 
+            'command': 'A specific instruction given to a computer (向计算机发出的特定指令 - 命令)', 
+            'console': 'A text-based interface used to interact with an OS (用于与操作系统交互的基于文本的界面 - 控制台)', 
+            'offline': 'Not connected to a network (未连接到网络 - 离线)', 
+            'desktop': 'The primary user interface of a computer (计算机的主要用户界面 - 桌面)',
+            'hardware': 'The physical components of a computer (计算机的物理组件 - 硬件)', 
+            'software': 'A collection of data or computer instructions (数据或计算机指令的集合 - 软件)', 
+            'variable': 'A storage location paired with an associated name (与关联名称配对的存储位置 - 变量)', 
+            'function': 'A sequence of program instructions for a specific task (用于特定任务的程序指令序列 - 函数)', 
+            'database': 'An organized collection of data (有组织的数据集合 - 数据库)', 
+            'protocol': 'A set of rules for formatting and processing data (格式化和处理数据的规则集 - 协议)', 
+            'terminal': 'A hardware or software interface for entering data (用于输入数据的硬件或软件界面 - 终端)', 
+            'compiler': 'A program that translates code to machine code (将代码翻译成机器代码的程序 - 编译器)', 
+            'frontend': 'The presentation layer of a software piece (软件的表示层 - 前端)', 
+            'firewall': 'A network security system that controls traffic (控制流量的网络安全系统 - 防火墙)',
+            'algorithm': 'A set of rules to be followed in calculations (计算中要遵循的一组规则 - 算法)', 
+            'processor': 'The electronic circuitry that executes instructions (执行指令的电子电路 - 处理器)', 
+            'bandwidth': 'The maximum rate of data transfer across a path (跨路径的数据传输的最大速率 - 带宽)', 
+            'framework': 'An abstraction in which software provides functionality (软件提供功能的抽象 - 框架)', 
+            'parameter': 'A special kind of variable used in a subroutine (子例程中使用的一种特殊变量 - 参数)', 
+            'interface': 'A shared boundary across which components exchange data (组件在其中交换数据的共享边界 - 接口)', 
+            'debugging': 'The process of finding and resolving bugs (查找和解决错误的过程 - 调试)', 
+            'directory': 'A file system cataloging structure (文件系统编录结构 - 目录)',
+            'encryption': 'The process of encoding information (编码信息的过程 - 加密)', 
+            'javascript': 'A language commonly used to create interactive web effects (常用于创建交互式网页效果的语言 - JavaScript)', 
+            'repository': 'A central file storage location (中央文件存储位置 - 代码仓库)', 
+            'cyberpunk': 'Sci-fi subgenre featuring advanced tech and a dystopian society (以先进技术和反乌托邦社会为特征的科幻子流派 - 赛博朋克)', 
+            'stylesheet': 'A document specifying how a web page should be rendered (指定应如何呈现网页的文档 - 样式表)', 
+            'networking': 'The exchange of information and ideas among systems (系统之间信息和思想的交换 - 网络互联)', 
+            'resolution': 'The number of distinct pixels that can be displayed (可显示的独特像素数 - 分辨率)',
+            'motherboard': 'The main printed circuit board in computers (计算机中的主印刷电路板 - 主板)', 
+            'environment': 'The state of a computer context (software/hardware) (计算机上下文的状态 - 环境)', 
+            'programming': 'The process of designing and building an executable program (设计和构建可执行程序的过程 - 编程)', 
+            'application': 'A computer program designed to carry out a specific task (设计用于执行特定任务的计算机程序 - 应用程序)', 
+            'performance': 'The amount of useful work accomplished by a system (系统完成的有用工作量 - 性能)', 
+            'development': 'The process of designing, programming, and testing software (设计、编程和测试软件的过程 - 开发)',
+            'cryptography': 'The practice of techniques for secure communication (安全通信技术的实践 - 密码学)', 
+            'architecture': 'Rules describing the functionality and organization of systems (描述系统功能和组织的规则 - 架构)', 
+            'authentication': 'The process of verifying the identity of a user (验证用户身份的过程 - 身份验证)', 
+            'optimization': 'Making the most effective use of a situation or resource (最有效地利用情况或资源 - 优化)', 
+            'asynchronous': 'Events or processes occurring independently of the main flow (独立于主流程发生的事件或进程 - 异步)', 
+            'polymorphism': 'Providing a single interface to entities of different types (为不同类型的实体提供单一接口 - 多态)', 
+            'vulnerability': 'A weakness which can be exploited by a threat actor (可能被威胁参与者利用的弱点 - 漏洞)', 
+            'configuration': 'The arrangement of hardware/software making up a system (构成系统的硬件/软件的排列 - 配置)',
+            'concurrency': 'The ability to run multiple parts of programs at the same time (同时运行程序的多个部分的能力 - 并发)',
+            'abstraction': 'Hiding complex implementation details and showing only the essential features (隐藏复杂的实现细节，仅显示基本功能 - 抽象)',
+            'scalability': 'The capability of a system to handle a growing amount of work (系统处理不断增长的工作量的能力 - 可扩展性)',
+            'microservices': 'An architectural style that structures an app as a collection of services (将应用程序构建为服务集合的架构风格 - 微服务)',
+            'serialization': 'Converting a data structure into a format that can be stored or transmitted (将数据结构转换为可存储或传输的格式 - 序列化)',
+            'multithreading': 'Execution of multiple threads concurrently within a single program (在单个程序中同时执行多个线程 - 多线程)',
+            'virtualization': 'Creating a virtual version of a resource, like a server or OS (创建资源的虚拟版本，如服务器或操作系统 - 虚拟化)',
+            'loadbalancing': 'Distributing network traffic across multiple servers (在多台服务器之间分配网络流量 - 负载均衡)',
+            'containerization': 'Packaging software code with just the OS libraries and dependencies (仅使用操作系统库和依赖项打包软件代码 - 容器化)',
+            'interoperability': 'The ability of computer systems or software to exchange and make use of information (计算机系统或软件交换和利用信息的能力 - 互操作性)',
+            'objectoriented': 'A programming paradigm based on the concept of objects (基于对象概念的编程范式 - 面向对象)',
+            'telecommunications': 'Communication over a distance by cable, telegraph, telephone, or broadcasting (通过电缆或广播进行的远距离通信 - 电信)',
+            'troubleshooting': 'A systematic approach to problem-solving (一种解决问题的系统方法 - 故障排除)'
+        };
+
+        // Screen Elements
+        const mainMenu = document.getElementById('main-menu');
+        const dictionaryMenu = document.getElementById('dictionary-menu');
+        const leaderboardMenu = document.getElementById('leaderboard-menu');
+        const gameScreen = document.getElementById('game-screen');
+        
+        // Menu Elements
+        const menuCurrencyDisplay = document.getElementById('menu-currency');
+        const lbList = document.getElementById('lb-list');
+
+        // Game settings
+        let fallSpeed = 0.4; // Starts much slower for Level 1 (was 0.8)
+        let animationFrameId;
+
+        // UI Functions
+        function updateMenuUI() {
+            menuCurrencyDisplay.innerText = gameData.currency;
+        }
+        
+        function saveData() { localStorage.setItem('terminalTyperData', JSON.stringify(gameData)); }
+        
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            if (screenId === 'main-menu') updateMenuUI();
+        }
+
+        // Populate Dictionary
+        function populateDictionary() {
+            const dictList = document.getElementById('dict-list');
+            dictList.innerHTML = '';
+            
+            // Flatten the wordsByLevel array and sort alphabetically
+            let allWords = wordsByLevel.flat().sort();
+            
+            allWords.forEach(word => {
+                let definition = wordDefinitions[word] || 'Definition not found.';
+                dictList.innerHTML += `
+                    <div class="dict-item">
+                        <span class="dict-word">${word}</span><br>
+                        <span class="dict-def">- ${definition}</span>
+                    </div>
+                `;
+            });
+        }
+
+        // Difficulty Selection
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+                e.target.classList.add('selected');
+                currentDifficulty = e.target.dataset.diff;
+            });
+        });
+
+        // Navigation Buttons
+        document.getElementById('btn-play').addEventListener('click', () => { 
+            switchScreen('game-screen'); 
+            startGame(); 
+        });
+        document.getElementById('btn-dictionary').addEventListener('click', () => {
+            populateDictionary();
+            switchScreen('dictionary-menu');
+        });
+        document.getElementById('btn-leaderboard').addEventListener('click', () => {
+            lbList.innerHTML = gameData.leaderboard.length > 0 
+                ? gameData.leaderboard.map(entry => `<li class="lb-item"><strong>${entry.name || 'ANON'}</strong> [${entry.diff.toUpperCase()}] <br>Raw: ${entry.rawScore} => Final: <strong>${entry.finalScore}</strong></li>`).join('')
+                : "<li>No data yet. Play a game!</li>";
+            switchScreen('leaderboard-menu');
+        });
+        document.getElementById('btn-back-dict').addEventListener('click', () => switchScreen('main-menu'));
+        document.getElementById('btn-back-lb').addEventListener('click', () => switchScreen('main-menu'));
+
+        // Next Level button event
+        nextLevelBtn.addEventListener('click', () => {
+            levelTransitionScreen.style.display = 'none';
+            isTransitioning = false;
+            typeInput.disabled = false;
+            typeInput.focus();
+            spawnWord();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        });
+
+        // Allow pressing Enter to continue to the next level
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && isTransitioning && levelTransitionScreen.style.display === 'block') {
+                nextLevelBtn.click();
+            }
+        });
+
+        // Return to Menu button event
+        rebootBtn.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            levelTransitionScreen.style.display = 'none';
+            // Clear existing words
+            activeWords.forEach(wordObj => gameContainer.removeChild(wordObj.element));
+            activeWords = [];
+            switchScreen('main-menu');
+        });
+
+        function spawnWord(wordType = 'normal') {
+            if (isGameOver) return;
+
+            let isBonus = (wordType === 'bonus');
+            let isFreeze = (wordType === 'freeze');
+
+            // Determine difficulty tier based on current level and difficulty offset (stops at max level array)
+            const difficultyIndex = Math.min(level - 1 + wordLevelOffset, wordsByLevel.length - 1);
+            const currentLevelWords = wordsByLevel[difficultyIndex];
+
+            // Pick a random word, ensuring it's not the exact same as any current active word or recently used ones
+            let wordText;
+            let attempts = 0; // Prevent infinite loops
+            do {
+                wordText = currentLevelWords[Math.floor(Math.random() * currentLevelWords.length)];
+                attempts++;
+            } while ((activeWords.some(w => w.text === wordText) || recentWords.includes(wordText)) && attempts < 50);
+            
+            if (wordType === 'normal') {
+                recentWords.push(wordText);
+                if (recentWords.length > 3) recentWords.shift(); // Keep only the last 3 words
+            }
+            
+            // 15% chance for a word to be a "danger" (red) word, BUT ONLY on Level 3 or higher
+            let isDanger = false;
+            if (wordType === 'normal') {
+                isDanger = (level >= 3) ? Math.random() < 0.15 : false;
+            }
+
+            // Create a new HTML element for the word
+            const wordEl = document.createElement('div');
+            wordEl.classList.add('word');
+            if (isDanger) wordEl.classList.add('danger');
+            if (isBonus) wordEl.classList.add('bonus');
+            if (isFreeze) wordEl.classList.add('freeze');
+            wordEl.innerText = wordText;
+
+            // Give it a random starting X position (keeping it inside the box)
+            // Calculate max width based on the actual container width
+            const containerWidth = gameContainer.clientWidth;
+            const maxLeft = containerWidth - (wordText.length * 12 + 20); // rough estimate of character width
+            const randomX = Math.max(0, Math.floor(Math.random() * maxLeft));
+            
+            wordEl.style.left = `${randomX}px`;
+            wordEl.style.top = '0px';
+
+            gameContainer.appendChild(wordEl);
+
+            // Add to our tracker array. Bonus words fall at half speed (0.5x multiplier). Danger words fall 2x faster (was 1.5x).
+            activeWords.push({
+                element: wordEl,
+                text: wordText,
+                y: 0,
+                isDanger: isDanger,
+                isBonus: isBonus,
+                isFreeze: isFreeze,
+                speedMultiplier: isBonus ? 0.5 : (isDanger ? 2.0 : 1.0)
+            });
+
+            // If we just spawned a regular word, check if a bonus or freeze word should spawn alongside it
+            if (wordType === 'normal') {
+                if (level >= 5 && Math.random() < 0.15) { // Cyan at level 5
+                    spawnWord('bonus');
+                }
+                if (level >= 10 && Math.random() < 0.05) { // Yellow at level 10
+                    spawnWord('freeze');
+                }
+            }
+        }
+
+        // New periodic spawner function
+        function handlePeriodicSpawn() {
+            if (isGameOver || isTransitioning) return;
+            
+            // Calculate max words: Starts at 1, maxes at 5. 
+            let maxWords = Math.max(1, Math.min(5, 1 + Math.floor(level / 3)));
+            let currentWords = activeWords.filter(w => !w.isBonus && !w.isFreeze).length;
+
+            if (currentWords < maxWords) {
+                spawnWord();
+            }
+        }
+
+        function gameLoop() {
+            if (isGameOver || isTransitioning) return;
+
+            loopCount++; 
+
+            // Move each active word down
+            for (let i = 0; i < activeWords.length; i++) {
+                let wordObj = activeWords[i];
+                
+                if (!isFrozen) {
+                    wordObj.y += (fallSpeed * wordObj.speedMultiplier);
+                }
+                
+                wordObj.element.style.top = `${wordObj.y}px`;
+
+                // Collision detection: Check if it hit the bottom
+                if (wordObj.y >= gameContainer.clientHeight - 25) { // 25px buffer for word height
+                    // Remove word from screen and array
+                    gameContainer.removeChild(wordObj.element);
+                    activeWords.splice(i, 1);
+
+                    if (wordObj.isDanger) {
+                        // Safely ignored a red word!
+                    } else if (wordObj.isBonus || wordObj.isFreeze) {
+                        // Missed a cyan or yellow word, do nothing. It's optional.
+                    } else {
+                        // Missed a regular word, lose a life
+                        lives--;
+                        livesDisplay.innerText = lives;
+
+                        if (lives <= 0) {
+                            triggerGameOver("SYSTEM BREACHED: Too many missed words.");
+                            return; // Stop processing further
+                        }
+                    }
+                    
+                    // If no regular/danger words are left on screen, spawn a new one to keep the game going
+                    if (activeWords.filter(w => !w.isBonus && !w.isFreeze).length === 0) {
+                        spawnWord();
+                    }
+                    
+                    i--; // Adjust index since we removed an item
+                }
+            }
+
+            // Call the next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Listen for typing
+        typeInput.addEventListener('input', (e) => {
+            const typedText = e.target.value.trim().toLowerCase();
+
+            // Look through active words to see if there's a match
+            for (let i = 0; i < activeWords.length; i++) {
+                if (activeWords[i].text === typedText) {
+                    
+                    // Did they type a red word?
+                    if (activeWords[i].isDanger) {
+                        triggerGameOver("FATAL ERROR: You executed a malicious red file!");
+                        return;
+                    }
+
+                    const typedWord = activeWords[i];
+
+                    // Match found! Destroy the word
+                    gameContainer.removeChild(typedWord.element); // Remove from screen
+                    activeWords.splice(i, 1); // Remove from array
+
+                    // Grant rewards based on word type
+                    if (typedWord.isBonus) {
+                        lives++;
+                        livesDisplay.innerText = lives;
+                        score += 20; // Bonus score for cyan words
+                        gameData.currency += 5; // Extra currency
+                    } else if (typedWord.isFreeze) {
+                        score += 20; // Bonus score for yellow words
+                        gameData.currency += 5;
+                        isFrozen = true;
+                        clearTimeout(freezeTimer);
+                        freezeTimer = setTimeout(() => { isFrozen = false; }, 4000); // Freeze for 4 seconds
+                    } else {
+                        score += 10;
+                        gameData.currency += 1; // 1 currency per normal word
+                    }
+                    saveData(); // Save currency data immediately
+
+                    // Reset input and update score
+                    typeInput.value = '';
+                    scoreDisplay.innerText = score;
+
+                    // Level up every 100 points
+                    const expectedLevel = Math.floor(score / 100) + 1;
+                    if (expectedLevel > level) {
+                        level = expectedLevel;
+                        levelDisplay.innerText = level;
+                        
+                        // Speed is now fixed per difficulty, so it no longer increases per level!
+                        
+                        // Trigger Level Transition break
+                        isTransitioning = true;
+                        cancelAnimationFrame(animationFrameId);
+                        typeInput.disabled = true;
+                        
+                        levelTitle.innerText = `LEVEL ${level}`;
+                        
+                        // Custom warnings
+                        if (level === 3) {
+                            levelMessage.innerHTML = `<span class="warning-text">WARNING: Malicious RED files detected!</span><br><br>DO NOT type them! Let red words fall safely to the bottom. Typing one will cause an instant game over.`;
+                        } else if (level === 5) {
+                            levelMessage.innerHTML = `<span style="color: #00ffff; text-shadow: 0 0 10px #00ffff; font-weight: bold;">SYSTEM UPDATE: Cyan files detected.</span><br><br>Type them to restore 1 Life! They fall slowly and accompany regular words.`;
+                        } else if (level === 10) {
+                            levelMessage.innerHTML = `<span style="color: #ffff00; text-shadow: 0 0 10px #ffff00; font-weight: bold;">SYSTEM UPDATE: Yellow Chrono-files detected.</span><br><br>Type them to temporarily freeze all incoming words!`;
+                        } else {
+                            levelMessage.innerHTML = "System upgraded successfully.<br>Take a brief pause before continuing.";
+                        }
+                        
+                        levelTransitionScreen.style.display = 'block';
+                    } else {
+                        // Only spawn the next word if we just cleared the last regular word
+                        if (activeWords.filter(w => !w.isBonus && !w.isFreeze).length === 0) {
+                            spawnWord();
+                        }
+                    }
+
+                    break; // Stop looking once we found a match
+                }
+            }
+        });
+
+        function triggerGameOver(reason) {
+            isGameOver = true;
+            clearInterval(spawnTimer);
+            clearTimeout(freezeTimer);
+            isFrozen = false;
+            cancelAnimationFrame(animationFrameId);
+            typeInput.disabled = true;
+            gameOverReason.innerText = reason;
+            gameOverScreen.style.display = 'block';
+
+            // Calculate final score and add to leaderboard
+            let playerName = document.getElementById('player-name-input').value.trim() || 'ANONYMOUS';
+            let finalScore = Math.floor(score * diffMultiplier);
+            gameData.leaderboard.push({
+                name: playerName,
+                diff: currentDifficulty,
+                rawScore: score,
+                finalScore: finalScore
+            });
+            gameData.leaderboard.sort((a, b) => b.finalScore - a.finalScore); // Highest score is best
+            gameData.leaderboard = gameData.leaderboard.slice(0, 10); // Keep top 10
+            saveData();
+        }
+
+        function startGame() {
+            // Clear existing words in case of restart
+            activeWords.forEach(wordObj => gameContainer.removeChild(wordObj.element));
+            activeWords = [];
+            
+            // Apply Difficulty Settings
+            let baseSpeed = 0.4;
+            if (currentDifficulty === 'easy') { baseSpeed = 0.4; diffMultiplier = 0.5; wordLevelOffset = 0; }
+            else if (currentDifficulty === 'medium') { baseSpeed = 0.7; diffMultiplier = 1; wordLevelOffset = 2; }
+            else if (currentDifficulty === 'hard') { baseSpeed = 1.0; diffMultiplier = 2; wordLevelOffset = 4; }
+
+            // Reset game session states
+            score = 0;
+            level = 1;
+            lives = 5;
+            scoreDisplay.innerText = score;
+            levelDisplay.innerText = level;
+            livesDisplay.innerText = lives;
+            document.getElementById('diff-display').innerText = currentDifficulty.toUpperCase();
+            
+            fallSpeed = baseSpeed;
+            
+            isGameOver = false;
+            isTransitioning = false;
+            isFrozen = false;
+            clearTimeout(freezeTimer);
+            recentWords = [];
+            loopCount = 0;
+            recordedLevel30 = false;
+            typeInput.disabled = false;
+            typeInput.value = '';
+            typeInput.focus();
+
+            // Start the periodic spawner
+            if (spawnTimer) clearInterval(spawnTimer);
+            spawnTimer = setInterval(handlePeriodicSpawn, 1500); // Check spawn every 1.5 seconds
+
+            // Spawn the first word immediately
+            spawnWord();
+            
+            // Start the animation loop
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Boot up the game when the window loads
+        window.onload = function() {
+            updateMenuUI();
+            // StartGame is now called from the Main Menu Play button
+        };
+    </script>
+</body>
+</html>

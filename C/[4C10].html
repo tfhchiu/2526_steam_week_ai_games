@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 第三人稱格鬥 - 刺客降臨</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Microsoft YaHei', sans-serif; user-select: none; }
+        #game-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
+        
+        /* --- 遊戲啟動頁與教學 --- */
+        #start-screen, #pause-screen, #tutorial-screen {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 10, 20, 0.95); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff;
+        }
+        #pause-screen { background: rgba(0, 0, 0, 0.8); display: none; z-index: 101; cursor: pointer; }
+        #pause-screen h1 { font-size: 48px; color: #fff; letter-spacing: 5px; }
+
+        #start-screen h1 { font-size: 64px; color: #00f2fe; text-shadow: 0 0 20px #4facfe; margin-bottom: 20px; letter-spacing: 5px; }
+        
+        .char-selection { margin-bottom: 30px; display: flex; gap: 20px; align-items: center; flex-direction: column;}
+        .char-btns { display: flex; gap: 15px; }
+        .char-btn { padding: 15px 25px; font-size: 20px; font-weight: bold; color: #aaa; background: #222; border: 2px solid #555; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .char-btn.selected { color: #fff; background: #333; border-color: #00f2fe; box-shadow: 0 0 15px #00f2fe; transform: scale(1.05); }
+        .char-btn.swordsman.selected { border-color: #aa00ff; box-shadow: 0 0 15px #aa00ff; }
+
+        .difficulty-section { display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 20px; }
+        .difficulty-btns { display: flex; gap: 20px; }
+        .diff-btn { padding: 12px 35px; font-size: 18px; font-weight: bold; color: #fff; background: #333; border: 2px solid #666; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .diff-btn:hover { transform: scale(1.1); }
+        .diff-btn.easy:hover { border-color: #00ffaa; box-shadow: 0 0 15px #00ffaa; }
+        .diff-btn.normal:hover { border-color: #4facfe; box-shadow: 0 0 15px #4facfe; }
+        .diff-btn.hard:hover { border-color: #ff0044; box-shadow: 0 0 15px #ff0044; }
+
+        .tutorial-btn { padding: 10px 30px; font-size: 18px; background: #444; color: #fff; border: 2px dashed #aaa; border-radius: 8px; cursor: pointer; }
+        .tutorial-btn:hover { background: #555; border-color: #fff; }
+
+        /* 教學面板 */
+        #tutorial-screen { display: none; z-index: 105; background: rgba(0,0,0,0.98); }
+        .tut-container { width: 80%; max-width: 1000px; max-height: 80vh; overflow-y: auto; background: #111; padding: 30px; border: 2px solid #555; border-radius: 10px; }
+        .tut-char { margin-bottom: 30px; padding: 20px; background: #222; border-left: 5px solid #00f2fe; }
+        .tut-char.swordsman { border-left-color: #aa00ff; }
+        .tut-char.cultivator { border-left-color: #00ffaa; }
+        .tut-char h2 { margin-top: 0; color: #fff; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        .tut-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;}
+        .tut-skill { background: #333; padding: 10px 15px; border-radius: 5px; }
+        .tut-key { display: inline-block; padding: 3px 8px; background: #fff; color: #000; font-weight: bold; border-radius: 4px; margin-right: 10px; font-size: 14px;}
+        .tut-close { display: block; margin: 20px auto 0; padding: 15px 40px; font-size: 20px; background: #ff0044; color: white; border: none; border-radius: 8px; cursor: pointer; }
+
+        /* --- UI 介面 --- */
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border: 2px dashed rgba(255, 0, 0, 0.5); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; display: none; animation: spin 4s linear infinite;}
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+        #esc-hint { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: rgba(255, 255, 255, 0.7); font-size: 14px; background: rgba(0, 0, 0, 0.5); padding: 5px 15px; border-radius: 20px; pointer-events: none; z-index: 10; display: none; border: 1px solid #444; }
+        #defend-hint { position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%); color: #00f2fe; font-size: 16px; background: rgba(0, 0, 0, 0.5); padding: 5px 15px; border-radius: 10px; pointer-events: none; z-index: 10; display: none; font-weight: bold;}
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; flex-direction: column; justify-content: space-between; }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 40px; margin-top: 30px; }
+        .player-info { width: 300px; background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; border: 2px solid #555; }
+        .player-info.left { border-color: #4facfe; }
+        .player-info.right { border-color: #ff0844; text-align: right; }
+        .name-score { font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .health-bar-bg { width: 100%; height: 20px; background: #333; border-radius: 10px; overflow: hidden; border: 1px solid #000; position: relative; }
+        .health-bar-fill { height: 100%; width: 100%; transition: width 0.2s; }
+        .left .health-bar-fill { background: linear-gradient(90deg, #00f2fe, #4facfe); }
+        .right .health-bar-fill { background: linear-gradient(90deg, #ff0844, #ffb199); transform-origin: right; }
+        .hp-quarter-mark { position: absolute; top: 0; left: 25%; width: 2px; height: 100%; background: #fff; z-index: 5; opacity: 0.5; }
+        
+        .score-board { font-size: 40px; font-weight: 900; color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); display: flex; flex-direction: column; align-items: center; }
+        .score-target { font-size: 14px; color: #aaa; margin-top: 5px; }
+
+        .bottom-bar { display: flex; justify-content: center; padding-bottom: 30px; gap: 15px; }
+        .skill-btn { position: relative; width: 85px; height: 85px; background: rgba(30, 30, 30, 0.8); border: 2px solid #666; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.5); overflow: hidden; text-align: center; }
+        .skill-btn .key { position: absolute; top: 2px; left: 5px; font-size: 14px; color: #ffaa00; }
+        .skill-btn .name { font-size: 14px; z-index: 2; line-height: 1.2; }
+        .skill-cd-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: rgba(0, 0, 0, 0.7); z-index: 1; display: flex; justify-content: center; align-items: center; font-size: 24px; color: #ff4d4d; }
+        .skill-btn.ready { border-color: #4facfe; box-shadow: 0 0 15px rgba(79, 172, 254, 0.6); }
+        .skill-btn.disabled { border-color: #333; opacity: 0.5; }
+        .skill-btn.ultimate-ready { border-color: #aa00ff; box-shadow: 0 0 20px rgba(170, 0, 255, 0.8); animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        
+        #message-box { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 50px; font-weight: 900; color: #fff; text-shadow: 2px 2px 0 #000, 0 0 20px #ff0000; opacity: 0; transition: opacity 0.3s; text-align: center; z-index: 50; width: 100%;}
+        #charge-text { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; font-weight: bold; color: #aa00ff; text-shadow: 0 0 10px #000; display: none; z-index: 60; pointer-events: none; }
+
+        #game-over-screen { display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 200; flex-direction: column; justify-content: center; align-items: center; }
+        #game-over-title { font-size: 80px; margin-bottom: 30px; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>3D 第三人稱格鬥</h1>
+        
+        <div class="char-selection">
+            <h3 style="margin: 0; color: #aaa;">選擇你的角色</h3>
+            <div class="char-btns">
+                <button class="char-btn selected" id="btn-char-brawler" onclick="selectChar('brawler')">勞子 (近戰體術)</button>
+                <button class="char-btn" id="btn-char-cultivator" onclick="selectChar('cultivator')">修行者 (法術)</button>
+                <button class="char-btn swordsman" id="btn-char-swordsman" onclick="selectChar('swordsman')">劍士 (黑色刺客)</button>
+            </div>
+        </div>
+
+        <div class="difficulty-section">
+            <h3 style="margin: 0; color: #aaa;">選擇難度 (先拿10分獲勝)</h3>
+            <div class="difficulty-btns">
+                <button class="diff-btn easy" onclick="requestGameStart('easy')">簡單</button>
+                <button class="diff-btn normal" onclick="requestGameStart('normal')">普通</button>
+                <button class="diff-btn hard" onclick="requestGameStart('hard')">困難</button>
+            </div>
+        </div>
+
+        <button class="tutorial-btn" onclick="document.getElementById('tutorial-screen').style.display='flex'">📖 查看角色技能教學</button>
+    </div>
+
+    <div id="tutorial-screen">
+        <div class="tut-container">
+            <h1 style="text-align: center; color: #ffd700; margin-top:0;">📜 角色技能大全</h1>
+            
+            <div class="tut-char swordsman">
+                <h2>🗡️ 劍士 (黑色刺客)</h2>
+                <div class="tut-grid">
+                    <div class="tut-skill"><span class="tut-key">左鍵</span> 揮砍：近戰傷害 5 點。</div>
+                    <div class="tut-skill"><span class="tut-key">長按右鍵</span> 防禦：舉刀格擋，大幅降低傷害並免疫控制。</div>
+                    <div class="tut-skill"><span class="tut-key">E 鍵</span> 突刺：往前衝刺，造成 20 點傷害與 1 秒眩暈。</div>
+                    <div class="tut-skill"><span class="tut-key">R 鍵</span> 飛刀背刺：丟出飛刀，命中後瞬移到背後踢飛敵人，造成 35 點傷害與 2 秒眩暈。</div>
+                    <div class="tut-skill"><span class="tut-key">長按 F</span> 蓄力劍氣：長按越久範圍越大、傷害越高（每秒+1）。鬆開釋放。</div>
+                    <div class="tut-skill"><span class="tut-key">V 鍵</span> 瞬殺·滅 (大招)：<b>發動條件：血量低於 25% 且 E、R、F 皆在冷卻中。</b>射出劍氣，命中觸發5秒滯空連斬+秒殺重壓。</div>
+                </div>
+            </div>
+
+            <div class="tut-char">
+                <h2>👊 勞子 (近戰體術)</h2>
+                <div class="tut-grid">
+                    <div class="tut-skill"><span class="tut-key">左鍵</span> 普攻：近戰連擊。</div>
+                    <div class="tut-skill"><span class="tut-key">E 鍵</span> 技能1：短推掌，擊退並造成傷害。</div>
+                    <div class="tut-skill"><span class="tut-key">R 鍵</span> 技能2：快速衝刺突進。</div>
+                    <div class="tut-skill"><span class="tut-key">F 鍵</span> 技能3：上勾拳擊飛。</div>
+                    <div class="tut-skill"><span class="tut-key">V 鍵</span> 極限亂舞 (大招)：<b>發動條件：血量低於 25%。</b>無敵瞬移殘影連打，重擊收尾。</div>
+                </div>
+            </div>
+
+            <div class="tut-char cultivator">
+                <h2>✨ 修行者 (元氣法術)</h2>
+                <div class="tut-grid">
+                    <div class="tut-skill"><span class="tut-key">左鍵</span> 元氣彈：遠程射擊小火球。</div>
+                    <div class="tut-skill"><span class="tut-key">E 鍵</span> 元氣拳：附帶元氣的高速衝刺攻擊。</div>
+                    <div class="tut-skill"><span class="tut-key">長按 R</span> 蓄力踢：長按滿 3 秒後自動釋放，給予致命一擊。</div>
+                    <div class="tut-skill"><span class="tut-key">長按 F</span> 大元氣彈：蓄力增加傷害，鬆開後發射巨大元氣彈。</div>
+                    <div class="tut-skill"><span class="tut-key">V 鍵</span> 毀天滅地 (大招)：<b>發動條件：血量低於 25%。</b>擊飛至高空後，用光束砲秒殺。</div>
+                </div>
+            </div>
+
+            <button class="tut-close" onclick="document.getElementById('tutorial-screen').style.display='none'">關閉教學</button>
+        </div>
+    </div>
+
+    <div id="pause-screen">
+        <h1>遊戲已暫停</h1>
+        <p>點擊畫面任何一處返回戰鬥</p>
+    </div>
+
+    <div id="game-over-screen">
+        <h1 id="game-over-title">勝利！</h1>
+        <button class="diff-btn normal" onclick="location.reload()">重新開始</button>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="esc-hint">按 [ESC] 暫停 / 呼出滑鼠</div>
+    <div id="defend-hint">💡 目標已鎖定！長按【右鍵】防禦 | WASD 橫移</div>
+
+    <div id="game-container"></div>
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="player-info left">
+                <div class="name-score"><span id="player-name-ui">玩家</span><span id="player-hp-text">100/100</span></div>
+                <div class="health-bar-bg">
+                    <div class="hp-quarter-mark"></div>
+                    <div class="health-bar-fill" id="player-hp-bar"></div>
+                </div>
+            </div>
+            <div class="score-board">
+                <span><span id="score-player">0</span> : <span id="score-npc">0</span></span>
+                <span class="score-target">目標: 10 分</span>
+            </div>
+            <div class="player-info right">
+                <div class="name-score"><span id="npc-hp-text">100/100</span><span id="npc-name-ui">無名守衛</span></div>
+                <div class="health-bar-bg">
+                    <div class="hp-quarter-mark"></div>
+                    <div class="health-bar-fill" id="npc-hp-bar"></div>
+                </div>
+            </div>
+        </div>
+        <div id="message-box"></div>
+        <div id="charge-text"></div>
+        <div class="bottom-bar">
+            <div class="skill-btn ready" id="btn-atk"><span class="key">左鍵</span><span class="name">普攻</span><div class="skill-cd-overlay" id="cd-atk"></div></div>
+            <div class="skill-btn ready" id="btn-s1"><span class="key">E</span><span class="name">技能 1</span><div class="skill-cd-overlay" id="cd-s1"></div></div>
+            <div class="skill-btn ready" id="btn-s2"><span class="key">R</span><span class="name">技能 2</span><div class="skill-cd-overlay" id="cd-s2"></div></div>
+            <div class="skill-btn ready" id="btn-s3"><span class="key">F</span><span class="name">技能 3</span><div class="skill-cd-overlay" id="cd-s3"></div></div>
+            <div class="skill-btn disabled" id="btn-s4"><span class="key">V</span><span class="name">終極奧義<br><span style='font-size:10px'>(殘血發動)</span></span><div class="skill-cd-overlay" id="cd-s4"></div></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // --- 遊戲全局狀態 ---
+        let gameStarted = false;
+        let isCinematic = false; 
+        let isRoundResetting = false;
+        let isPointerLocked = false;
+        let isGameOver = false;
+        let score = { player: 0, npc: 0 };
+        let selectedChar = 'brawler';
+        let currentDifficulty = 'normal';
+        
+        let cameraYaw = 0;   
+        let cameraPitch = 0.2; 
+        let cameraYawOffset = 0; 
+        
+        const GAME_CONFIG = { arenaRadius: 20, arenaY: 0, fallDeathY: -10, gravity: -30 };
+
+        const container = document.getElementById('game-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a14);
+        scene.fog = new THREE.Fog(0x0a0a14, 10, 80);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        let effects = [];
+        let projectiles = [];
+
+        // --- 擂台 ---
+        const arenaGeo = new THREE.CylinderGeometry(GAME_CONFIG.arenaRadius, GAME_CONFIG.arenaRadius + 2, 2, 64);
+        const arenaMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+        const arena = new THREE.Mesh(arenaGeo, arenaMat);
+        arena.position.y = -1; arena.receiveShadow = true; scene.add(arena);
+
+        const gridGeo = new THREE.CylinderGeometry(GAME_CONFIG.arenaRadius, GAME_CONFIG.arenaRadius, 0.1, 64);
+        const gridMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, wireframe: true, transparent: true, opacity: 0.1 });
+        const grid = new THREE.Mesh(gridGeo, gridMat); grid.position.y = 0.05; scene.add(grid);
+
+        // --- 角色類 ---
+        class Fighter {
+            constructor(name, baseColor, startPos, isPlayer = false, charType = 'brawler') {
+                this.name = name;
+                this.isPlayer = isPlayer;
+                this.charType = charType;
+                this.maxHp = 100;
+                this.hp = 100;
+                
+                this.pos = new THREE.Vector3(startPos.x, startPos.y, startPos.z);
+                this.vel = new THREE.Vector3(0, 0, 0);
+                this.isGrounded = false;
+                this.isDead = false;
+                
+                this.isDefending = false;
+                this.stunTimer = 0;
+                this.flurryTimer = 0;
+                this.flurryTick = 0;
+                this.chargeR = 0;
+                this.chargeF = 0;
+                this.isDashing = false;
+                this.dashSkill = '';
+                this.walkCycle = 0;
+                this.atkState = { active: false, type: '', time: 0 };
+                this.baseColor = baseColor;
+                this.facingDir = new THREE.Vector3(0, 0, 1);
+
+                if (charType === 'cultivator') {
+                    this.skills = {
+                        atk: { cd: 0.5, currentCd: 0, range: 20 },
+                        s1: { cd: 8, currentCd: 0, damage: 25, range: 4.5 }, 
+                        s2: { cd: 12, currentCd: 0, damage: 30, range: 4.5 },
+                        s3: { cd: 10, currentCd: 0, damage: 0, range: 20 },  
+                        s4: { cd: 60, currentCd: 0, damage: 9999, range: 8 } 
+                    };
+                } else if (charType === 'swordsman') {
+                    this.skills = {
+                        atk: { cd: 0.4, currentCd: 0, range: 4.0 },
+                        s1: { cd: 8, currentCd: 0, damage: 20, range: 6 }, // 突刺
+                        s2: { cd: 12, currentCd: 0, damage: 35, range: 30 }, // 飛刀背刺
+                        s3: { cd: 10, currentCd: 0, damage: 15, range: 5 }, // 蓄力劍氣
+                        s4: { cd: 60, currentCd: 0, damage: 9999, range: 30 } // 瞬殺滅
+                    };
+                } else {
+                    this.skills = { 
+                        atk: { cd: 0.25, currentCd: 0, range: 4.0 },
+                        s1: { cd: 9, currentCd: 0, damage: 10, range: 4.5 },
+                        s2: { cd: 13, currentCd: 0, damage: 8, range: 4.5 },
+                        s3: { cd: 5, currentCd: 0, damage: 5, range: 4.5 },
+                        s4: { cd: 60, currentCd: 0, damage: 80, range: 8 } 
+                    };
+                }
+
+                this.buildModel(baseColor);
+                this.mesh.position.copy(this.pos);
+                scene.add(this.mesh);
+            }
+
+            buildModel(color) {
+                this.mesh = new THREE.Group();
+                this.matBody = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+                this.matSkin = this.charType === 'swordsman' ? new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 }) : new THREE.MeshStandardMaterial({ color: 0xffccaa, roughness: 0.5 });
+                this.matDark = new THREE.MeshStandardMaterial({ color: this.charType === 'swordsman' ? 0x050505 : 0x222222, roughness: 0.9 });
+                this.matJoint = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 });
+                this.materials = [this.matBody, this.matSkin, this.matDark, this.matJoint];
+
+                this.body = new THREE.Group(); this.body.position.y = 1.9; this.mesh.add(this.body);
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.8), this.matBody); this.body.add(torso);
+                
+                this.neck = new THREE.Group(); this.neck.position.y = 0.7; this.body.add(this.neck);
+                this.head = new THREE.Group(); this.head.position.y = 0.3; this.neck.add(this.head);
+                const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), this.charType === 'swordsman' ? this.matDark : this.matSkin); headMesh.position.y=0.4; this.head.add(headMesh);
+
+                // 左手
+                this.armL = new THREE.Group(); this.armL.position.set(-0.8, 0.5, 0); this.body.add(this.armL);
+                this.armL.add(new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), this.matJoint));
+                const uArmL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.35), this.matBody); uArmL.position.y = -0.25; this.armL.add(uArmL);
+                this.lowerArmL = new THREE.Group(); this.lowerArmL.position.y = -0.5; this.armL.add(this.lowerArmL);
+                this.lowerArmL.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), this.matJoint));
+                const lArmL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3), this.matSkin); lArmL.position.y = -0.25; this.lowerArmL.add(lArmL);
+
+                // 右手 (如果劍士，裝備劍)
+                this.armR = new THREE.Group(); this.armR.position.set(0.8, 0.5, 0); this.body.add(this.armR);
+                this.armR.add(new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), this.matJoint));
+                const uArmR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.35), this.matBody); uArmR.position.y = -0.25; this.armR.add(uArmR);
+                this.lowerArmR = new THREE.Group(); this.lowerArmR.position.y = -0.5; this.armR.add(this.lowerArmR);
+                this.lowerArmR.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), this.matJoint));
+                const lArmR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3), this.matSkin); lArmR.position.y = -0.25; this.lowerArmR.add(lArmR);
+
+                if (this.charType === 'swordsman') {
+                    const swordMat = new THREE.MeshStandardMaterial({color: 0xaaaaaa, metalness: 0.8, roughness: 0.2});
+                    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.0, 0.2), swordMat);
+                    sword.position.set(0, -1.2, 0.2); // 握在手上
+                    sword.rotation.x = -Math.PI / 4;
+                    this.lowerArmR.add(sword);
+                }
+
+                // 左腿
+                this.legL = new THREE.Group(); this.legL.position.set(-0.35, 1.2, 0); this.mesh.add(this.legL);
+                this.legL.add(new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), this.matJoint));
+                const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.45), this.matDark); thighL.position.y = -0.3; this.legL.add(thighL);
+                this.lowerLegL = new THREE.Group(); this.lowerLegL.position.y = -0.6; this.legL.add(this.lowerLegL);
+                this.lowerLegL.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), this.matJoint));
+                const calfL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.4), this.matDark); calfL.position.y = -0.3; this.lowerLegL.add(calfL);
+
+                // 右腿
+                this.legR = new THREE.Group(); this.legR.position.set(0.35, 1.2, 0); this.mesh.add(this.legR);
+                this.legR.add(new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), this.matJoint));
+                const thighR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.45), this.matDark); thighR.position.y = -0.3; this.legR.add(thighR);
+                this.lowerLegR = new THREE.Group(); this.lowerLegR.position.y = -0.6; this.legR.add(this.lowerLegR);
+                this.lowerLegR.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), this.matJoint));
+                const calfR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.4), this.matDark); calfR.position.y = -0.3; this.lowerLegR.add(calfR);
+            }
+
+            update(dt) {
+                if (!gameStarted || this.isDead || isGameOver) return;
+                
+                for (let key in this.skills) {
+                    if (this.skills[key].currentCd > 0) this.skills[key].currentCd = Math.max(0, this.skills[key].currentCd - dt);
+                }
+                if (this.isPlayer) updateSkillUI();
+
+                if (this.isPlayer && !isCinematic && this.stunTimer <= 0 && !this.isDashing) {
+                    this.lookAtTarget(npc.pos);
+                }
+
+                if (this.stunTimer > 0) {
+                    this.stunTimer -= dt;
+                    this.isDefending = false;
+                    this.head.rotation.z = Math.sin(Date.now() / 50) * 0.3; 
+                    this.updatePhysics(dt);
+                    return; 
+                }
+
+                if (this.isPlayer) {
+                    this.isDefending = keys.rightClick; 
+                    
+                    if (this.charType === 'cultivator') {
+                        if (keys.r && this.skills.s2.currentCd <= 0) {
+                            this.chargeR += dt;
+                            showChargeText(`蓄力踢: ${(this.chargeR).toFixed(1)}s / 3.0s`);
+                            if (this.chargeR >= 3.0) {
+                                executeSkill(this, npc, 's2_execute');
+                                this.chargeR = 0; keys.r = false; hideChargeText();
+                            }
+                        } else if (!keys.r && this.chargeR > 0) {
+                            this.chargeR = 0; hideChargeText();
+                        }
+
+                        if (keys.f && this.skills.s3.currentCd <= 0) {
+                            this.chargeF += dt;
+                            showChargeText(`大元气弹 充能: +${Math.floor(this.chargeF * 5)} 傷害`);
+                        } else if (!keys.f && this.chargeF > 0) {
+                            executeSkill(this, npc, 's3_execute');
+                            this.chargeF = 0; hideChargeText();
+                        }
+                    } else if (this.charType === 'swordsman') {
+                        if (keys.f && this.skills.s3.currentCd <= 0) {
+                            this.chargeF += dt;
+                            showChargeText(`大劍氣 充能: +${Math.floor(this.chargeF)} 範圍與傷害`);
+                        } else if (!keys.f && this.chargeF > 0) {
+                            executeSkill(this, npc, 's3_execute');
+                            this.chargeF = 0; hideChargeText();
+                        }
+                    }
+                }
+
+                if (this.flurryTimer > 0) {
+                    this.flurryTimer -= dt;
+                    this.flurryTick -= dt;
+                    if (this.flurryTick <= 0) {
+                        const target = this.isPlayer ? npc : player;
+                        target.takeDamage(5, 0, this.pos); 
+                        this.flurryTick = 0.4;
+                    }
+                    this.updateAnimations(dt);
+                    return; 
+                }
+
+                if (this.isDefending) { this.vel.x = 0; this.vel.z = 0; }
+
+                if (this.isDashing && !isCinematic) {
+                    this.dashTimer -= dt;
+                    const target = this.isPlayer ? npc : player;
+                    
+                    if (this.dashSkill === 'E_Thrust_Sword') {
+                        if (this.pos.distanceTo(target.pos) < 3.0 && this.dashTimer > 0) {
+                            this.isDashing = false; this.vel.set(0,0,0);
+                            target.takeDamage(20, 0, this.pos);
+                            target.stunTimer = 1.0;
+                            createAttackVFX(this, 0xaa00ff, 3.0);
+                        }
+                    } else if (this.pos.distanceTo(target.pos) < 3.0) {
+                        this.isDashing = false; this.vel.set(0,0,0);
+                        if (this.dashSkill === 'E_Flurry') {
+                            target.stunTimer = 2.0; this.flurryTimer = 2.0; this.flurryTick = 0;
+                        } else if (this.dashSkill === 'R_Kick') {
+                            target.takeDamage(target.maxHp * 0.3, 15, this.pos, 5); 
+                            createAttackVFX(this, 0x00ffaa, 3.0);
+                        }
+                    } 
+                    if (this.dashTimer <= 0) {
+                        this.isDashing = false;
+                    }
+                }
+
+                if (!isCinematic) this.updatePhysics(dt);
+                else if (this.isCinematicActor) this.mesh.position.copy(this.pos);
+
+                this.updateAnimations(dt);
+            }
+
+            updatePhysics(dt) {
+                if (!this.isGrounded) this.vel.y += GAME_CONFIG.gravity * dt;
+                this.vel.x -= this.vel.x * 5 * dt;
+                this.vel.z -= this.vel.z * 5 * dt;
+                this.pos.addScaledVector(this.vel, dt);
+
+                const distCenter = Math.sqrt(this.pos.x ** 2 + this.pos.z ** 2);
+                if (distCenter <= GAME_CONFIG.arenaRadius) {
+                    if (this.pos.y <= GAME_CONFIG.arenaY) {
+                        this.pos.y = GAME_CONFIG.arenaY; this.vel.y = 0; this.isGrounded = true;
+                    } else this.isGrounded = false;
+                } else this.isGrounded = false;
+
+                if (this.pos.y < GAME_CONFIG.fallDeathY || this.hp <= 0) this.die();
+
+                this.mesh.position.copy(this.pos);
+                if (!this.isPlayer && !this.isDashing && !this.isDefending && this.stunTimer <= 0) {
+                    const speedSq = this.vel.x**2 + this.vel.z**2;
+                    if (speedSq > 0.1) {
+                        this.facingDir.set(this.vel.x, 0, this.vel.z).normalize();
+                        this.mesh.rotation.y = Math.atan2(this.facingDir.x, this.facingDir.z);
+                    }
+                }
+            }
+
+            updateAnimations(dt) {
+                if (this.isDefending) {
+                    if (this.charType === 'swordsman') {
+                        // 舉刀橫身防禦
+                        this.armR.rotation.x = -Math.PI / 2; this.armR.rotation.z = Math.PI / 4; 
+                        this.lowerArmR.rotation.x = -Math.PI / 2;
+                        this.armL.rotation.x = 0;
+                        this.body.rotation.y = -0.5;
+                    } else {
+                        this.armL.rotation.x = -Math.PI / 2.5; this.armL.rotation.z = Math.PI / 4; this.lowerArmL.rotation.x = -Math.PI / 2;
+                        this.armR.rotation.x = -Math.PI / 2.5; this.armR.rotation.z = -Math.PI / 4; this.lowerArmR.rotation.x = -Math.PI / 2;
+                        this.body.rotation.x = 0.2;
+                    }
+                    return;
+                }
+                this.body.rotation.y = 0; // reset
+                if (this.flurryTimer > 0) {
+                    this.armL.rotation.x = -Math.abs(Math.sin(this.flurryTimer * 25)) * Math.PI * 0.8;
+                    this.armR.rotation.x = -Math.abs(Math.cos(this.flurryTimer * 25)) * Math.PI * 0.8;
+                    return;
+                }
+                if (this.chargeR > 0) {
+                    this.legR.rotation.x = -0.5; this.lowerLegR.rotation.x = 0; 
+                    this.body.rotation.x = -0.2; 
+                    return;
+                }
+                if (this.chargeF > 0) {
+                    if (this.charType === 'swordsman') {
+                        this.armR.rotation.x = Math.PI; // 高舉劍
+                        this.armR.rotation.z = Math.sin(Date.now()/50) * 0.1; // 震動
+                    } else {
+                        this.armL.rotation.x = Math.PI; this.armR.rotation.x = Math.PI; 
+                    }
+                    return;
+                }
+
+                if (this.atkState.type === 'shoot' || this.atkState.type === 'slash') {
+                    this.atkState.time += dt;
+                    if (this.atkState.time < 0.2) {
+                        this.armR.rotation.x = -Math.PI / 2; this.lowerArmR.rotation.x = 0;
+                    } else {
+                        this.atkState.type = '';
+                    }
+                    return;
+                }
+
+                this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, 0, 0.2);
+                this.head.rotation.z = THREE.MathUtils.lerp(this.head.rotation.z, 0, 0.2);
+                this.armL.rotation.z = THREE.MathUtils.lerp(this.armL.rotation.z, 0, 0.2);
+                this.armR.rotation.z = THREE.MathUtils.lerp(this.armR.rotation.z, 0, 0.2);
+                
+                const speed = Math.sqrt(this.vel.x**2 + this.vel.z**2);
+                if (speed > 0.1 && this.isGrounded && !this.isDashing) {
+                    this.walkCycle += dt * 15;
+                    const moveL = Math.sin(this.walkCycle), moveR = Math.sin(this.walkCycle + Math.PI);
+                    this.legL.rotation.x = moveL * 0.7; this.legR.rotation.x = moveR * 0.7;
+                    this.lowerLegL.rotation.x = Math.max(0, -moveL * 1.0); this.lowerLegR.rotation.x = Math.max(0, -moveR * 1.0);
+                    this.armL.rotation.x = moveR * 0.5; this.armR.rotation.x = moveL * 0.5;
+                } else {
+                    this.legL.rotation.x = THREE.MathUtils.lerp(this.legL.rotation.x, 0, 0.2);
+                    this.lowerLegL.rotation.x = THREE.MathUtils.lerp(this.lowerLegL.rotation.x, 0, 0.2);
+                    this.legR.rotation.x = THREE.MathUtils.lerp(this.legR.rotation.x, 0, 0.2);
+                    this.lowerLegR.rotation.x = THREE.MathUtils.lerp(this.lowerLegR.rotation.x, 0, 0.2);
+                    this.armL.rotation.x = THREE.MathUtils.lerp(this.armL.rotation.x, 0, 0.2);
+                    this.armR.rotation.x = THREE.MathUtils.lerp(this.armR.rotation.x, 0, 0.2);
+                }
+            }
+
+            takeDamage(amount, knockback, sourcePos, yKnockback = 0, ignoreCinematic = false) {
+                if (this.isDead || (isCinematic && !ignoreCinematic)) return;
+                
+                if (this.isDefending) {
+                    amount = Math.max(1, Math.floor(amount * 0.1)); 
+                    knockback = 0; yKnockback = 0;
+                    createHitEffect(this.pos.clone().add(new THREE.Vector3(0,1,0)), 0x00ffff); 
+                }
+
+                this.hp = Math.max(0, this.hp - amount);
+                
+                if (knockback > 0 && this.stunTimer <= 0) {
+                    const dir = new THREE.Vector3().subVectors(this.pos, sourcePos); dir.y = 0; dir.normalize();
+                    this.vel.x += dir.x * knockback; this.vel.z += dir.z * knockback;
+                }
+                if (yKnockback > 0 && !this.isDefending) {
+                    this.vel.y = yKnockback; this.isGrounded = false;
+                }
+
+                if (this.materials) this.materials.forEach(m => m.color.setHex(0xff0000));
+                setTimeout(() => {
+                    this.matBody.color.setHex(this.baseColor);
+                    this.matSkin.color.setHex(this.charType === 'swordsman' ? 0xdddddd : 0xffccaa);
+                    this.matDark.color.setHex(this.charType === 'swordsman' ? 0x050505 : 0x222222); 
+                    this.matJoint.color.setHex(0x444444);
+                }, 200);
+
+                updateHealthUI();
+                if(!this.isDefending) createHitEffect(this.pos.clone().add(new THREE.Vector3(0, 1.5, 0)));
+            }
+
+            die() {
+                if (this.isDead) return;
+                this.isDead = true;
+                this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.5;
+
+                if (this.isPlayer) { score.npc++; showMessage("回合戰敗！", "#ff0000"); }
+                else { score.player++; showMessage("回合勝利！", "#ffd700"); }
+                
+                updateScoreUI();
+                if (score.player >= 10 || score.npc >= 10) {
+                    isGameOver = true;
+                    setTimeout(() => showGameOver(score.player >= 10 ? "修行完成！10 分獲勝！" : "你被打敗了！", score.player >= 10 ? "#00f2fe" : "#ff0000"), 1500);
+                } else if (!isRoundResetting) {
+                    isRoundResetting = true; setTimeout(resetRound, 3000);
+                }
+            }
+
+            lookAtTarget(targetPos) {
+                const dir = new THREE.Vector3().subVectors(targetPos, this.pos); dir.y = 0; dir.normalize();
+                this.facingDir.copy(dir);
+                this.mesh.rotation.y = Math.atan2(this.facingDir.x, this.facingDir.z);
+            }
+        }
+
+        // --- 飛行物 (支援特殊回調) ---
+        class Projectile {
+            constructor(pos, dir, speed, damage, owner, scale=1, type='normal', onHit=null, color=0x00ffff) {
+                this.pos = pos.clone(); this.dir = dir.clone().normalize();
+                this.speed = speed; this.damage = damage; this.owner = owner;
+                this.active = true; this.scale = scale;
+                this.onHit = onHit;
+
+                let geo = type === 'dagger' ? new THREE.ConeGeometry(0.3, 1.2, 8) : new THREE.SphereGeometry(scale, 16, 16);
+                if(type === 'sword_aura') geo = new THREE.BoxGeometry(scale*2, 0.2, scale);
+                
+                const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+                this.mesh = new THREE.Mesh(geo, mat);
+                
+                if (type === 'dagger' || type === 'sword_aura') {
+                    this.mesh.lookAt(this.pos.clone().add(this.dir));
+                    if(type === 'dagger') this.mesh.rotateX(Math.PI/2);
+                }
+                
+                this.mesh.position.copy(this.pos);
+                scene.add(this.mesh);
+            }
+            update(dt) {
+                if (!this.active) return;
+                this.pos.addScaledVector(this.dir, this.speed * dt);
+                this.mesh.position.copy(this.pos);
+
+                let target = this.owner.isPlayer ? npc : player;
+                if (this.pos.distanceTo(target.pos) < 1.5 + this.scale) {
+                    if (this.onHit) {
+                        this.onHit(target);
+                    } else {
+                        target.takeDamage(this.damage, 2, this.pos);
+                    }
+                    createHitEffect(this.pos, this.mesh.material.color.getHex());
+                    this.destroy();
+                }
+                if (this.pos.length() > GAME_CONFIG.arenaRadius * 2.5) this.destroy();
+            }
+            destroy() {
+                this.active = false; scene.remove(this.mesh);
+            }
+        }
+
+        let player, npc;
+
+        // --- 輸入控制 ---
+        const keys = { w: false, a: false, s: false, d: false, r: false, f: false, leftClick: false, rightClick: false };
+
+        window.addEventListener('contextmenu', e => e.preventDefault()); 
+
+        document.addEventListener('pointerlockchange', () => {
+            isPointerLocked = document.pointerLockElement === document.body;
+            if (!isPointerLocked && gameStarted && !isGameOver && !isRoundResetting) {
+                document.getElementById('pause-screen').style.display = 'flex';
+                document.getElementById('crosshair').style.display = 'none';
+                document.getElementById('defend-hint').style.display = 'none';
+            } else if (isPointerLocked && gameStarted) {
+                document.getElementById('pause-screen').style.display = 'none';
+                document.getElementById('crosshair').style.display = 'block';
+                document.getElementById('defend-hint').style.display = 'block';
+            }
+        });
+
+        document.getElementById('pause-screen').addEventListener('click', () => document.body.requestPointerLock());
+
+        document.addEventListener('mousemove', (e) => {
+            if (isPointerLocked && !isCinematic && !player.isDead) {
+                cameraYawOffset -= e.movementX * 0.002;
+                cameraYawOffset = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraYawOffset));
+                
+                cameraPitch += e.movementY * 0.002;
+                cameraPitch = Math.max(-Math.PI/4, Math.min(Math.PI/3, cameraPitch));
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (!gameStarted || !isPointerLocked || isCinematic || player.isDead || isRoundResetting) return;
+            const key = e.key.toLowerCase();
+            if (key === 'w' || e.key === 'ArrowUp') keys.w = true;
+            if (key === 's' || e.key === 'ArrowDown') keys.s = true;
+            if (key === 'a' || e.key === 'ArrowLeft') keys.a = true;
+            if (key === 'd' || e.key === 'ArrowRight') keys.d = true;
+            if (key === 'r') keys.r = true;
+            if (key === 'f') keys.f = true;
+
+            if (key === 'e') executeSkill(player, npc, 's1');
+            if (key === 'r' && player.charType !== 'cultivator') executeSkill(player, npc, 's2');
+            if (key === 'f' && player.charType === 'brawler') executeSkill(player, npc, 's3');
+            if (key === 'v') executeSkill(player, npc, 's4');
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keys.w = false; if (key === 's') keys.s = false;
+            if (key === 'a') keys.a = false; if (key === 'd') keys.d = false;
+            if (key === 'r') keys.r = false; if (key === 'f') keys.f = false;
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (!isPointerLocked || isCinematic || player.isDead || isRoundResetting) return;
+            if (e.button === 0) {
+                if (player.charType === 'cultivator') {
+                    if (player.skills.atk.currentCd <= 0) {
+                        player.skills.atk.currentCd = player.skills.atk.cd;
+                        projectiles.push(new Projectile(player.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), player.facingDir.clone(), 30, 5, player, 0.4));
+                        player.atkState = { active: true, type: 'shoot', time: 0 };
+                    }
+                } else if (player.charType === 'swordsman') {
+                    if (player.skills.atk.currentCd <= 0) {
+                        player.skills.atk.currentCd = player.skills.atk.cd;
+                        createAttackVFX(player, 0xaa00ff, 1.5);
+                        player.atkState = { active: true, type: 'slash', time: 0 };
+                        if (player.pos.distanceTo(npc.pos) <= player.skills.atk.range) npc.takeDamage(5, 2, player.pos);
+                    }
+                } else {
+                    executeSkill(player, npc, 'atk');
+                }
+            }
+            if (e.button === 2) keys.rightClick = true; 
+        });
+        window.addEventListener('mouseup', (e) => { if (e.button === 2) keys.rightClick = false; });
+
+        // --- 技能執行 ---
+        function executeSkill(attacker, target, skillId) {
+            let skillRef = skillId.includes('_') ? skillId.split('_')[0] : skillId;
+            const skill = attacker.skills[skillRef];
+            if (skill && skill.currentCd > 0) return;
+
+            // 大招特殊條件判斷
+            if (skillId === 's4') {
+                if (attacker.hp > attacker.maxHp / 4) {
+                    if (attacker.isPlayer) showMessage("必須殘血 (血量低於25%) 才能發動大招！", "#ff0000");
+                    return;
+                }
+                if (attacker.charType === 'swordsman') {
+                    if (attacker.skills.s1.currentCd <= 0 || attacker.skills.s2.currentCd <= 0 || attacker.skills.s3.currentCd <= 0) {
+                        if (attacker.isPlayer) showMessage("劍士大招需要所有技能(E,R,F)都在冷卻中！", "#ffaa00");
+                        return;
+                    }
+                }
+            }
+
+            if(skill) skill.currentCd = skill.cd;
+            if (!attacker.isPlayer) attacker.lookAtTarget(target.pos);
+
+            const dist = attacker.pos.distanceTo(target.pos);
+            const facingEnemy = attacker.facingDir.angleTo(new THREE.Vector3().subVectors(target.pos, attacker.pos).normalize()) < Math.PI / 2.5;
+
+            // --- 修行者 ---
+            if (attacker.charType === 'cultivator') {
+                if (skillId === 's1') {
+                    attacker.isDashing = true; attacker.dashTimer = 0.5; attacker.dashSkill = 'E_Flurry';
+                    attacker.vel.x = attacker.facingDir.x * 40; attacker.vel.z = attacker.facingDir.z * 40;
+                } else if (skillId === 's2_execute') {
+                    attacker.isDashing = true; attacker.dashTimer = 0.5; attacker.dashSkill = 'R_Kick';
+                    attacker.vel.x = attacker.facingDir.x * 40; attacker.vel.z = attacker.facingDir.z * 40;
+                    attacker.skills.s2.currentCd = attacker.skills.s2.cd;
+                } else if (skillId === 's3_execute') {
+                    let dmg = 10 + Math.floor(attacker.chargeF * 5); let scale = 1 + attacker.chargeF * 0.5;
+                    projectiles.push(new Projectile(attacker.pos.clone().add(new THREE.Vector3(0, 2, 0)), attacker.facingDir.clone(), 20, dmg, attacker, scale));
+                    attacker.skills.s3.currentCd = attacker.skills.s3.cd;
+                } else if (skillId === 's4') triggerCultivatorUltimate(attacker, target);
+            
+            // --- 劍士 (黑色刺客) ---
+            } else if (attacker.charType === 'swordsman') {
+                if (skillId === 's1') { // 突刺
+                    attacker.isDashing = true; attacker.dashTimer = 0.4; attacker.dashSkill = 'E_Thrust_Sword';
+                    attacker.vel.x = attacker.facingDir.x * 40; attacker.vel.z = attacker.facingDir.z * 40;
+                } else if (skillId === 's2') { // 飛刀背刺
+                    let p = new Projectile(attacker.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), attacker.facingDir.clone(), 35, 0, attacker, 1, 'dagger', (t) => {
+                        // 命中後瞬移到背後踢飛
+                        attacker.pos.copy(t.pos).add(new THREE.Vector3(-t.facingDir.x*1.5, 0, -t.facingDir.z*1.5));
+                        attacker.lookAtTarget(t.pos);
+                        t.takeDamage(35, 0, attacker.pos, 15); // 擊飛 yKnockback = 15
+                        t.stunTimer = 2.0;
+                        createAttackVFX(attacker, 0xaa00ff, 2.0);
+                    }, 0x555555);
+                    projectiles.push(p);
+                } else if (skillId === 's3_execute') { // 大劍氣
+                    let dmg = 15 + Math.floor(attacker.chargeF * 1); 
+                    let scale = 1 + attacker.chargeF * 1;
+                    let p = new Projectile(attacker.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), attacker.facingDir.clone(), 25, dmg, attacker, scale, 'sword_aura', null, 0xaa00ff);
+                    projectiles.push(p);
+                    attacker.skills.s3.currentCd = attacker.skills.s3.cd;
+                } else if (skillId === 's4') { // 大招: 射出劍氣觸發瞬殺滅
+                    let p = new Projectile(attacker.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), attacker.facingDir.clone(), 40, 0, attacker, 1.5, 'sword_aura', (t) => {
+                        triggerSwordsmanUltimate(attacker, t);
+                    }, 0xff0000);
+                    projectiles.push(p);
+                }
+            
+            // --- 勞子 (近戰體術) ---
+            } else {
+                if (skillId === 'atk') {
+                    createAttackVFX(attacker, 0xaaaaaa, 1.2);
+                    if (dist <= skill.range && facingEnemy) target.takeDamage(5, 2, attacker.pos);
+                } else if (skillId === 's1') {
+                    createAttackVFX(attacker, 0xffffff, 2.0);
+                    if (dist <= skill.range && facingEnemy) target.takeDamage(10, 15, attacker.pos);
+                } else if (skillId === 's2') {
+                    attacker.isDashing = true; attacker.dashTimer = 0.3; attacker.dashSkill = '';
+                    attacker.vel.x = attacker.facingDir.x * 30; attacker.vel.z = attacker.facingDir.z * 30;
+                    if (dist <= skill.range && facingEnemy) target.takeDamage(8, 5, attacker.pos);
+                } else if (skillId === 's3') {
+                    createAttackVFX(attacker, 0xffaa00, 2.5);
+                    if (dist <= skill.range && facingEnemy) target.takeDamage(5, 5, attacker.pos, 15);
+                } else if (skillId === 's4') triggerBrawlerUltimate(attacker, target);
+            }
+            if (attacker.isPlayer) updateSkillUI();
+        }
+
+        // --- 劍士大招：瞬殺·滅 ---
+        function triggerSwordsmanUltimate(attacker, target) {
+            isCinematic = true; attacker.isCinematicActor = true; target.isCinematicActor = true;
+            attacker.vel.set(0,0,0); target.vel.set(0,0,0);
+            
+            let time = 0; const startY = GAME_CONFIG.arenaY;
+            showMessage("終極奧義：瞬殺·滅！", "#aa00ff");
+
+            const animInterval = setInterval(() => {
+                time += 0.03;
+                if (time <= 0.5) { // 1. 瞬移背後抓住
+                    if (time < 0.05) {
+                        attacker.pos.copy(target.pos).add(new THREE.Vector3(-target.facingDir.x*1.5, 0, -target.facingDir.z*1.5));
+                        attacker.lookAtTarget(target.pos);
+                        attacker.armR.rotation.x = -Math.PI/2;
+                    }
+                    camera.position.set(attacker.pos.x + 4, attacker.pos.y + 2, attacker.pos.z + 4);
+                    camera.lookAt(target.pos);
+                } else if (time <= 1.0) { // 2. 往天上扔
+                    if (time < 0.55) target.vel.y = 45;
+                    target.pos.y += target.vel.y * 0.03; target.vel.y -= 25 * 0.03;
+                    attacker.lookAtTarget(target.pos);
+                    camera.lookAt(target.pos);
+                } else if (time <= 6.0) { // 3. 瞬移空中持續 5 秒劈砍
+                    if (time < 1.05) {
+                        attacker.pos.copy(target.pos).add(new THREE.Vector3(0, 0, 2));
+                        target.vel.y = 0; // 滯空
+                    }
+                    attacker.pos.y = target.pos.y;
+                    if (Math.random() < 0.4) {
+                        createHitEffect(target.pos.clone().add(new THREE.Vector3(0, Math.random()*2, 0)), 0xffffff);
+                        attacker.armR.rotation.x = -Math.random() * Math.PI; 
+                        const angle = Math.random() * Math.PI * 2;
+                        attacker.pos.x = target.pos.x + Math.cos(angle) * 1.5;
+                        attacker.pos.z = target.pos.z + Math.sin(angle) * 1.5;
+                        attacker.lookAtTarget(target.pos);
+                    }
+                    camera.position.set(target.pos.x + 8, target.pos.y + 2, target.pos.z + 8);
+                    camera.lookAt(target.pos);
+                } else if (time <= 7.0) { // 4. 蓄力超大劍氣
+                    attacker.pos.copy(target.pos).add(new THREE.Vector3(0, 4, 0));
+                    attacker.lookAtTarget(target.pos);
+                    attacker.armR.rotation.x = Math.PI; // 高舉
+                    if (!attacker.giantAura) {
+                        const geo = new THREE.BoxGeometry(4, 10, 0.5);
+                        const mat = new THREE.MeshBasicMaterial({color: 0xaa00ff, transparent: true, opacity: 0.8});
+                        attacker.giantAura = new THREE.Mesh(geo, mat); scene.add(attacker.giantAura);
+                    }
+                    attacker.giantAura.position.copy(attacker.pos).add(new THREE.Vector3(0, 2, 0));
+                    attacker.giantAura.rotation.y = attacker.mesh.rotation.y;
+                    camera.position.set(attacker.pos.x + 8, attacker.pos.y, attacker.pos.z + 8);
+                    camera.lookAt(target.pos);
+                } else if (time <= 7.5) { // 5. 壓向地面
+                    if (time < 7.05) target.vel.y = -70;
+                    target.pos.y += target.vel.y * 0.03;
+                    if (target.pos.y <= startY) { target.pos.y = startY; target.vel.y = 0; }
+                    if (attacker.giantAura) attacker.giantAura.position.copy(target.pos).add(new THREE.Vector3(0, 4, 0));
+                } else if (time <= 9.0) { // 6. 瞬移地面，背對對手，視角到正面，巨大劍氣壓迫
+                    if (time < 7.55) {
+                        attacker.pos.copy(target.pos).add(new THREE.Vector3(0, 0, 4));
+                        attacker.pos.y = startY;
+                        attacker.facingDir.set(0, 0, 1); attacker.mesh.rotation.y = Math.PI; // 背對
+                        camera.position.set(attacker.pos.x, attacker.pos.y + 1.5, attacker.pos.z + 6); // 正面視角
+                        camera.lookAt(attacker.pos.x, attacker.pos.y+1, attacker.pos.z);
+                    }
+                    if (attacker.giantAura) {
+                        attacker.giantAura.scale.set(1, Math.max(0.1, 1 - (time-7.5)*2), 1);
+                        attacker.giantAura.position.y -= 0.1;
+                    }
+                } else { // 7. 爆炸秒殺
+                    clearInterval(animInterval);
+                    if (attacker.giantAura) { scene.remove(attacker.giantAura); attacker.giantAura = null; }
+                    createHitEffect(target.pos, 0xaa00ff);
+                    createAttackVFX(target, 0xff0000, 8.0);
+                    document.getElementById('game-container').style.transform = `translate(0px, 20px)`;
+                    setTimeout(() => document.getElementById('game-container').style.transform = 'none', 100);
+
+                    attacker.isCinematicActor = false; target.isCinematicActor = false;
+                    isCinematic = false; attacker.armR.rotation.x = 0;
+                    target.takeDamage(9999, 0, attacker.pos, 0, true); 
+                    showMessage("秒殺！", "#ff0000");
+                }
+            }, 30);
+        }
+
+        // --- 勞子大招 ---
+        function triggerBrawlerUltimate(attacker, target) {
+            isCinematic = true; attacker.isCinematicActor = true; target.isCinematicActor = true;
+            attacker.vel.set(0,0,0); target.vel.set(0,0,0);
+            
+            let time = 0; attacker.lookAtTarget(target.pos); showMessage("奧義：極限亂舞！", "#ffaa00");
+
+            const animInterval = setInterval(() => {
+                time += 0.03;
+                if (time <= 0.4) {
+                    attacker.body.rotation.x = 0.5; attacker.armL.rotation.x = -Math.PI/2; attacker.armR.rotation.x = -Math.PI/2;
+                    camera.position.set(attacker.pos.x + 4, attacker.pos.y + 2, attacker.pos.z + 4); camera.lookAt(attacker.pos);
+                } else if (time <= 0.6) {
+                    attacker.pos.lerp(target.pos.clone().add(new THREE.Vector3(-attacker.facingDir.x*1.5, 0, -attacker.facingDir.z*1.5)), 0.5);
+                    attacker.body.rotation.x = 0;
+                    camera.position.set(target.pos.x + 6, target.pos.y + 4, target.pos.z + 6); camera.lookAt(target.pos);
+                } else if (time <= 2.2) {
+                    if (Math.random() < 0.4) {
+                        createHitEffect(target.pos.clone().add(new THREE.Vector3(0, 1 + Math.random(), 0)), 0xff0000);
+                        const angle = Math.random() * Math.PI * 2;
+                        attacker.pos.x = target.pos.x + Math.cos(angle) * 1.5; attacker.pos.z = target.pos.z + Math.sin(angle) * 1.5;
+                        attacker.lookAtTarget(target.pos);
+                        attacker.armL.rotation.x = -Math.random() * Math.PI; attacker.armR.rotation.x = -Math.random() * Math.PI;
+                    }
+                    target.vel.y = 5; target.pos.y += target.vel.y * 0.03;
+                } else if (time <= 2.6) {
+                    attacker.pos.copy(target.pos).add(new THREE.Vector3(0, 4, 0)); attacker.lookAtTarget(target.pos);
+                    attacker.armR.rotation.x = Math.PI; attacker.body.rotation.x = Math.PI / 2;
+                } else if (time <= 2.9) {
+                    attacker.pos.y -= 20 * 0.03; 
+                    if (attacker.pos.y <= GAME_CONFIG.arenaY) {
+                        attacker.pos.y = GAME_CONFIG.arenaY; target.pos.y = GAME_CONFIG.arenaY;
+                        attacker.body.rotation.x = 0; attacker.armR.rotation.x = 0;
+                        if (!target.smashEffect) {
+                            target.smashEffect = true; createHitEffect(target.pos, 0xffaa00); createAttackVFX(attacker, 0xff0000, 5.0);
+                            document.getElementById('game-container').style.transform = `translate(0px, 15px)`;
+                            setTimeout(() => document.getElementById('game-container').style.transform = 'none', 100);
+                        }
+                    }
+                } else {
+                    clearInterval(animInterval); target.smashEffect = false;
+                    attacker.isCinematicActor = false; target.isCinematicActor = false; isCinematic = false;
+                    attacker.body.rotation.x = 0; target.takeDamage(80, 20, attacker.pos, 15, true); 
+                    showMessage("KO 級重擊！", "#ff0000");
+                }
+            }, 30);
+        }
+
+        // --- 修行者大招 ---
+        function triggerCultivatorUltimate(attacker, target) {
+            isCinematic = true; attacker.isCinematicActor = true; target.isCinematicActor = true;
+            attacker.vel.set(0,0,0); target.vel.set(0,0,0);
+            
+            let time = 0; const startY = target.pos.y; attacker.lookAtTarget(target.pos); showMessage("毀天滅地！", "#00ffff");
+
+            const animInterval = setInterval(() => {
+                time += 0.03;
+                if (time <= 0.5) { 
+                    attacker.pos.lerp(target.pos.clone().add(new THREE.Vector3(-attacker.facingDir.x*1.5, 0, -attacker.facingDir.z*1.5)), 0.2);
+                } else if (time <= 1.0) { 
+                    if (time < 0.55) { target.vel.y = 25; attacker.armR.rotation.x = -Math.PI; }
+                    target.pos.y += target.vel.y * 0.03; target.vel.y -= 40 * 0.03;
+                    camera.position.set(attacker.pos.x + 6, attacker.pos.y + 4, attacker.pos.z + 6); camera.lookAt(target.pos);
+                } else if (time <= 1.5) { 
+                    attacker.pos.copy(target.pos).add(new THREE.Vector3(0, 4, 0)); attacker.armR.rotation.x = 0; attacker.lookAtTarget(target.pos);
+                } else if (time <= 2.2) { 
+                    if (time < 1.55) { target.vel.y = -50; attacker.armR.rotation.x = Math.PI/2; }
+                    if (target.pos.y > startY) target.pos.y += target.vel.y * 0.03;
+                    else {
+                        target.pos.y = startY;
+                        if (!target.smashEffect) {
+                            target.smashEffect = true; createHitEffect(target.pos, 0xff0000);
+                            document.getElementById('game-container').style.transform = `translate(0px, 15px)`;
+                            setTimeout(() => document.getElementById('game-container').style.transform = 'none', 100);
+                        }
+                    }
+                } else if (time <= 3.2) { 
+                    attacker.armL.rotation.x = Math.PI; attacker.armR.rotation.x = Math.PI;
+                    if (!attacker.beamCharge) {
+                        attacker.beamCharge = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshBasicMaterial({color: 0x00ffff, transparent: true, opacity: 0.8}));
+                        attacker.beamCharge.position.copy(attacker.pos).add(new THREE.Vector3(0, 2, 0)); scene.add(attacker.beamCharge);
+                    }
+                    attacker.beamCharge.scale.addScalar(0.05);
+                } else if (time <= 3.7) { 
+                    if (attacker.beamCharge) { scene.remove(attacker.beamCharge); attacker.beamCharge = null; }
+                    attacker.armL.rotation.x = Math.PI/2; attacker.armR.rotation.x = Math.PI/2;
+                    if (!attacker.beamMesh) {
+                        attacker.beamMesh = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 20, 16), new THREE.MeshBasicMaterial({color: 0x00ffff, transparent: true, opacity: 0.9})); scene.add(attacker.beamMesh);
+                    }
+                    attacker.beamMesh.position.copy(attacker.pos).lerp(target.pos, 0.5);
+                    attacker.beamMesh.lookAt(target.pos); attacker.beamMesh.rotateX(Math.PI/2);
+                } else { 
+                    clearInterval(animInterval);
+                    if (attacker.beamMesh) { scene.remove(attacker.beamMesh); attacker.beamMesh = null; }
+                    target.smashEffect = false; attacker.isCinematicActor = false; target.isCinematicActor = false; isCinematic = false;
+                    target.takeDamage(9999, 0, attacker.pos, 0, true); showMessage("秒殺！", "#ff0000");
+                }
+            }, 30);
+        }
+
+        // --- NPC AI ---
+        function updateNPC(dt) {
+            if (npc.isDead || isCinematic || !gameStarted || npc.stunTimer > 0) return;
+
+            const dist = npc.pos.distanceTo(player.pos);
+            npc.lookAtTarget(player.pos);
+            
+            let speed = 6.75; let attackProb = 0.04;
+            if (currentDifficulty === 'easy') { speed = 4.5; attackProb = 0.02; }
+            if (currentDifficulty === 'hard') { speed = 8.5; attackProb = 0.08; }
+
+            if (dist > 4.5) {
+                npc.vel.x += npc.facingDir.x * speed * dt; npc.vel.z += npc.facingDir.z * speed * dt;
+            } else {
+                const s1Cd = npc.skills.s1.currentCd > 0; const s2Cd = npc.skills.s2.currentCd > 0; const s3Cd = npc.skills.s3.currentCd > 0;
+                const hpReq = npc.hp <= npc.maxHp / 4; 
+
+                if (s1Cd && s2Cd && s3Cd && hpReq) executeSkill(npc, player, 's4');
+                else if (!s3Cd && Math.random() < attackProb) executeSkill(npc, player, 's3');
+                else if (!s2Cd && Math.random() < attackProb) executeSkill(npc, player, 's2');
+                else if (!s1Cd && Math.random() < attackProb) executeSkill(npc, player, 's1');
+                else if (npc.skills.atk.currentCd <= 0 && Math.random() < (attackProb * 3)) executeSkill(npc, player, 'atk');
+            }
+        }
+
+        // --- 特效與 UI ---
+        function createAttackVFX(attacker, color, size) {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 }));
+            mesh.position.copy(attacker.pos); mesh.position.y += 1.8; 
+            mesh.position.x += attacker.facingDir.x * 2.0; mesh.position.z += attacker.facingDir.z * 2.0;
+            mesh.rotation.y = Math.atan2(attacker.facingDir.x, attacker.facingDir.z);
+            scene.add(mesh); effects.push({ mesh, life: 0.15 }); 
+        }
+        function createHitEffect(pos, color=0xffffff) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({ color: color }));
+            mesh.position.copy(pos); scene.add(mesh); effects.push({ mesh, life: 0.1, expand: true });
+        }
+
+        function selectChar(c) {
+            selectedChar = c;
+            document.querySelectorAll('.char-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById(`btn-char-${c}`).classList.add('selected');
+        }
+
+        function requestGameStart(difficulty) {
+            currentDifficulty = difficulty; document.body.requestPointerLock();
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('ui-layer').style.display = 'flex';
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('defend-hint').style.display = 'block';
+            
+            if (player && player.mesh) scene.remove(player.mesh); if (npc && npc.mesh) scene.remove(npc.mesh);
+
+            let charColor = selectedChar === 'brawler' ? 0x0088ff : (selectedChar === 'cultivator' ? 0x00ffaa : 0x111111);
+            let charName = selectedChar === 'brawler' ? "勞子" : (selectedChar === 'cultivator' ? "修行者" : "劍士");
+            
+            player = new Fighter(charName, charColor, {x: -6, y: 0, z: 0}, true, selectedChar);
+            npc = new Fighter("無名守衛", 0xff4444, {x: 6, y: 0, z: 0}, false, 'brawler');
+
+            document.getElementById('player-name-ui').innerText = player.name;
+            
+            if (selectedChar === 'cultivator') {
+                document.querySelector('#btn-atk .name').innerHTML = "元气弹"; document.querySelector('#btn-s1 .name').innerHTML = "元气拳";
+                document.querySelector('#btn-s2 .name').innerHTML = "蓄力踢<br><span style='font-size:10px'>(長按3秒)</span>";
+                document.querySelector('#btn-s3 .name').innerHTML = "大元气弹<br><span style='font-size:10px'>(長按)</span>";
+                document.querySelector('#btn-s4 .name').innerHTML = "毀天滅地<br><span style='font-size:10px'>(殘血發動)</span>";
+            } else if (selectedChar === 'swordsman') {
+                document.querySelector('#btn-atk .name').innerHTML = "揮砍"; document.querySelector('#btn-s1 .name').innerHTML = "突刺";
+                document.querySelector('#btn-s2 .name').innerHTML = "飛刀背刺";
+                document.querySelector('#btn-s3 .name').innerHTML = "大劍氣<br><span style='font-size:10px'>(長按)</span>";
+                document.querySelector('#btn-s4 .name').innerHTML = "瞬殺·滅<br><span style='font-size:10px'>(殘血+全CD)</span>";
+            } else {
+                document.querySelector('#btn-atk .name').innerHTML = "普攻"; document.querySelector('#btn-s1 .name').innerHTML = "技能 1";
+                document.querySelector('#btn-s2 .name').innerHTML = "技能 2"; document.querySelector('#btn-s3 .name').innerHTML = "技能 3";
+                document.querySelector('#btn-s4 .name').innerHTML = "極限亂舞<br><span style='font-size:10px'>(殘血發動)</span>";
+            }
+
+            updateHealthUI(); updateSkillUI(); gameStarted = true;
+            let diffName = difficulty === 'hard' ? '困難模式' : (difficulty === 'easy' ? '簡單模式' : '普通模式');
+            showMessage(`${diffName} Fight!`, "#00f2fe");
+        }
+
+        function showChargeText(msg) { const el = document.getElementById('charge-text'); el.innerText = msg; el.style.display = 'block'; }
+        function hideChargeText() { document.getElementById('charge-text').style.display = 'none'; }
+        function showGameOver(msg, color) {
+            document.exitPointerLock(); document.getElementById('ui-layer').style.display = 'none';
+            const goTitle = document.getElementById('game-over-title'); goTitle.innerText = msg; goTitle.style.color = color;
+            document.getElementById('game-over-screen').style.display = 'flex';
+        }
+
+        function updateHealthUI() {
+            document.getElementById('player-hp-text').innerText = `${Math.floor(player.hp)}/${player.maxHp}`;
+            document.getElementById('player-hp-bar').style.width = `${(player.hp / player.maxHp) * 100}%`;
+            document.getElementById('npc-hp-text').innerText = `${Math.floor(npc.hp)}/${npc.maxHp}`;
+            document.getElementById('npc-hp-bar').style.width = `${(npc.hp / npc.maxHp) * 100}%`;
+        }
+        function updateScoreUI() { document.getElementById('score-player').innerText = score.player; document.getElementById('score-npc').innerText = score.npc; }
+        
+        function updateSkillUI() {
+            const hpReq = player.hp <= (player.maxHp / 4);
+            document.getElementById('btn-atk').className = player.skills.atk.currentCd > 0 ? 'skill-btn disabled' : 'skill-btn ready';
+
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`btn-s${i}`), cd = document.getElementById(`cd-s${i}`);
+                if (player.skills[`s${i}`].currentCd > 0) {
+                    btn.className = 'skill-btn disabled'; cd.style.height = '100%'; cd.innerText = Math.ceil(player.skills[`s${i}`].currentCd);
+                } else { btn.className = 'skill-btn ready'; cd.style.height = '0%'; cd.innerText = ''; }
+            }
+
+            const btnUlt = document.getElementById('btn-s4'), cdUlt = document.getElementById('cd-s4');
+            let ultReady = hpReq;
+            if (player.charType === 'swordsman' && hpReq) {
+                ultReady = (player.skills.s1.currentCd > 0 && player.skills.s2.currentCd > 0 && player.skills.s3.currentCd > 0);
+            }
+            if (player.skills.s4.currentCd > 0) {
+                btnUlt.className = 'skill-btn disabled'; cdUlt.style.height = '100%'; cdUlt.innerText = Math.ceil(player.skills.s4.currentCd);
+            } else {
+                cdUlt.style.height = '0%'; cdUlt.innerText = ''; btnUlt.className = ultReady ? 'skill-btn ultimate-ready' : 'skill-btn disabled';
+            }
+        }
+        
+        function showMessage(msg, color = "#ffffff") {
+            const box = document.getElementById('message-box');
+            box.innerText = msg; box.style.color = color; box.style.opacity = 1;
+            setTimeout(() => { box.style.opacity = 0; }, 2000);
+        }
+
+        function resetRound() {
+            projectiles.forEach(p => p.destroy()); projectiles = [];
+            player.hp = player.maxHp; npc.hp = npc.maxHp;
+            player.pos.set(-6, 0, 0); npc.pos.set(6, 0, 0);
+            
+            [player, npc].forEach(p => {
+                p.vel.set(0, 0, 0); p.isDead = false; p.stunTimer = 0; p.flurryTimer = 0; p.chargeR = 0; p.chargeF = 0; p.isDefending = false;
+                p.mesh.rotation.x = 0; p.body.rotation.x = 0; p.armR.rotation.x = 0; p.mesh.rotation.y = 0;
+                for (let k in p.skills) p.skills[k].currentCd = 0;
+            });
+
+            cameraYawOffset = 0; updateHealthUI(); updateSkillUI();
+            isRoundResetting = false; showMessage("Fight!", "#00f2fe");
+        }
+
+        // --- 主循環 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            if (gameStarted && !isGameOver) {
+                if (!isCinematic && !isRoundResetting && !player.isDead) {
+                    const baseYaw = Math.atan2(npc.pos.x - player.pos.x, npc.pos.z - player.pos.z);
+                    cameraYawOffset = THREE.MathUtils.lerp(cameraYawOffset, 0, dt * 3);
+                    cameraYaw = baseYaw + cameraYawOffset;
+
+                    const camDist = 7, camHeight = 1.8; 
+                    const camAngle = cameraYaw + Math.PI; 
+                    const dx = camDist * Math.cos(cameraPitch) * Math.sin(camAngle);
+                    const dy = camDist * Math.sin(cameraPitch);
+                    const dz = camDist * Math.cos(cameraPitch) * Math.cos(camAngle);
+
+                    camera.position.set(player.pos.x + dx, player.pos.y + camHeight + dy, player.pos.z + dz);
+                    const lookTarget = new THREE.Vector3().addVectors(player.pos, npc.pos).multiplyScalar(0.5);
+                    camera.lookAt(lookTarget.x, lookTarget.y + camHeight, lookTarget.z);
+
+                    if (!player.isDefending && player.stunTimer <= 0 && player.flurryTimer <= 0 && !player.isDashing) {
+                        const speed = 28; const forward = player.facingDir.clone();
+                        const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+                        
+                        let moveDir = new THREE.Vector3(0, 0, 0);
+                        if (keys.w) moveDir.add(forward); if (keys.s) moveDir.sub(forward); 
+                        if (keys.a) moveDir.sub(right);   if (keys.d) moveDir.add(right);   
+
+                        if (moveDir.length() > 0) {
+                            moveDir.normalize(); player.vel.x += moveDir.x * speed * dt; player.vel.z += moveDir.z * speed * dt;
+                        }
+                    }
+                }
+
+                player.update(dt); updateNPC(dt); npc.update(dt);
+
+                if (!isCinematic && !player.isDead && !npc.isDead) {
+                    const dist = player.pos.distanceTo(npc.pos);
+                    if (dist < 1.8) {
+                        const pushDir = new THREE.Vector3().subVectors(player.pos, npc.pos).normalize();
+                        const overlap = 1.8 - dist;
+                        player.pos.addScaledVector(pushDir, overlap * 0.5); npc.pos.addScaledVector(pushDir, -overlap * 0.5);
+                    }
+                }
+
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    projectiles[i].update(dt);
+                    if (!projectiles[i].active) projectiles.splice(i, 1);
+                }
+
+                for (let i = effects.length - 1; i >= 0; i--) {
+                    const eff = effects[i]; eff.life -= dt;
+                    if (eff.expand) eff.mesh.scale.addScalar(dt * 12);
+                    if (eff.life <= 0) { scene.remove(eff.mesh); effects.splice(i, 1); }
+                }
+            }
+
+            if (!gameStarted) {
+                camera.position.x = Math.sin(clock.getElapsedTime() * 0.5) * 20; camera.position.z = Math.cos(clock.getElapsedTime() * 0.5) * 20;
+                camera.position.y = 12; camera.lookAt(0, 0, 0);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

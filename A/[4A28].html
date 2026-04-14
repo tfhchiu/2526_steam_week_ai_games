@@ -1,0 +1,702 @@
+v<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Typer - Protocol AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00f3ff;
+            --magenta: #ff003c;
+            --dark: #050508;
+            --panel: rgba(5, 10, 15, 0.85);
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: var(--dark);
+            color: var(--cyan);
+            overflow: hidden;
+            touch-action: none;
+            background-image: 
+                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+        /* Cinematic Vignette & Scanlines */
+        .vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, transparent 30%, #000 100%);
+            pointer-events: none; z-index: 1;
+        }
+        .scanlines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            pointer-events: none; z-index: 50;
+        }
+
+        /* Cyber UI Panels */
+        .cyber-panel {
+            background: var(--panel);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            box-shadow: inset 0 0 30px rgba(0, 243, 255, 0.05);
+            backdrop-filter: blur(4px);
+        }
+        
+        .cyber-btn {
+            clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+            transition: all 0.2s ease;
+        }
+        .cyber-btn:hover { background-color: var(--cyan); color: black; box-shadow: 0 0 20px var(--cyan); }
+        .cyber-btn-magenta:hover { background-color: var(--magenta); color: white; box-shadow: 0 0 25px var(--magenta); border-color: var(--magenta); }
+
+        .cyber-input { background: rgba(0, 243, 255, 0.02); border: 1px solid rgba(0, 243, 255, 0.3); border-bottom: 2px solid var(--cyan); transition: all 0.2s; }
+        .cyber-input:focus { background: rgba(255, 0, 60, 0.05); border-color: rgba(255, 0, 60, 0.5); border-bottom: 2px solid var(--magenta); outline: none; color: white; }
+
+        .neon-cyan { text-shadow: 0 0 5px var(--cyan), 0 0 10px var(--cyan); }
+        .neon-magenta { text-shadow: 0 0 5px var(--magenta), 0 0 15px var(--magenta); color: var(--magenta); }
+
+        /* Game Words */
+        .word {
+            position: absolute;
+            background: rgba(5, 5, 8, 0.95);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            border-left: 3px solid var(--cyan);
+            padding: 4px 12px;
+            color: #fff;
+            white-space: nowrap;
+            transition: background-color 0.2s, transform 0.1s;
+            animation: wordSpawn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
+            z-index: 10;
+        }
+        @keyframes wordSpawn {
+            0% { transform: translateY(-20px) scale(0.8); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* Targeted Word Reticle */
+        .active-target {
+            border-color: var(--magenta) !important;
+            border-left: 4px solid var(--magenta) !important;
+            background-color: rgba(255, 0, 60, 0.15) !important;
+            box-shadow: 0 0 20px rgba(255, 0, 60, 0.5), inset 0 0 10px rgba(255, 0, 60, 0.3) !important;
+            transform: scale(1.1);
+            z-index: 25;
+        }
+        .active-target::after {
+            content: '[ TARGET ACQUIRED ]';
+            position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+            font-size: 8px; color: var(--magenta); letter-spacing: 0.2em;
+            white-space: nowrap; animation: pulseText 1s infinite;
+        }
+
+        @keyframes pulseText { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        .star-1 { border-left-color: #0ff; }
+        .star-2 { border-left-color: #ffd700; color: #ffd700; }
+        .star-3 { border-left-color: #ff003c; color: #ff003c; text-shadow: 0 0 8px #ff003c; font-weight: bold; }
+
+        .glitch { animation: glitch 0.2s linear infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-3px, 3px) }
+            40% { transform: translate(-3px, -3px) }
+            60% { transform: translate(3px, 3px) }
+            80% { transform: translate(3px, -3px) }
+            100% { transform: translate(0) }
+        }
+
+        .screen-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+
+        .flash-red { animation: flashRed 0.3s forwards; }
+        .flash-green { animation: flashGreen 0.3s forwards; }
+        @keyframes flashRed { 0%, 100% { border-color: rgba(0,243,255,0.2); background: transparent; } 50% { border-color: var(--magenta); background: rgba(255,0,60,0.3); box-shadow: 0 0 20px rgba(255,0,60,0.5); } }
+        @keyframes flashGreen { 0%, 100% { border-color: rgba(0,243,255,0.2); background: transparent; } 50% { border-color: #00ffaa; background: rgba(0,255,170,0.2); box-shadow: 0 0 20px rgba(0,255,170,0.5); } }
+
+        /* Floating Combat Text */
+        .floating-text {
+            position: absolute; font-family: 'Orbitron', sans-serif; font-weight: 900;
+            pointer-events: none; z-index: 45;
+            animation: floatUpFade 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+        @keyframes floatUpFade {
+            0% { transform: translateY(0) scale(0.8); opacity: 1; }
+            50% { transform: translateY(-20px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1); opacity: 0; }
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 0, 60, 0.2); border-top-color: var(--magenta); border-radius: 50%;
+            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col items-center justify-center selection:bg-cyan-500 selection:text-black relative">
+
+    <!-- Background Music -->
+    <audio id="bgm" loop>
+        <source src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="vignette"></div>
+    <div class="scanlines"></div>
+
+    <!-- Main Game Frame -->
+    <div id="game-board" class="relative w-full max-w-[1200px] h-[95vh] md:h-[90vh] cyber-panel border border-cyan-500/30 overflow-hidden flex flex-col z-10 shadow-[0_0_50px_rgba(0,0,0,0.9)] transition-transform">
+        
+        <!-- Top HUD -->
+        <div class="w-full px-4 py-3 flex justify-between items-start z-20 bg-black/90 border-b border-cyan-500/40 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+            <div class="flex flex-col gap-1 w-1/3">
+                <div class="text-sm md:text-xl font-black font-orbitron text-gray-300">SCORE <span id="score" class="neon-cyan ml-2 text-cyan-400">00000</span></div>
+                <div class="text-[9px] md:text-xs text-cyan-600 tracking-[0.2em] truncate" id="player-info">SYS_OFFLINE</div>
+            </div>
+            
+            <div class="text-center w-1/3 flex flex-col items-center justify-start pt-1">
+                <div class="text-base md:text-xl font-black font-orbitron tracking-[0.2em] text-white" id="level-display">STAGE_01</div>
+                <div class="w-full max-w-[200px] bg-gray-950 h-1.5 mt-2 border border-cyan-900/50 rounded-full overflow-hidden">
+                    <div id="level-progress-bar" class="h-full bg-cyan-400 w-0 transition-all duration-300 shadow-[0_0_10px_rgba(0,243,255,1)]"></div>
+                </div>
+                <div class="text-[9px] md:text-[10px] text-cyan-500 mt-1 tracking-widest font-bold" id="level-progress-text">0 / 50 SECURED</div>
+            </div>
+
+            <div class="flex flex-col items-end gap-1 w-1/3">
+                <div class="text-sm md:text-xl font-black font-orbitron text-gray-300">INTEGRITY <span id="health" class="neon-cyan ml-2 text-cyan-400">100%</span></div>
+                <button id="bgm-toggle" class="text-[9px] md:text-[10px] border border-cyan-800 text-cyan-600 px-2 py-0.5 hover:text-cyan-300 hover:border-cyan-400 transition-colors focus:outline-none z-50 pointer-events-auto uppercase tracking-widest bg-black/50">
+                    [ AUDIO: MUTE ]
+                </button>
+            </div>
+        </div>
+
+        <!-- Gameplay Canvas -->
+        <div id="words-container" class="flex-1 relative w-full overflow-hidden z-10"></div>
+
+        <!-- Multi-Choice Interface -->
+        <div id="options-panel" class="w-full bg-black/95 border-t-2 border-cyan-500/50 p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 z-30 transition-all duration-300 opacity-0 pointer-events-none relative shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+            <div class="absolute top-0 left-0 w-full h-[1px] bg-cyan-400 shadow-[0_0_15px_rgba(0,243,255,1)]"></div>
+            
+            <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 border border-cyan-500/50 border-b-0 px-6 py-1 rounded-t-lg shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+                <span class="text-[10px] md:text-xs text-cyan-400 font-bold tracking-[0.3em] uppercase flex items-center gap-2">
+                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    DECODING: <span id="current-target-text" class="text-white ml-1 font-orbitron">NONE</span>
+                </span>
+            </div>
+            
+            <!-- Options dynamically updated by JS -->
+            <button class="opt-btn flex flex-col items-start justify-center bg-gray-950/80 border border-cyan-900/60 p-3 hover:border-cyan-300 hover:bg-cyan-900/20 transition-all duration-150 group relative overflow-hidden h-24 md:h-28" data-idx="0">
+                <div class="text-cyan-600 text-[10px] md:text-xs font-black tracking-[0.2em] mb-1 group-hover:text-cyan-300 transition-colors bg-black px-1 rounded">KEY_1</div>
+                <span class="opt-text text-sm md:text-base font-bold text-gray-300 group-hover:text-white transition-colors text-left break-words w-full line-clamp-3">...</span>
+                <div class="absolute bottom-0 left-0 w-0 h-[3px] bg-cyan-400 group-hover:w-full transition-all duration-300"></div>
+            </button>
+            <button class="opt-btn flex flex-col items-start justify-center bg-gray-950/80 border border-cyan-900/60 p-3 hover:border-cyan-300 hover:bg-cyan-900/20 transition-all duration-150 group relative overflow-hidden h-24 md:h-28" data-idx="1">
+                <div class="text-cyan-600 text-[10px] md:text-xs font-black tracking-[0.2em] mb-1 group-hover:text-cyan-300 transition-colors bg-black px-1 rounded">KEY_2</div>
+                <span class="opt-text text-sm md:text-base font-bold text-gray-300 group-hover:text-white transition-colors text-left break-words w-full line-clamp-3">...</span>
+                <div class="absolute bottom-0 left-0 w-0 h-[3px] bg-cyan-400 group-hover:w-full transition-all duration-300"></div>
+            </button>
+            <button class="opt-btn flex flex-col items-start justify-center bg-gray-950/80 border border-cyan-900/60 p-3 hover:border-cyan-300 hover:bg-cyan-900/20 transition-all duration-150 group relative overflow-hidden h-24 md:h-28" data-idx="2">
+                <div class="text-cyan-600 text-[10px] md:text-xs font-black tracking-[0.2em] mb-1 group-hover:text-cyan-300 transition-colors bg-black px-1 rounded">KEY_3</div>
+                <span class="opt-text text-sm md:text-base font-bold text-gray-300 group-hover:text-white transition-colors text-left break-words w-full line-clamp-3">...</span>
+                <div class="absolute bottom-0 left-0 w-0 h-[3px] bg-cyan-400 group-hover:w-full transition-all duration-300"></div>
+            </button>
+            <button class="opt-btn flex flex-col items-start justify-center bg-gray-950/80 border border-cyan-900/60 p-3 hover:border-cyan-300 hover:bg-cyan-900/20 transition-all duration-150 group relative overflow-hidden h-24 md:h-28" data-idx="3">
+                <div class="text-cyan-600 text-[10px] md:text-xs font-black tracking-[0.2em] mb-1 group-hover:text-cyan-300 transition-colors bg-black px-1 rounded">KEY_4</div>
+                <span class="opt-text text-sm md:text-base font-bold text-gray-300 group-hover:text-white transition-colors text-left break-words w-full line-clamp-3">...</span>
+                <div class="absolute bottom-0 left-0 w-0 h-[3px] bg-cyan-400 group-hover:w-full transition-all duration-300"></div>
+            </button>
+        </div>
+
+        <div id="center-message" class="absolute inset-0 flex items-center justify-center z-40 pointer-events-none hidden bg-black/60 backdrop-blur-sm"></div>
+
+        <!-- Main Menu -->
+        <div id="overlay" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-start z-50 overflow-y-auto py-10 px-4">
+            <div class="text-center mb-8 relative">
+                <h1 id="title" class="text-5xl md:text-7xl font-black font-orbitron text-white tracking-[0.1em] uppercase drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">
+                    CYBER<span class="text-cyan-400 drop-shadow-[0_0_20px_rgba(0,243,255,0.8)]">_TYPER</span>
+                </h1>
+                <p id="subtitle" class="text-cyan-600 text-xs md:text-sm tracking-[0.4em] uppercase mt-3 font-bold bg-cyan-950/30 inline-block px-4 py-1 border border-cyan-900/50 rounded">Protocol Initialization / v3.0</p>
+            </div>
+            
+            <div id="setup-form" class="flex flex-col items-center gap-6 w-full max-w-lg bg-black/40 p-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(0,243,255,0.05)] rounded-lg relative">
+                
+                <div class="w-full flex gap-4">
+                    <div class="flex-1 relative">
+                        <label class="text-[10px] text-cyan-500 absolute -top-4 left-0 font-bold tracking-widest">OPERATIVE ID</label>
+                        <input type="text" id="student-name" placeholder="NAME" class="cyber-input w-full bg-transparent text-cyan-100 p-2 text-sm uppercase font-bold" autocomplete="off">
+                    </div>
+                    <div class="w-1/3 relative">
+                        <label class="text-[10px] text-cyan-500 absolute -top-4 left-0 font-bold tracking-widest">SECTOR</label>
+                        <input type="text" id="student-class" placeholder="CLASS" class="cyber-input w-full bg-transparent text-cyan-100 p-2 text-sm uppercase font-bold" autocomplete="off">
+                    </div>
+                </div>
+                
+                <p id="error-msg" class="text-red-500 text-xs font-bold hidden w-full text-center border border-red-900 bg-red-950/50 p-2">ERR: INVALID PARAMS</p>
+
+                <div class="w-full relative mt-2">
+                    <label class="text-[10px] text-cyan-500 absolute -top-4 left-0 font-bold tracking-widest">DATABANK QUERY (TOPIC)</label>
+                    <input type="text" id="custom-topic" value="Space Exploration" class="cyber-input w-full bg-transparent text-cyan-100 p-2 text-sm uppercase font-bold text-center" autocomplete="off">
+                </div>
+
+                <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                    <div>
+                        <div class="text-[10px] text-cyan-500 font-bold tracking-widest mb-1 border-b border-cyan-900 pb-1">THREAT LEVEL</div>
+                        <div class="flex gap-2">
+                            <button class="diff-btn flex-1 bg-transparent border border-cyan-800 text-cyan-600 py-1.5 text-xs font-bold hover:bg-cyan-900/30 transition-colors" data-level="easy">L1</button>
+                            <button class="diff-btn flex-1 bg-transparent border border-cyan-800 text-cyan-600 py-1.5 text-xs font-bold hover:bg-cyan-900/30 transition-colors" data-level="medium">L2</button>
+                            <button class="diff-btn flex-1 bg-transparent border border-cyan-800 text-cyan-600 py-1.5 text-xs font-bold hover:bg-cyan-900/30 transition-colors" data-level="hard">L3</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-cyan-500 font-bold tracking-widest mb-1 border-b border-cyan-900 pb-1">LANGUAGE PROTOCOL</div>
+                        <div class="flex gap-2">
+                            <button class="lang-btn flex-1 bg-transparent border border-cyan-800 text-cyan-600 py-1.5 text-xs font-bold hover:bg-cyan-900/30 transition-colors" data-lang="english">EN_ONLY</button>
+                            <button class="lang-btn flex-1 bg-transparent border border-cyan-800 text-cyan-600 py-1.5 text-xs font-bold hover:bg-cyan-900/30 transition-colors" data-lang="bilingual">EN_ZH</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="start-btn" class="cyber-btn cyber-btn-magenta w-full mt-4 py-4 bg-transparent border border-pink-700 text-pink-500 text-lg font-bold font-orbitron tracking-[0.2em] focus:outline-none flex justify-center items-center">
+                    > INITIALIZE_SYSTEM
+                </button>
+            </div>
+
+            <!-- Final Stats -->
+            <div id="final-stats" class="hidden flex-col items-center mt-6 w-full max-w-md bg-gray-950/80 border border-cyan-500 p-6 relative shadow-[0_0_40px_rgba(0,243,255,0.2)]">
+                <div class="text-sm text-cyan-600 font-bold tracking-widest mb-2">OPERATION CONCLUDED</div>
+                <div class="text-4xl font-orbitron text-white mb-4 drop-shadow-[0_0_10px_rgba(0,243,255,0.8)]">SCORE: <span id="final-score" class="text-cyan-400">0</span></div>
+                <div class="text-xs text-gray-400 tracking-widest">PACKETS SECURED: <span id="words-typed" class="text-white font-bold ml-1">0</span></div>
+            </div>
+        </div>
+
+        <div id="damage-flash" class="absolute inset-0 bg-red-600/30 pointer-events-none transition-opacity duration-100 opacity-0 z-40"></div>
+    </div>
+
+    <script>
+        const apiKey = ""; 
+        let dynamicWordList = [];
+
+        // DOM Setup
+        const container = document.getElementById('words-container');
+        const scoreEl = document.getElementById('score');
+        const healthEl = document.getElementById('health');
+        const levelDisplayEl = document.getElementById('level-display');
+        const levelProgressText = document.getElementById('level-progress-text');
+        const levelProgressBar = document.getElementById('level-progress-bar');
+        const centerMessageEl = document.getElementById('center-message');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('start-btn');
+        const errorMsg = document.getElementById('error-msg');
+        const optionsPanel = document.getElementById('options-panel');
+        const optButtons = document.querySelectorAll('.opt-btn');
+        const optTexts = document.querySelectorAll('.opt-text');
+        const currentTargetText = document.getElementById('current-target-text');
+        const gameBoard = document.getElementById('game-board');
+        
+        // Game State
+        let score = 0, health = 100, wordsClearedCount = 0;
+        let isPlaying = false, isTransitioning = false;
+        let wordsOnScreen = [], activeWord = null; 
+        let currentLevel = 1, targetLevelScore = 50, currentLevelScore = 0;
+        let isBossLevel = false, bossActive = false, bossObj = null;
+
+        // Settings
+        let selectedDifficulty = 'medium';
+        let selectedLang = 'bilingual'; 
+        let bgmPlaying = false;
+        let currentFallSpeed = 0.03;
+        let spawnRate = 2500, currentMaxWords = 4;
+        let lastSpawnTime = 0, lastTime = 0, animationFrameId;
+
+        const diffSettings = {
+            easy: { speed: 0.015, rate: 3500, max: 3 },
+            medium: { speed: 0.025, rate: 2500, max: 4 },
+            hard: { speed: 0.045, rate: 1800, max: 5 }
+        };
+
+        // UI Setup & Web Audio API
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSynth(type) {
+            if (!bgmPlaying) return; 
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            if (type === 'select') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'correct') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'wrong' || type === 'damage') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            }
+        }
+
+        document.getElementById('bgm-toggle').addEventListener('click', (e) => {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            if (bgmPlaying) {
+                document.getElementById('bgm').pause();
+                e.target.innerText = "[ AUDIO: MUTE ]"; e.target.classList.remove('bg-cyan-900', 'text-white');
+            } else {
+                document.getElementById('bgm').play().catch(e=>{});
+                e.target.innerText = "[ AUDIO: ON ]"; e.target.classList.add('bg-cyan-900', 'text-white');
+            }
+            bgmPlaying = !bgmPlaying;
+        });
+
+        function setupSelectionGroup(btns, classAdd, classRem, cb) {
+            btns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    playSynth('select');
+                    btns.forEach(b => { b.classList.remove(...classAdd); b.classList.add(...classRem); });
+                    btn.classList.remove(...classRem); btn.classList.add(...classAdd);
+                    cb(btn);
+                });
+            });
+        }
+        setupSelectionGroup(document.querySelectorAll('.diff-btn'), ['bg-cyan-900', 'text-cyan-100', 'border-cyan-400'], ['bg-transparent', 'text-cyan-600', 'border-cyan-800'], b => selectedDifficulty = b.dataset.level);
+        setupSelectionGroup(document.querySelectorAll('.lang-btn'), ['bg-cyan-900', 'text-cyan-100', 'border-cyan-400'], ['bg-transparent', 'text-cyan-600', 'border-cyan-800'], b => selectedLang = b.dataset.lang);
+        document.querySelector('[data-level="medium"]').click();
+        document.querySelector('[data-lang="bilingual"]').click();
+
+        // Gemini API
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            let delays = [1000, 2000, 4000];
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error();
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delays[i]));
+                }
+            }
+        }
+
+        async function generateVocabulary(topic) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const prompt = `Generate a list of exactly 40 vocabulary words related to the topic: "${topic}". Provide the English word (lowercase), its Traditional Chinese translation (繁體中文), and a very short (3-5 words) English definition. English words must only contain letters.`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY", items: { type: "OBJECT", properties: { en: { type: "STRING" }, zh: { type: "STRING" }, def: { type: "STRING" } }, required: ["en", "zh", "def"] }
+                    }
+                }
+            };
+
+            const data = await fetchWithBackoff(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            let parsedData = JSON.parse(data.candidates[0].content.parts[0].text);
+            return parsedData.filter(item => /^[a-z]+$/.test(item.en.toLowerCase()));
+        }
+
+        // Gameplay Logic
+        function generateOptions(correctItem) {
+            const k = selectedLang === 'english' ? 'def' : 'zh';
+            let opts = [correctItem[k]];
+            let avail = dynamicWordList.filter(w => w.en !== correctItem.en).sort(() => 0.5 - Math.random());
+            opts.push(avail[0][k], avail[1][k], avail[2][k]);
+            return { options: opts.sort(() => 0.5 - Math.random()), correct: correctItem[k] };
+        }
+
+        // Collision detection for spawning
+        function getSafeSpawnX(width) {
+            let maxLeft = container.clientWidth - width - 20;
+            for(let attempts=0; attempts<10; attempts++) {
+                let x = Math.max(10, Math.random() * maxLeft);
+                let safe = true;
+                for(let w of wordsOnScreen) {
+                    let wLeft = parseFloat(w.element.style.left);
+                    let wWidth = w.element.clientWidth || 100;
+                    if(w.y < 50 && Math.abs(x - wLeft) < (width + wWidth)/2) { safe = false; break; }
+                }
+                if(safe) return x;
+            }
+            return Math.max(10, Math.random() * maxLeft);
+        }
+
+        function spawnWord() {
+            if (!dynamicWordList.length) return;
+            const wTpl = dynamicWordList[Math.floor(Math.random() * dynamicWordList.length)];
+            const r = Math.random();
+            const rarity = r > 0.9 ? {stars: 3, m: 3, c: 'star-3', i: '★★★'} : r > 0.7 ? {stars: 2, m: 2, c: 'star-2', i: '★★'} : {stars: 1, m: 1, c: 'star-1', i: '★'};
+            const opts = generateOptions(wTpl);
+            
+            const el = document.createElement('div');
+            el.className = `word flex items-center gap-2 ${rarity.c}`;
+            el.innerHTML = `<span class="text-[10px] opacity-70 tracking-[0.2em]">${rarity.i}</span> <span class="font-bold tracking-wider">${wTpl.en.toUpperCase()}</span>`;
+            
+            container.appendChild(el);
+            let widthEstimate = el.clientWidth || 100;
+            el.style.left = `${getSafeSpawnX(widthEstimate)}px`;
+            el.style.top = `-50px`;
+
+            wordsOnScreen.push({ text: wTpl.en, element: el, y: -50, mult: rarity.m, options: opts.options, ans: opts.correct, isBoss: false, spdMod: rarity.stars===3?1.3:(rarity.stars===2?1.1:1) });
+            evaluateActiveWord();
+        }
+
+        function spawnBoss(level) {
+            bossActive = true;
+            let hp = targetLevelScore;
+            const el = document.createElement('div');
+            el.className = 'absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 bg-black/95 p-6 border border-red-500 shadow-[0_0_40px_rgba(255,0,60,0.5)] z-20 w-[300px]';
+            el.innerHTML = `<div class="text-[10px] text-red-400 font-bold tracking-[0.3em] animate-pulse">ANOMALY DETECTED</div><div class="w-full bg-black h-2 border border-red-900 mt-1"><div id="boss-hp-bar" class="bg-red-500 h-full w-full transition-all duration-300"></div></div><div id="boss-word" class="text-3xl mt-4 word min-w-[200px] flex justify-center bg-transparent border-none shadow-none text-white neon-magenta font-black uppercase font-orbitron"></div>`;
+            el.style.top = '10px';
+            container.appendChild(el);
+
+            bossObj = { element: el, wordContainer: el.querySelector('#boss-word'), hpBar: el.querySelector('#boss-hp-bar'), y: 10, hp: hp, maxHp: hp, isBoss: true, mult: 1, spdMod: 0 };
+            
+            const wTpl = dynamicWordList[Math.floor(Math.random() * dynamicWordList.length)];
+            const opts = generateOptions(wTpl);
+            bossObj.text = wTpl.en; bossObj.options = opts.options; bossObj.ans = opts.correct;
+            bossObj.wordContainer.innerText = wTpl.en;
+            
+            wordsOnScreen.push(bossObj);
+            evaluateActiveWord();
+            gameBoard.classList.add('screen-shake');
+            setTimeout(()=>gameBoard.classList.remove('screen-shake'), 400);
+        }
+
+        function evaluateActiveWord() {
+            if (!wordsOnScreen.length) {
+                optionsPanel.classList.remove('opacity-100');
+                optionsPanel.classList.add('opacity-0', 'pointer-events-none');
+                activeWord = null; currentTargetText.innerText = "NONE";
+                return;
+            }
+
+            let sorted = [...wordsOnScreen].sort((a, b) => b.y - a.y);
+            let newActive = sorted[0];
+
+            if (activeWord !== newActive) {
+                if (activeWord && activeWord.element) activeWord.element.classList.remove('active-target');
+                activeWord = newActive;
+                if (activeWord && activeWord.element) activeWord.element.classList.add('active-target');
+
+                activeWord.options.forEach((opt, idx) => optTexts[idx].innerText = opt);
+                currentTargetText.innerText = activeWord.text.toUpperCase();
+                
+                optionsPanel.classList.remove('opacity-0', 'pointer-events-none');
+                optionsPanel.classList.add('opacity-100');
+            }
+        }
+
+        function createFloatingText(text, x, y, colorClass) {
+            const f = document.createElement('div');
+            f.className = `floating-text ${colorClass} text-xl`;
+            f.innerText = text;
+            f.style.left = `${x}px`; f.style.top = `${y}px`;
+            container.appendChild(f);
+            setTimeout(()=>f.remove(), 1000);
+        }
+
+        function takeDamage(amt) {
+            playSynth('damage');
+            health = Math.max(0, health - amt);
+            healthEl.innerText = `${health}%`;
+            if (health <= 30) healthEl.classList.replace('text-cyan-400', 'text-red-500');
+            
+            document.getElementById('damage-flash').style.opacity = '1';
+            setTimeout(() => document.getElementById('damage-flash').style.opacity = '0', 100);
+            gameBoard.classList.add('screen-shake');
+            setTimeout(() => gameBoard.classList.remove('screen-shake'), 400);
+
+            if (health <= 0) gameOver();
+        }
+
+        function destroyWord(w) {
+            w.element.remove();
+            wordsOnScreen = wordsOnScreen.filter(x => x !== w);
+            if (activeWord === w) activeWord = null;
+            evaluateActiveWord();
+        }
+
+        function updateProgressUI() {
+            const v = Math.min(currentLevelScore, targetLevelScore);
+            if (isBossLevel) {
+                levelProgressText.innerText = `ANOMALY HEALTH: ${targetLevelScore - v}`;
+                levelProgressText.classList.replace('text-cyan-500', 'text-red-500');
+                levelProgressBar.style.width = '0%';
+            } else {
+                levelProgressText.innerText = `${v} / ${targetLevelScore} SECURED`;
+                levelProgressText.classList.replace('text-red-500', 'text-cyan-500');
+                levelProgressBar.style.width = `${(v/targetLevelScore)*100}%`;
+            }
+        }
+
+        function handleOptionSelection(idx) {
+            if (!isPlaying || isTransitioning || !activeWord) return;
+            const btn = optButtons[idx];
+
+            if (activeWord.options[idx] === activeWord.ans) {
+                playSynth('correct');
+                btn.classList.add('flash-green'); setTimeout(() => btn.classList.remove('flash-green'), 300);
+
+                let pts = 10 * activeWord.mult;
+                score += pts; currentLevelScore += pts;
+                scoreEl.innerText = score.toString().padStart(5, '0');
+                wordsClearedCount++;
+                
+                let rect = activeWord.element.getBoundingClientRect();
+                let contRect = container.getBoundingClientRect();
+                createFloatingText(`+${pts}`, rect.left - contRect.left + 20, rect.top - contRect.top, activeWord.mult>1?'text-magenta-500 neon-magenta':'text-cyan-400 neon-cyan');
+
+                if (activeWord.isBoss) {
+                    activeWord.hp -= pts;
+                    activeWord.hpBar.style.width = `${Math.max(0, (activeWord.hp/activeWord.maxHp)*100)}%`;
+                    updateProgressUI();
+                    if (currentLevelScore >= targetLevelScore || activeWord.hp <= 0) { destroyWord(activeWord); bossActive = false; completeLevel(); }
+                    else {
+                        const wTpl = dynamicWordList[Math.floor(Math.random() * dynamicWordList.length)];
+                        const opts = generateOptions(wTpl);
+                        activeWord.text = wTpl.en; activeWord.options = opts.options; activeWord.ans = opts.correct;
+                        activeWord.wordContainer.innerText = wTpl.en; evaluateActiveWord();
+                    }
+                } else {
+                    destroyWord(activeWord); updateProgressUI();
+                    if (currentLevelScore >= targetLevelScore) completeLevel();
+                }
+            } else {
+                playSynth('wrong');
+                btn.classList.add('flash-red'); setTimeout(() => btn.classList.remove('flash-red'), 300);
+                if(activeWord.element) { activeWord.element.classList.add('glitch', '!border-red-500', '!text-red-500'); setTimeout(() => activeWord.element.classList.remove('glitch', '!border-red-500', '!text-red-500'), 400); }
+                takeDamage(10);
+            }
+        }
+
+        optButtons.forEach(btn => btn.addEventListener('click', () => handleOptionSelection(parseInt(btn.dataset.idx))));
+        window.addEventListener('keydown', e => { if(isPlaying && !isTransitioning && e.key>='1' && e.key<='4') handleOptionSelection(parseInt(e.key)-1); });
+
+        function startLevel(l) {
+            isTransitioning = false; currentLevelScore = 0; targetLevelScore = Math.min(40 + l*10, 100);
+            isBossLevel = (l % 5 === 0);
+            levelDisplayEl.innerText = `STAGE_${l<10?'0'+l:l}`;
+            updateProgressUI();
+
+            if (isBossLevel) { levelDisplayEl.classList.replace('text-white', 'neon-magenta'); spawnBoss(l); }
+            else levelDisplayEl.classList.replace('neon-magenta', 'text-white');
+
+            let set = diffSettings[selectedDifficulty];
+            currentFallSpeed = set.speed + (l * 0.002);
+            spawnRate = Math.max(1500, set.rate - (l * 40));
+            currentMaxWords = set.max + Math.floor(l/4);
+        }
+
+        function completeLevel() {
+            isTransitioning = true; activeWord = null; optionsPanel.classList.remove('opacity-100'); optionsPanel.classList.add('opacity-0');
+            wordsOnScreen.forEach(w => w.element.remove()); wordsOnScreen = [];
+            
+            centerMessageEl.innerHTML = `<div class="bg-black/90 border border-cyan-500 p-8 text-center shadow-[0_0_30px_rgba(0,243,255,0.4)]"><h2 class="text-3xl md:text-5xl font-black font-orbitron neon-cyan tracking-[0.2em] mb-2">STAGE_CLEARED</h2><div class="text-cyan-600 text-xs tracking-[0.3em]">PREPARING NEXT SECTOR</div></div>`;
+            centerMessageEl.classList.remove('hidden');
+
+            setTimeout(() => { centerMessageEl.classList.add('hidden'); currentLevel++; startLevel(currentLevel); }, 2000);
+        }
+
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+            let dt = timestamp - lastTime; if (dt > 100) dt = 16; lastTime = timestamp;
+
+            if (!isTransitioning) {
+                if (!isBossLevel && timestamp - lastSpawnTime > spawnRate && wordsOnScreen.length < currentMaxWords) {
+                    spawnWord(); lastSpawnTime = timestamp;
+                }
+            }
+
+            const bottom = container.clientHeight - 20;
+            for (let i = wordsOnScreen.length - 1; i >= 0; i--) {
+                const w = wordsOnScreen[i];
+                w.y += (currentFallSpeed * w.spdMod) * (dt/16);
+                w.element.style.top = `${w.y}px`;
+
+                if (w.y > bottom && !w.isBoss) { takeDamage(15); destroyWord(w); }
+            }
+
+            if (wordsOnScreen.length > 0) evaluateActiveWord();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        async function startGame() {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const n = document.getElementById('student-name').value.trim() || 'GUEST';
+            const c = document.getElementById('student-class').value.trim() || 'N/A';
+            const t = document.getElementById('custom-topic').value.trim() || 'Computing';
+            
+            startBtn.disabled = true; startBtn.innerHTML = '<span class="spinner"></span> FETCHING_DATA...';
+            startBtn.classList.replace('cyber-btn-magenta', 'opacity-75');
+
+            try {
+                dynamicWordList = await generateVocabulary(t);
+                if (dynamicWordList.length < 5) throw new Error();
+            } catch (err) {
+                errorMsg.innerText = "ERR: DB_CONNECTION_FAILED. TRY ANOTHER TOPIC."; errorMsg.classList.remove('hidden');
+                startBtn.disabled = false; startBtn.innerHTML = '> INITIALIZE_SYSTEM'; startBtn.classList.replace('opacity-75', 'cyber-btn-magenta');
+                return; 
+            }
+
+            errorMsg.classList.add('hidden');
+            currentLevel = 1; score = 0; health = 100; wordsClearedCount = 0;
+            
+            let dl = selectedDifficulty==='easy'?'L1':selectedDifficulty==='medium'?'L2':'L3';
+            let ll = selectedLang==='english'?'EN_ONLY':'EN_ZH';
+            document.getElementById('player-info').innerText = `ID: ${n} [${c}] // ${dl} // ${ll} // DATA: ${t.toUpperCase()}`;
+            
+            if(!bgmPlaying){ document.getElementById('bgm').play().catch(e=>{}); bgmPlaying=true; document.getElementById('bgm-toggle').innerText="[ AUDIO: ON ]"; document.getElementById('bgm-toggle').classList.add('bg-cyan-900', 'text-white'); }
+
+            scoreEl.innerText = '00000'; healthEl.innerText = '100%'; healthEl.classList.replace('text-red-500', 'text-cyan-400');
+            overlay.classList.add('hidden'); document.getElementById('setup-form').classList.add('hidden'); document.getElementById('final-stats').classList.add('hidden');
+            
+            startBtn.disabled = false; startBtn.innerHTML = '> INITIALIZE_SYSTEM'; startBtn.classList.replace('opacity-75', 'cyber-btn-magenta');
+            
+            wordsOnScreen.forEach(w => w.element.remove()); wordsOnScreen = []; activeWord = null;
+            isPlaying = true;
+            
+            startLevel(1);
+            lastTime = performance.now(); lastSpawnTime = lastTime;
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            isPlaying = false; cancelAnimationFrame(animationFrameId);
+            overlay.classList.remove('hidden'); document.getElementById('setup-form').classList.remove('hidden');
+            document.getElementById('title').innerHTML = `CRITICAL<span class="neon-magenta ml-4">FAILURE</span>`;
+            document.getElementById('subtitle').innerText = `NETWORK BREACHED AT STAGE_${currentLevel}`; document.getElementById('subtitle').classList.replace('text-cyan-600', 'text-red-500');
+            document.getElementById('final-stats').classList.remove('hidden'); document.getElementById('final-stats').style.display = 'flex';
+            document.getElementById('final-score').innerText = score.toString().padStart(5, '0'); document.getElementById('words-typed').innerText = wordsClearedCount;
+            startBtn.innerHTML = "> REBOOT_SYSTEM"; optionsPanel.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        startBtn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>

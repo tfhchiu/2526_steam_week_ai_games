@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>草原單字套羊 - 終極進化版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 草原與日夜交替背景 */
+        @keyframes cloudsMove {
+            0% { background-position: 0 0; }
+            100% { background-position: -1000px 0; }
+        }
+        .grassland-bg {
+            background-color: var(--sky-color, #87CEEB);
+            transition: background-color 2s ease;
+            background-image: 
+                radial-gradient(circle at 50% 100%, #4ade80 0%, #22c55e 40%, transparent 40%),
+                radial-gradient(circle at 20% 100%, #4ade80 0%, #16a34a 50%, transparent 50%),
+                radial-gradient(circle at 80% 100%, #4ade80 0%, #15803d 60%, transparent 60%);
+            background-size: 100% 50%, 100% 60%, 100% 70%;
+            background-position: bottom;
+            background-repeat: no-repeat;
+            position: relative;
+        }
+        .grassland-bg::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 50%;
+            background-image: url('data:image/svg+xml;utf8,<svg width="200" height="100" xmlns="http://www.w3.org/2000/svg"><path d="M50 50 Q70 20 100 50 Q130 20 150 50 Q170 80 100 80 Q30 80 50 50 Z" fill="white" opacity="0.8"/></svg>');
+            background-size: 200px 100px;
+            animation: cloudsMove 60s linear infinite;
+            pointer-events: none;
+            transition: opacity 2s ease;
+            opacity: var(--cloud-opacity, 0.8);
+        }
+
+        /* 羊的容器 */
+        .sheep-container {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            transition: left var(--move-speed, 2s) linear; 
+        }
+        
+        @keyframes sheepBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .sheep-emoji {
+            font-size: 6rem;
+            line-height: 1;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.3));
+            animation: sheepBounce var(--bounce-speed, 1s) ease-in-out infinite;
+        }
+
+        /* 套繩動畫 */
+        @keyframes lassoThrow {
+            0% { transform: scale(0.1) translateY(200px); opacity: 0; }
+            50% { transform: scale(1.5) translateY(-50px); opacity: 1; border-color: #d97706; }
+            100% { transform: scale(1) translateY(0); opacity: 1; border-color: #b45309; border-width: 8px;}
+        }
+        .lasso-ring {
+            position: absolute;
+            top: 10px; left: -10px; width: 120px; height: 100px;
+            border: 6px dashed transparent; border-radius: 50%;
+            z-index: 10; pointer-events: none;
+        }
+        .lasso-active { animation: lassoThrow 0.5s ease-out forwards; }
+
+        /* 粒子特效 (金幣/星星) */
+        @keyframes scatter {
+            0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(360deg); opacity: 0; }
+        }
+        .particle {
+            position: absolute;
+            animation: scatter 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            pointer-events: none;
+            z-index: 60;
+            font-size: 2rem;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        /* 加分與扣分動畫 */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5); }
+        }
+        .score-popup {
+            position: absolute; top: 50%; left: 50%;
+            animation: floatUp 1s ease-out forwards;
+            pointer-events: none; z-index: 50;
+        }
+
+        /* Combo 動畫 */
+        @keyframes comboPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.5) rotate(-5deg); }
+            100% { transform: scale(1); }
+        }
+        .combo-pop { animation: comboPop 0.3s ease-out; }
+
+        /* 輸入框錯誤震動 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .shake { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; background-color: #fee2e2 !important; color: #7f1d1d !important; }
+        
+        .damage-flash { animation: damageFlash 0.3s ease-out; }
+        @keyframes damageFlash { 0%, 100% { background-color: rgba(239, 68, 68, 0); } 50% { background-color: rgba(239, 68, 68, 0.5); } }
+
+        .timer-pop { animation: pop 0.3s ease-out; }
+        @keyframes pop { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.5); color: #ef4444; } }
+
+        .mono-timer { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, monospace; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.5); border-radius: 4px; }
+        
+        /* 暴走模式 UI 警告 */
+        .rampage-border { border-color: #ef4444 !important; box-shadow: inset 0 0 20px rgba(239,68,68,0.5); }
+    </style>
+</head>
+<body class="bg-slate-900 text-white h-screen w-full overflow-hidden flex flex-col font-sans select-none relative">
+
+    <!-- 背景音樂 -->
+    <audio id="bg-music" loop preload="auto">
+        <source src="https://assets.mixkit.co/music/preview/mixkit-relaxing-nature-47.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 傷害閃爍疊層 -->
+    <div id="damage-overlay" class="absolute inset-0 z-40 pointer-events-none"></div>
+
+    <!-- 頂部資訊列 -->
+    <header id="top-header" class="w-full flex justify-between items-center p-4 bg-emerald-900/80 shadow-lg border-b border-emerald-700 z-20 backdrop-blur-sm transition-colors duration-1000">
+        <div class="flex items-center gap-4 lg:gap-6">
+            <h1 class="text-xl lg:text-2xl font-bold text-yellow-300 drop-shadow-md">🐑 草原單字套羊</h1>
+            
+            <div class="bg-black/30 px-3 py-1 rounded-lg font-bold text-lg flex items-center gap-2 border border-white/20">
+                生命: <span id="lives-display" class="tracking-widest text-red-400">❤️❤️❤️</span>
+            </div>
+
+            <div class="bg-black/30 px-3 py-1 rounded-lg font-bold text-lg border border-white/20">
+                分數: <span id="score-display" class="text-yellow-400">0</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button id="music-toggle" class="bg-black/50 p-2 rounded-full border border-white/20 hover:bg-white/20 transition" title="開關音樂">🎵</button>
+                <button id="exit-btn" class="hidden bg-red-900/80 p-2 px-4 rounded-full border border-red-500 hover:bg-red-700 transition font-bold" title="放棄遊戲">🚪 離開</button>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- Combo 顯示 -->
+            <div id="combo-display" class="hidden text-3xl font-black text-orange-400 drop-shadow-[0_2px_5px_rgba(0,0,0,0.8)]">
+                <span id="combo-count">0</span> COMBO! 🔥
+            </div>
+            <div id="timer-box" class="bg-slate-900/80 px-4 py-2 rounded-lg font-bold text-3xl border-2 border-emerald-500 shadow-inner transition-colors">
+                <span id="timer-display" class="text-emerald-300 mono-timer">60.000</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 遊戲主要區域 (草原背景) -->
+    <main id="game-area" class="flex-grow relative overflow-hidden grassland-bg">
+        <!-- 羊將會動態生成於此 -->
+    </main>
+
+    <!-- 底部輸入區 -->
+    <footer id="bottom-footer" class="w-full p-6 bg-emerald-950/90 border-t border-emerald-800 flex justify-center z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors duration-1000">
+        <div class="w-full max-w-2xl relative">
+            <input 
+                type="text" 
+                id="word-input" 
+                class="w-full bg-white text-emerald-900 font-bold text-4xl text-center py-4 rounded-2xl border-4 border-emerald-600 focus:border-yellow-500 focus:outline-none transition-all shadow-inner tracking-widest uppercase"
+                placeholder="輸入單字後按 Enter 套羊" autocomplete="off" spellcheck="false" disabled>
+            <div id="hint-text" class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-emerald-300 text-sm font-bold bg-black/60 px-4 py-1 rounded-full border border-white/20 whitespace-nowrap">
+                ⚠️ 注意：不要套到紅色的「披著羊皮的狼」！
+            </div>
+        </div>
+    </footer>
+
+    <!-- 開始畫面 -->
+    <div id="start-overlay" class="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-lg flex items-center justify-center transition-opacity duration-300">
+        <div class="flex flex-col lg:flex-row gap-6 w-full max-w-6xl px-8 h-[650px]">
+            <!-- 左側：排行榜 -->
+            <div class="w-full lg:w-1/3 bg-slate-800/80 rounded-3xl border-2 border-slate-600 p-6 shadow-2xl flex flex-col h-full relative overflow-hidden">
+                <h2 class="text-3xl font-black text-yellow-400 mb-4 border-b border-slate-600 pb-4">🏆 牧羊人排行榜</h2>
+                <div class="overflow-y-auto flex-grow pr-2">
+                    <ul id="leaderboard-list" class="space-y-4"></ul>
+                </div>
+            </div>
+
+            <!-- 右側：登入與設定 -->
+            <div class="w-full lg:w-2/3 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-800 to-teal-900 rounded-3xl border-2 border-emerald-500 p-8 shadow-2xl relative overflow-hidden">
+                <h1 class="text-5xl font-black text-white mb-4 drop-shadow-md text-center">草原<span class="text-yellow-400">單字</span>套羊 <span class="text-2xl text-emerald-300 align-top">終極版</span></h1>
+                
+                <div class="bg-black/30 p-4 rounded-2xl mb-6 border border-white/10 w-full max-w-lg text-sm text-emerald-100 space-y-2">
+                    <p>🐑 <b>普通羊</b>：停留10秒 (最後20秒暴走變4秒)。</p>
+                    <p>✨ <b>黃金羊</b>：超快離開，單字極短！套中 <span class="text-yellow-400">+50分並補血</span>。</p>
+                    <p>🐢 <b>烏龜羊</b>：超長單字，打字高手的挑戰。</p>
+                    <p class="text-red-300">🐺 <b>偽裝的狼 (紅字)</b>：<b>絕對不要打！</b> 打錯或套中都會大扣血！等牠自己走掉。</p>
+                    <p class="text-orange-300">🔥 <b>Combo系統</b>：連續打對不漏，分數加倍！</p>
+                </div>
+                
+                <div class="w-full max-w-md flex flex-col gap-4 mb-6">
+                    <div>
+                        <label class="block text-emerald-200 text-sm font-bold mb-1 ml-2">選擇單字庫：</label>
+                        <select id="vocab-select" class="w-full py-3 px-4 bg-slate-800 text-white text-xl font-bold border-2 border-emerald-400 rounded-xl focus:outline-none">
+                            <option value="hardware">💻 電腦硬體 (基礎)</option>
+                            <option value="programming">👨‍💻 程式語言 (進階)</option>
+                            <option value="food">🍔 美食天堂 (生活)</option>
+                            <option value="toeic">💼 多益必考 (實戰)</option>
+                            <option value="hell">😈 地獄模式 (超長單字)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-emerald-200 text-sm font-bold mb-1 ml-2">牧羊人名稱：</label>
+                        <input id="player-name" class="w-full py-3 px-4 bg-white/10 text-white text-xl font-bold border-2 border-emerald-400 rounded-xl focus:outline-none text-center" type="text" placeholder="例如：套羊高手" maxlength="10">
+                    </div>
+                </div>
+
+                <button id="start-btn" class="bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-white text-3xl font-black py-4 px-16 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.3)] transform hover:scale-105 transition-all duration-200 border-2 border-yellow-300">
+                    開始套羊
+                </button>
+            </div>
+        </div>
+        <div id="countdown-text" class="hidden absolute inset-0 flex items-center justify-center text-[20rem] font-black text-white drop-shadow-[0_0_50px_rgba(250,204,21,1)] z-50 bg-black/80 backdrop-blur-md">3</div>
+    </div>
+
+    <!-- 遊戲結束畫面 -->
+    <div id="game-over-overlay" class="hidden absolute inset-0 z-50 bg-slate-900/95 flex flex-col items-center justify-center">
+        <div class="text-[100px] mb-2 filter drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" id="game-over-icon">⏰</div>
+        <h2 id="game-over-title" class="text-6xl font-black text-white mb-4 drop-shadow-lg tracking-wider">時間到！</h2>
+        
+        <div class="bg-slate-800/80 p-6 rounded-3xl border border-slate-600 text-center shadow-2xl mb-8 min-w-[400px]">
+            <div class="text-xl text-slate-400 font-bold uppercase">牧羊人</div>
+            <div class="text-3xl text-blue-400 font-black mb-4 pb-4 border-b border-slate-700" id="final-player-name">---</div>
+            
+            <div class="text-xl text-slate-400 font-bold uppercase">最高 Combo</div>
+            <div class="text-2xl text-orange-400 font-black mb-4" id="final-combo">0</div>
+
+            <div class="text-xl text-slate-400 font-bold uppercase">總分</div>
+            <div class="text-7xl text-yellow-400 font-black" id="final-score">0</div>
+        </div>
+
+        <button id="restart-btn" class="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-2xl font-bold py-3 px-12 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200 border border-emerald-400">
+            返回營地
+        </button>
+    </div>
+
+    <script>
+        // --- 單字庫與設定 ---
+        const VOCAB_LISTS = {
+            hardware: ["CPU", "MONITOR", "KEYBOARD", "MOUSE", "PRINTER", "MEMORY", "ROUTER", "SERVER", "SYSTEM", "UPDATE"],
+            programming: ["PYTHON", "JAVASCRIPT", "REACT", "NODEJS", "VARIABLE", "ARRAY", "OBJECT", "STRING", "FUNCTION", "BOOLEAN"],
+            food: ["BURGER", "PIZZA", "SUSHI", "PASTA", "STEAK", "SALAD", "TACO", "WAFFLE", "DONUT", "BACON"],
+            toeic: ["STRATEGY", "PROFIT", "CONTRACT", "EVALUATE", "NEGOTIATE", "BUDGET", "REVENUE", "BENEFIT", "CONSUMER", "GUARANTEE"],
+            hell: ["REVOLUTIONARY", "EXTRAORDINARY", "COMPREHENSIVE", "ENTHUSIASTIC", "ACCOMMODATE", "SIMULTANEOUSLY", "UNBELIEVABLE", "AUTHORIZATION", "PHILOSOPHICAL", "ARCHITECTURAL"]
+        };
+        const GOLDEN_WORDS = ["GO", "WIN", "YES", "HI", "YAY", "RUN", "TOP", "FLY", "VIP"];
+
+        const GAME_DURATION = 60000;
+        const MAX_LIVES = 3.0;
+        
+        // --- 音效系統 (使用線上開源音效) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const sfxType = new Audio("https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"); // 打字聲
+        const sfxSuccess = new Audio("https://assets.mixkit.co/active_storage/sfx/1003/1003-preview.mp3"); // 套繩
+        const sfxBaa = new Audio("https://assets.mixkit.co/active_storage/sfx/93/93-preview.mp3"); // 羊叫
+        const sfxError = new Audio("https://assets.mixkit.co/active_storage/sfx/2954/2954-preview.mp3"); // 錯誤
+        const bgMusic = document.getElementById('bg-music');
+        
+        sfxType.volume = 0.4;
+        sfxSuccess.volume = 0.6;
+        sfxBaa.volume = 0.5;
+        sfxError.volume = 0.5;
+        bgMusic.volume = 0.4;
+
+        // --- DOM 元素 ---
+        const uiStartOverlay = document.getElementById('start-overlay');
+        const btnStart = document.getElementById('start-btn');
+        const inputPlayerName = document.getElementById('player-name');
+        const selectVocab = document.getElementById('vocab-select');
+        const textCountdown = document.getElementById('countdown-text');
+        
+        const uiGameOverOverlay = document.getElementById('game-over-overlay');
+        const textGameOverTitle = document.getElementById('game-over-title');
+        const displayFinalScore = document.getElementById('final-score');
+        const displayFinalCombo = document.getElementById('final-combo');
+        const btnRestart = document.getElementById('restart-btn');
+        const iconGameOver = document.getElementById('game-over-icon');
+        
+        const displayScore = document.getElementById('score-display');
+        const displayTimer = document.getElementById('timer-display');
+        const displayLives = document.getElementById('lives-display');
+        const comboDisplay = document.getElementById('combo-display');
+        const comboCountDisplay = document.getElementById('combo-count');
+        
+        const gameArea = document.getElementById('game-area');
+        const inputWord = document.getElementById('word-input');
+        const damageOverlay = document.getElementById('damage-overlay');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const topHeader = document.getElementById('top-header');
+        const bottomFooter = document.getElementById('bottom-footer');
+        const timerBox = document.getElementById('timer-box');
+
+        // --- 狀態變數 ---
+        let playerName = "";
+        let currentVocabList = [];
+        let score = 0;
+        let lives = MAX_LIVES;
+        let isPlaying = false;
+        let timerEnd = 0;
+        let animationFrameId;
+        
+        let combo = 0;
+        let maxCombo = 0;
+        
+        let currentTargetWord = "";
+        let currentSheepElement = null;
+        let currentSheepType = 'NORMAL'; 
+        let targetTimeouts = []; 
+        let isMusicPlaying = false;
+
+        renderLeaderboard();
+
+        // --- 事件綁定 ---
+        document.getElementById('music-toggle').addEventListener('click', (e) => {
+            if (isMusicPlaying) { bgMusic.pause(); e.target.textContent = '🔇'; } 
+            else { bgMusic.play(); e.target.textContent = '🎵'; }
+            isMusicPlaying = !isMusicPlaying;
+        });
+
+        document.getElementById('exit-btn').addEventListener('click', () => { if(isPlaying) resetToHome(); });
+
+        btnStart.addEventListener('click', () => {
+            playerName = inputPlayerName.value.trim() || "新手牧羊人";
+            currentVocabList = VOCAB_LISTS[selectVocab.value];
+            if (!isMusicPlaying) { bgMusic.play().then(()=>isMusicPlaying=true).catch(e=>{}); }
+            startCountdown();
+        });
+
+        btnRestart.addEventListener('click', resetToHome);
+        document.addEventListener('click', () => { if (isPlaying) inputWord.focus(); });
+
+        // 打字音效
+        inputWord.addEventListener('input', () => {
+            if(isPlaying) {
+                sfxType.currentTime = 0; 
+                sfxType.play().catch(e=>{});
+            }
+        });
+
+        // 核心輸入邏輯
+        inputWord.addEventListener('keydown', (e) => {
+            if (!isPlaying || !currentTargetWord) return;
+            if (e.key === 'Enter') {
+                const typed = inputWord.value.trim().toUpperCase();
+                if (!typed) return;
+
+                if (typed === currentTargetWord) {
+                    if (currentSheepType === 'WOLF') {
+                        // 套到狼！大懲罰
+                        handleWrongTyping(1.0); 
+                        if(currentSheepElement) currentSheepElement.querySelector('.sheep-emoji').textContent = "🩸🐺🩸";
+                        dismissSheep(false); // 直接移除
+                    } else {
+                        handleCorrectTyping();
+                    }
+                } else {
+                    handleWrongTyping(currentSheepType === 'WOLF' ? 1.0 : 0.5);
+                }
+            }
+        });
+
+        // --- 排行榜 ---
+        function getRecords() { return JSON.parse(localStorage.getItem('sheepRecordsV2') || '[]'); }
+        function saveRecord(name, s) {
+            let r = getRecords(); r.push({ name: name, score: s }); r.sort((a,b)=>b.score-a.score);
+            localStorage.setItem('sheepRecordsV2', JSON.stringify(r.slice(0, 10)));
+        }
+        function renderLeaderboard() {
+            const r = getRecords();
+            if (r.length === 0) { leaderboardList.innerHTML = '<li class="text-slate-400 text-center mt-4">尚無紀錄</li>'; return; }
+            leaderboardList.innerHTML = r.map((x, i) => `
+                <li class="flex justify-between items-center bg-slate-700/40 p-3 rounded-xl border border-slate-600/50">
+                    <div class="flex items-center gap-3"><span class="w-6 text-center font-bold text-slate-400">${i+1}.</span><span class="font-bold text-white">${x.name}</span></div>
+                    <span class="font-black text-yellow-400">${x.score}</span>
+                </li>
+            `).join('');
+        }
+
+        // --- 遊戲流程 ---
+        function startCountdown() {
+            textCountdown.classList.remove('hidden');
+            let count = 3; textCountdown.textContent = count;
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) textCountdown.textContent = count;
+                else if (count === 0) textCountdown.textContent = "GO!";
+                else { clearInterval(countInterval); textCountdown.classList.add('hidden'); startGame(); }
+            }, 1000);
+        }
+
+        function startGame() {
+            uiStartOverlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => uiStartOverlay.classList.add('hidden'), 300);
+            document.getElementById('exit-btn').classList.remove('hidden');
+            
+            score = 0; lives = MAX_LIVES; combo = 0; maxCombo = 0;
+            displayScore.textContent = score;
+            updateLivesDisplay(); updateComboUI();
+            
+            // 重置場景
+            gameArea.style.setProperty('--sky-color', '#87CEEB');
+            gameArea.style.setProperty('--cloud-opacity', '0.8');
+            topHeader.className = "w-full flex justify-between items-center p-4 bg-emerald-900/80 shadow-lg border-b border-emerald-700 z-20 backdrop-blur-sm transition-colors duration-1000";
+            bottomFooter.className = "w-full p-6 bg-emerald-950/90 border-t border-emerald-800 flex justify-center z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors duration-1000";
+            timerBox.classList.remove('rampage-border');
+            inputWord.classList.remove('rampage-border');
+
+            isPlaying = true;
+            inputWord.disabled = false; inputWord.value = ""; inputWord.focus();
+            timerEnd = performance.now() + GAME_DURATION;
+            animationFrameId = requestAnimationFrame(updateTimer);
+            spawnTarget();
+        }
+
+        function resetToHome() {
+            isPlaying = false; inputWord.disabled = true;
+            cancelAnimationFrame(animationFrameId); clearTargetTimeouts();
+            if (currentSheepElement) { currentSheepElement.remove(); currentSheepElement = null; }
+            uiGameOverOverlay.classList.add('hidden');
+            uiStartOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            document.getElementById('exit-btn').classList.add('hidden');
+            comboDisplay.classList.add('hidden');
+            renderLeaderboard();
+        }
+
+        function endGame(reason) {
+            isPlaying = false; inputWord.disabled = true;
+            cancelAnimationFrame(animationFrameId);
+            document.getElementById('exit-btn').classList.add('hidden');
+            
+            if (reason === 'death') {
+                iconGameOver.textContent = "💀"; textGameOverTitle.textContent = "慘遭滑鐵盧";
+                textGameOverTitle.className = "text-6xl font-black text-red-500 mb-4 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]";
+            } else {
+                iconGameOver.textContent = "🌅"; textGameOverTitle.textContent = "一天結束了";
+                textGameOverTitle.className = "text-6xl font-black text-white mb-4 drop-shadow-lg";
+            }
+            document.getElementById('final-player-name').textContent = playerName;
+            displayFinalScore.textContent = score;
+            displayFinalCombo.textContent = maxCombo;
+            saveRecord(playerName, score);
+            uiGameOverOverlay.classList.remove('hidden');
+        }
+
+        // --- UI 更新與扣分 ---
+        function updateLivesDisplay() {
+            let full = Math.floor(lives), half = (lives % 1 !== 0), empty = 3 - Math.ceil(lives);
+            displayLives.innerHTML = '❤️'.repeat(full) + (half ? '💔' : '') + '🖤'.repeat(empty);
+        }
+
+        function updateComboUI() {
+            if (combo > maxCombo) maxCombo = combo;
+            if (combo >= 2) {
+                comboDisplay.classList.remove('hidden');
+                comboCountDisplay.textContent = combo;
+                comboDisplay.classList.remove('combo-pop');
+                void comboDisplay.offsetWidth;
+                comboDisplay.classList.add('combo-pop');
+            } else {
+                comboDisplay.classList.add('hidden');
+            }
+        }
+
+        function handleWrongTyping(damage = 0.5) {
+            if (!isPlaying) return;
+            sfxError.currentTime = 0; sfxError.play().catch(e=>{});
+            
+            lives -= damage;
+            combo = 0; // 斷 Combo
+            updateLivesDisplay(); updateComboUI();
+            
+            inputWord.value = "";
+            inputWord.classList.remove('shake'); void inputWord.offsetWidth; inputWord.classList.add('shake');
+            damageOverlay.classList.remove('damage-flash'); void damageOverlay.offsetWidth; damageOverlay.classList.add('damage-flash');
+            showScorePopup(`-${damage} 命`, 'text-red-500');
+
+            if (lives <= 0) { lives = 0; updateLivesDisplay(); endGame('death'); }
+        }
+
+        // --- 打對邏輯與特效 ---
+        function handleCorrectTyping() {
+            if (!isPlaying) return;
+            sfxSuccess.currentTime = 0; sfxSuccess.play().catch(e=>{});
+
+            combo++;
+            let baseScore = 10;
+            if (currentSheepType === 'GOLDEN') {
+                baseScore = 50;
+                lives = Math.min(MAX_LIVES, lives + 1); // 補血
+                updateLivesDisplay();
+            } else if (currentSheepType === 'TURTLE') {
+                baseScore = 30;
+            }
+
+            // Combo 分數加成 (每 5 combo 多 0.5 倍)
+            let multiplier = 1 + Math.floor(combo / 5) * 0.5;
+            let earned = Math.floor(baseScore * multiplier);
+            score += earned;
+            displayScore.textContent = score;
+
+            updateComboUI();
+            
+            // 視覺與粒子特效
+            showScorePopup(`+${earned} 分`, currentSheepType === 'GOLDEN' ? 'text-yellow-300' : 'text-emerald-400');
+            createParticles(window.innerWidth / 2, window.innerHeight / 2, currentSheepType === 'GOLDEN' ? '✨' : '💰');
+
+            // 觸發套繩與抓羊動畫
+            clearTargetTimeouts();
+            const oldSheep = currentSheepElement;
+            currentSheepElement = null;
+            inputWord.value = "";
+
+            if (oldSheep) {
+                const lasso = oldSheep.querySelector('.lasso-ring');
+                if (lasso) lasso.classList.add('lasso-active');
+
+                // 停止羊的跳躍與移動，模擬被套住
+                const emoji = oldSheep.querySelector('.sheep-emoji');
+                if(emoji) {
+                    emoji.style.animation = 'none';
+                    emoji.style.transform = 'scale(0.9)'; // 被套住稍微縮小
+                }
+                oldSheep.style.transition = 'none'; 
+
+                // 0.6秒動畫結束後，將羊拖走或淡出
+                setTimeout(() => {
+                    oldSheep.style.transition = 'all 0.5s ease-in';
+                    oldSheep.style.transform = 'translate(-50%, -150%) scale(0.5)';
+                    oldSheep.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        oldSheep.remove();
+                        // 動畫播完再出下一隻羊
+                        if(isPlaying) spawnTarget();
+                    }, 500);
+                }, 600);
+            } else {
+                // 如果找不到羊的例外狀況，直接出下一隻
+                if(isPlaying) spawnTarget();
+            }
+        }
+
+        function showScorePopup(text, colorClass) {
+            const popup = document.createElement('div');
+            popup.className = `score-popup text-5xl md:text-6xl font-black ${colorClass} drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] z-50`;
+            popup.textContent = text;
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 1000);
+        }
+
+        function createParticles(x, y, emojiStr) {
+            for (let i = 0; i < 8; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.textContent = emojiStr;
+                p.style.left = x + 'px';
+                p.style.top = y + 'px';
+
+                // 隨機散射角度與距離
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 50 + Math.random() * 100;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+
+                p.style.setProperty('--tx', `${tx}px`);
+                p.style.setProperty('--ty', `${ty}px`);
+
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 800);
+            }
+        }
+
+        // --- 日夜交替與暴走模式 ---
+        function updateTimer(currentTime) {
+            if (!isPlaying) return;
+            let remaining = timerEnd - currentTime;
+            if (remaining <= 0) { displayTimer.textContent = "00.000"; endGame('timeup'); return; }
+
+            // 視覺轉換邏輯
+            if (remaining < 20000) {
+                // 黑夜 + 暴走模式
+                gameArea.style.setProperty('--sky-color', '#0f172a'); // slate-900
+                gameArea.style.setProperty('--cloud-opacity', '0.2');
+                topHeader.classList.replace('bg-emerald-900/80', 'bg-red-950/90');
+                topHeader.classList.replace('border-emerald-700', 'border-red-900');
+                bottomFooter.classList.replace('bg-emerald-950/90', 'bg-red-950/90');
+                bottomFooter.classList.replace('border-emerald-800', 'border-red-900');
+                timerBox.classList.add('rampage-border');
+                inputWord.classList.add('rampage-border');
+                displayTimer.classList.replace('text-emerald-300', 'text-red-400');
+                displayTimer.classList.add('animate-pulse');
+            } else if (remaining < 40000) {
+                // 黃昏
+                gameArea.style.setProperty('--sky-color', '#ea580c'); // orange-600
+                gameArea.style.setProperty('--cloud-opacity', '0.5');
+            }
+
+            let secs = Math.floor(remaining / 1000).toString().padStart(2, '0');
+            let ms = Math.floor((remaining % 1000)).toString().padStart(3, '0');
+            displayTimer.textContent = `${secs}.${ms}`;
+            animationFrameId = requestAnimationFrame(updateTimer);
+        }
+
+        // --- 目標生成邏輯 ---
+        function clearTargetTimeouts() { targetTimeouts.forEach(id => clearTimeout(id)); targetTimeouts = []; }
+        
+        function dismissSheep(spawnNext = true) {
+            clearTargetTimeouts();
+            if (currentSheepElement) {
+                currentSheepElement.style.left = 'calc(100% + 200px)';
+                let el = currentSheepElement; currentSheepElement = null;
+                setTimeout(() => { el.remove(); if(spawnNext && isPlaying) spawnTarget(); }, 1000);
+            }
+        }
+
+        function spawnTarget() {
+            if (!isPlaying) return;
+            clearTargetTimeouts(); inputWord.value = "";
+            
+            // 決定羊的種類
+            let r = Math.random();
+            currentSheepType = 'NORMAL';
+            if (r < 0.1) currentSheepType = 'GOLDEN';
+            else if (r < 0.2) currentSheepType = 'WOLF';
+            else if (r < 0.3) currentSheepType = 'TURTLE';
+
+            let pauseTime = 10000;
+            let emoji = "🐑"; 
+            let wordColor = "text-white border-white/30";
+            let wordBg = "bg-black/60";
+            let animationSpeed = "1s";
+
+            // 判斷是否進入暴走模式
+            let remainingTime = timerEnd - performance.now();
+            let isRampage = remainingTime < 20000;
+
+            // 根據類型設定變數
+            if (currentSheepType === 'GOLDEN') {
+                emoji = "🐏";
+                currentTargetWord = GOLDEN_WORDS[Math.floor(Math.random() * GOLDEN_WORDS.length)];
+                pauseTime = 2000;
+                wordColor = "text-yellow-300 border-yellow-400";
+                wordBg = "bg-yellow-900/80";
+                animationSpeed = "0.3s";
+            } else if (currentSheepType === 'WOLF') {
+                emoji = "🐺";
+                currentTargetWord = currentVocabList[Math.floor(Math.random() * currentVocabList.length)];
+                pauseTime = isRampage ? 3000 : 5000;
+                wordColor = "text-red-500 border-red-600";
+                wordBg = "bg-red-950/90";
+            } else if (currentSheepType === 'TURTLE') {
+                emoji = "🐢";
+                // 選出長單字，若無則拿全部隨機
+                let longWords = currentVocabList.filter(w => w.length >= 6);
+                if(longWords.length === 0) longWords = currentVocabList;
+                currentTargetWord = longWords[Math.floor(Math.random() * longWords.length)];
+                pauseTime = 15000;
+                wordColor = "text-emerald-300 border-emerald-500";
+                animationSpeed = "2s";
+            } else {
+                emoji = "🐑";
+                currentTargetWord = currentVocabList[Math.floor(Math.random() * currentVocabList.length)];
+                pauseTime = isRampage ? 4000 : 10000;
+                if (isRampage) animationSpeed = "0.5s";
+            }
+
+            sfxBaa.currentTime = 0; 
+            sfxBaa.play().catch(e=>{});
+
+            const sheepDiv = document.createElement('div');
+            sheepDiv.className = 'sheep-container flex flex-col items-center gap-2';
+            sheepDiv.style.left = '-20%'; // 從左邊出現
+            sheepDiv.style.setProperty('--move-speed', '1s');
+            
+            sheepDiv.innerHTML = `
+                <div class="lasso-ring"></div>
+                <div class="sheep-emoji" style="--bounce-speed: ${animationSpeed}">${emoji}</div>
+                <div class="font-black text-3xl md:text-4xl px-6 py-2 rounded-2xl border-4 ${wordBg} ${wordColor} shadow-xl tracking-widest">${currentTargetWord}</div>
+            `;
+
+            gameArea.appendChild(sheepDiv);
+            currentSheepElement = sheepDiv;
+
+            // 羊走入畫面中央
+            setTimeout(() => {
+                if (!isPlaying || currentSheepElement !== sheepDiv) return;
+                sheepDiv.style.left = '50%';
+                
+                // 到達中央後開始倒數停留時間
+                let t1 = setTimeout(() => {
+                    if (!isPlaying || currentSheepElement !== sheepDiv) return;
+                    
+                    // 停留時間結束，羊離開畫面
+                    sheepDiv.style.left = '120%';
+                    
+                    // 根據是否為狼來決定懲罰
+                    if (currentSheepType !== 'WOLF') {
+                        handleWrongTyping(0.5); // 沒打到扣血
+                        showScorePopup('逃走了!', 'text-slate-400');
+                    } else {
+                        // 狼自己走掉是好事
+                        showScorePopup('安全!', 'text-emerald-400');
+                    }
+
+                    // 等待離開動畫結束後刪除並生下一隻
+                    let t2 = setTimeout(() => {
+                        if (!isPlaying || currentSheepElement !== sheepDiv) return;
+                        sheepDiv.remove();
+                        spawnTarget();
+                    }, 1000); 
+                    targetTimeouts.push(t2);
+
+                }, 1000 + pauseTime); // 走進來的時間(1s) + 停留時間
+                
+                targetTimeouts.push(t1);
+
+            }, 50);
+        }
+    </script>
+</body>
+</html>

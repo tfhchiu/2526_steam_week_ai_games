@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>老奶奶的麵包店 - Grandma's Bakery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Quicksand', 'Noto Sans TC', sans-serif;
+            background-color: #fdf6e3;
+            color: #5d4037;
+        }
+        .bakery-card {
+            background: #ffffff;
+            border: 4px solid #d7ccc8;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .btn-bakery {
+            background-color: #8d6e63;
+            color: white;
+            transition: all 0.3s;
+        }
+        .btn-bakery:hover {
+            background-color: #6d4c41;
+            transform: translateY(-2px);
+        }
+        .option-btn {
+            background: #efebe9;
+            border: 2px solid #d7ccc8;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .option-btn:hover {
+            background: #d7ccc8;
+        }
+        .option-btn.correct {
+            background-color: #c8e6c9;
+            border-color: #81c784;
+            color: #2e7d32;
+        }
+        .option-btn.wrong {
+            background-color: #ffcdd2;
+            border-color: #e57373;
+            color: #c62828;
+        }
+        .bread-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        .progress-bar {
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #a1887f;
+            transition: width 0.5s ease-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="game-container" class="max-w-2xl w-full">
+        <!-- Start Screen -->
+        <div id="start-screen" class="bakery-card p-8 text-center">
+            <h1 class="text-4xl font-bold mb-4 text-[#795548]">👵 老奶奶的麵包店</h1>
+            <p class="text-xl mb-8">Grandma's Bakery</p>
+            <div class="mb-8">
+                <span class="bread-icon">🥖🥐🍞</span>
+                <p class="text-gray-600">幫助老奶奶為她的美味麵包貼上正確的英文標籤吧！</p>
+            </div>
+            <button onclick="startGame()" class="btn-bakery px-10 py-4 rounded-full text-xl font-bold">
+                開始營業！
+            </button>
+        </div>
+
+        <!-- Quiz Screen (Hidden by default) -->
+        <div id="quiz-screen" class="bakery-card p-8 hidden">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-sm font-bold uppercase tracking-widest text-brown-400">進度</span>
+                <span id="score-display" class="font-bold">得分: 0</span>
+            </div>
+            <div class="progress-bar mb-8">
+                <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+            </div>
+
+            <div class="text-center mb-10">
+                <div id="item-emoji" class="bread-icon">🥐</div>
+                <h2 id="item-chinese" class="text-3xl font-bold mb-2">可頌 / 牛角麵包</h2>
+                <p class="text-gray-500">對應的英文單字是？</p>
+            </div>
+
+            <div id="options-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                <!-- Options injected by JS -->
+            </div>
+
+            <div id="feedback" class="hidden text-center p-4 rounded-lg mb-4">
+                <p id="feedback-text" class="font-bold mb-1"></p>
+                <p id="example-sentence" class="text-sm italic opacity-80"></p>
+            </div>
+
+            <button id="next-btn" onclick="nextQuestion()" class="btn-bakery w-full py-3 rounded-xl font-bold hidden">
+                下一個麵包
+            </button>
+        </div>
+
+        <!-- End Screen (Hidden by default) -->
+        <div id="end-screen" class="bakery-card p-8 text-center hidden">
+            <h2 class="text-3xl font-bold mb-4">營業結束！✨</h2>
+            <div class="text-5xl mb-6">🏆</div>
+            <p class="text-xl mb-2">你的最終得分</p>
+            <p id="final-score" class="text-5xl font-bold text-[#795548] mb-8">0</p>
+            <button onclick="location.reload()" class="btn-bakery px-10 py-4 rounded-full text-xl font-bold">
+                重新挑戰
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const vocabulary = [
+            { en: "Croissant", zh: "可頌 / 牛角麵包", emoji: "🥐", example: "I love the buttery layers of a fresh croissant." },
+            { en: "Baguette", zh: "法式長棍麵包", emoji: "🥖", example: "A French baguette is long and has a crispy crust." },
+            { en: "Whole Wheat Bread", zh: "全麥麵包", emoji: "🍞", example: "Whole wheat bread is healthier than white bread." },
+            { en: "Flour", zh: "麵粉", emoji: "🍚", example: "We need two cups of flour to make this cake." },
+            { en: "Yeast", zh: "酵母", emoji: "🧪", example: "Yeast makes the bread dough rise." },
+            { en: "Dough", zh: "麵團", emoji: "🥯", example: "Knead the dough until it becomes smooth." },
+            { en: "Oven", zh: "烤箱", emoji: "🔥", example: "The bread is baking inside the oven." },
+            { en: "Pastry", zh: "糕點", emoji: "🥧", example: "This bakery sells various fruit pastries." },
+            { en: "Toast", zh: "吐司", emoji: "🍞", example: "I usually have two slices of toast for breakfast." },
+            { en: "Baker", zh: "麵包師", emoji: "👨‍🍳", example: "The baker wakes up early to prepare the bread." }
+        ];
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let isAnswered = false;
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            isAnswered = false;
+            const currentItem = vocabulary[currentQuestionIndex];
+            
+            // UI Update
+            document.getElementById('item-emoji').innerText = currentItem.emoji;
+            document.getElementById('item-chinese').innerText = currentItem.zh;
+            document.getElementById('feedback').classList.add('hidden');
+            document.getElementById('next-btn').classList.add('hidden');
+            
+            // Progress
+            const progress = (currentQuestionIndex / vocabulary.length) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+
+            // Generate Options
+            const optionsGrid = document.getElementById('options-grid');
+            optionsGrid.innerHTML = '';
+            
+            const options = generateOptions(currentItem.en);
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn text-lg font-semibold';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(btn, opt, currentItem.en);
+                optionsGrid.appendChild(btn);
+            });
+        }
+
+        function generateOptions(correctAnswer) {
+            let opts = [correctAnswer];
+            let pool = vocabulary.map(v => v.en).filter(v => v !== correctAnswer);
+            
+            // Shuffle pool and pick 3
+            pool.sort(() => Math.random() - 0.5);
+            opts.push(...pool.slice(0, 3));
+            
+            return opts.sort(() => Math.random() - 0.5);
+        }
+
+        function checkAnswer(btn, selected, correct) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const feedback = document.getElementById('feedback');
+            const feedbackText = document.getElementById('feedback-text');
+            const exampleText = document.getElementById('example-sentence');
+            const currentItem = vocabulary[currentQuestionIndex];
+
+            feedback.classList.remove('hidden');
+            
+            if (selected === correct) {
+                score += 10;
+                btn.classList.add('correct');
+                feedback.className = 'text-center p-4 rounded-lg mb-4 bg-green-100 text-green-800';
+                feedbackText.innerText = "答對了！你太棒了！👏";
+                document.getElementById('score-display').innerText = `得分: ${score}`;
+            } else {
+                btn.classList.add('wrong');
+                feedback.className = 'text-center p-4 rounded-lg mb-4 bg-red-100 text-red-800';
+                feedbackText.innerText = `可惜，正確答案是：${correct}`;
+                // Highlight the correct one
+                const buttons = document.querySelectorAll('.option-btn');
+                buttons.forEach(b => {
+                    if (b.innerText === correct) b.classList.add('correct');
+                });
+            }
+
+            exampleText.innerText = `例句: ${currentItem.example}`;
+            document.getElementById('next-btn').classList.remove('hidden');
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < vocabulary.length) {
+                loadQuestion();
+            } else {
+                showEndScreen();
+            }
+        }
+
+        function showEndScreen() {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('end-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+        }
+    </script>
+</body>
+</html>

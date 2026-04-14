@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旅遊英文打字挑戰 - 夜航排行榜版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700;800&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            /* 深藍色背景與星空點綴 */
+            background-color: #0f172a; /* slate-900 */
+            background-image: 
+                radial-gradient(circle at 100% 100%, #1e293b 0, #1e293b 4px, transparent 4px), 
+                radial-gradient(circle at 0 0, #1e293b 0, #1e293b 4px, transparent 4px);
+            background-size: 30px 30px;
+            color: #f8fafc;
+        }
+
+        .typing-font { font-family: 'JetBrains Mono', monospace; }
+
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .pop-in { animation: popIn 0.3s ease-out forwards; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            50% { transform: translateX(4px); }
+            75% { transform: translateX(-4px); }
+        }
+        .shake { animation: shake 0.3s ease-in-out; }
+
+        /* 輸入框聚焦時的發光效果 */
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+        }
+
+        /* 滾動條美化 (深色版) */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* 玻璃透視效果容器 */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center py-8 px-4">
+
+    <!-- 遊戲主容器 -->
+    <main class="w-full max-w-4xl glass-panel rounded-3xl shadow-2xl overflow-hidden relative border border-slate-700">
+        
+        <!-- 頂部資訊列 -->
+        <header class="bg-blue-900/80 border-b border-blue-800 text-white p-4 md:p-6 flex justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-500/20 p-2 rounded-lg border border-blue-400/30">
+                    <i data-lucide="plane-takeoff" class="w-6 h-6 text-blue-400"></i>
+                </div>
+                <h1 class="text-xl md:text-2xl font-bold tracking-wide text-blue-100 hidden sm:block">夜航打字挑戰</h1>
+            </div>
+
+            <div class="flex gap-3 md:gap-4 text-sm md:text-lg font-medium">
+                <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-600 px-3 md:px-4 py-2 rounded-full shadow-inner">
+                    <i data-lucide="timer" class="w-4 h-4 md:w-5 md:h-5 text-blue-400"></i>
+                    <span id="time-left" class="w-5 md:w-6 text-center text-slate-100">60</span><span class="text-slate-400 text-xs md:text-sm">s</span>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-600 px-3 md:px-4 py-2 rounded-full shadow-inner">
+                    <i data-lucide="award" class="w-4 h-4 md:w-5 md:h-5 text-yellow-400"></i>
+                    <span id="score" class="text-slate-100">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 遊戲互動區 -->
+        <div class="p-6 md:p-10 flex flex-col items-center justify-center min-h-[450px] relative">
+            
+            <!-- 首頁：開始遊戲覆蓋層 -->
+            <div id="start-screen" class="absolute inset-0 bg-[#0f172a]/95 z-20 flex flex-col items-center justify-center backdrop-blur-md p-6 text-center">
+                <div class="w-20 h-20 bg-blue-900/50 rounded-3xl flex items-center justify-center mb-6 border border-blue-700 shadow-[0_0_20px_rgba(59,130,246,0.3)] transform rotate-3">
+                    <i data-lucide="keyboard" class="w-10 h-10 text-blue-400 -rotate-3"></i>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4 tracking-wider">準備起飛</h2>
+                <p class="text-slate-400 mb-8 max-w-md text-sm md:text-base leading-relaxed">在 60 秒內輸入旅遊單字，突破其他旅客的紀錄，爭取排行榜第一名吧！</p>
+                
+                <div class="w-full max-w-sm mb-8 text-left">
+                    <label for="player-name-input" class="block text-sm font-medium text-blue-300 mb-2 pl-1">旅客代號 (暱稱)</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <i data-lucide="user" class="h-5 w-5 text-slate-500"></i>
+                        </div>
+                        <input type="text" id="player-name-input" class="block w-full pl-12 pr-4 py-4 bg-slate-800 border-2 border-slate-700 rounded-xl leading-5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:bg-slate-700 transition-all font-bold text-lg" placeholder="例如：夜航員007">
+                    </div>
+                </div>
+
+                <!-- 首頁雙按鈕 -->
+                <div class="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+                    <button id="start-btn" class="flex-[3] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] transform hover:-translate-y-1 transition-all flex justify-center items-center gap-2">
+                        <i data-lucide="rocket" class="w-5 h-5"></i>
+                        開始挑戰
+                    </button>
+                    <button id="home-leaderboard-btn" class="flex-[2] py-4 bg-slate-800 border border-slate-600 hover:bg-slate-700 text-blue-300 font-bold text-lg rounded-xl transform hover:-translate-y-1 transition-all flex justify-center items-center gap-2">
+                        <i data-lucide="trophy" class="w-5 h-5 text-yellow-500"></i>
+                        排行榜
+                    </button>
+                </div>
+            </div>
+
+            <!-- 單字顯示區 (遊戲進行中) -->
+            <div id="game-area" class="w-full flex flex-col items-center opacity-0 transition-opacity duration-300 pointer-events-none">
+                <div class="text-center mb-10">
+                    <div class="inline-block bg-blue-900/50 border border-blue-500/30 px-6 py-2 rounded-full mb-6 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
+                        <p id="chinese-meaning" class="text-xl md:text-2xl text-blue-300 font-bold tracking-widest">中文意思</p>
+                    </div>
+                    <div id="word-display" class="typing-font text-5xl md:text-6xl tracking-[0.2em] font-bold text-slate-600 select-none flex flex-wrap justify-center min-h-[80px]">
+                        <!-- 字母會在這裡動態生成 -->
+                    </div>
+                </div>
+
+                <!-- 輸入框 -->
+                <input 
+                    type="text" 
+                    id="typing-input" 
+                    class="w-full max-w-lg text-center text-3xl md:text-4xl typing-font py-5 px-6 bg-slate-800 border-2 border-slate-600 rounded-2xl text-white transition-all shadow-inner focus:border-blue-500 focus:bg-slate-700"
+                    autocomplete="off" 
+                    spellcheck="false"
+                    placeholder="Type here..."
+                    disabled
+                >
+                <div class="flex items-center gap-2 mt-6 text-slate-500 text-sm bg-slate-800/50 px-4 py-2 rounded-full">
+                    <i data-lucide="info" class="w-4 h-4 text-blue-400"></i> 
+                    <span>輸入正確會自動切換下一個單字</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 底部裝飾列 -->
+        <div class="h-1.5 w-full bg-gradient-to-r from-blue-900 via-blue-500 to-blue-900"></div>
+    </main>
+
+    <!-- 獨立排行榜彈出視窗 (首頁點擊顯示) -->
+    <div id="leaderboard-modal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50 backdrop-blur-md p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl pop-in relative flex flex-col max-h-[90vh]">
+            <button id="close-leaderboard-btn" class="absolute top-5 right-5 text-slate-400 hover:text-white transition bg-slate-800 hover:bg-slate-700 p-2 rounded-full">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
+                    <i data-lucide="trophy" class="w-8 h-8 text-slate-900"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white">航班排行榜</h2>
+                <p class="text-sm text-slate-400 mt-1">看看誰是旅遊單字大師！</p>
+            </div>
+
+            <div class="bg-slate-800/80 rounded-t-xl p-3 flex text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                <div class="w-12 text-center">排名</div>
+                <div class="flex-1 pl-2">旅客名稱</div>
+                <div class="w-16 text-center">得分</div>
+                <div class="w-16 text-right pr-2">準確率</div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto rounded-b-xl bg-slate-800/30 p-2" id="full-leaderboard-list">
+                <!-- 完整排行榜動態生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束與數據彈出視窗 -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50 backdrop-blur-md p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 max-w-2xl w-full text-center shadow-2xl pop-in overflow-y-auto max-h-[90vh]">
+            
+            <div class="flex flex-col md:flex-row gap-8">
+                <!-- 左側：本次成績與個人數據 -->
+                <div class="flex-1 border-b md:border-b-0 md:border-r border-slate-700 pb-6 md:pb-0 md:pr-6">
+                    <div class="w-20 h-20 bg-yellow-500/10 border border-yellow-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
+                        <i data-lucide="award" class="w-10 h-10 text-yellow-500"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white mb-1">任務完成！</h2>
+                    <p class="text-slate-400 mb-6" id="end-greeting">辛苦了，旅客。</p>
+                    
+                    <div class="bg-blue-900/30 border border-blue-800/50 rounded-2xl p-5 mb-6 shadow-inner">
+                        <h3 class="text-sm font-bold text-blue-300 mb-4 text-left border-b border-blue-800/50 pb-2">本次航班成績</h3>
+                        <div class="flex justify-around">
+                            <div class="text-center">
+                                <p class="text-xs text-slate-400 mb-1">完成單字</p>
+                                <p class="text-5xl font-black text-blue-400 drop-shadow-md" id="final-score">0</p>
+                            </div>
+                            <div class="w-px bg-slate-700 my-2"></div>
+                            <div class="text-center">
+                                <p class="text-xs text-slate-400 mb-1">準確率</p>
+                                <p class="text-5xl font-black text-green-400 drop-shadow-md" id="final-accuracy">0%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-left bg-slate-800/80 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">個人生涯數據</h3>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="flex justify-between items-center bg-slate-900 px-3 py-2 rounded">
+                                <span class="text-slate-400">遊玩次數</span>
+                                <span class="font-bold text-white" id="stat-games">0</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-slate-900 px-3 py-2 rounded">
+                                <span class="text-slate-400">最高分</span>
+                                <span class="font-bold text-blue-400" id="stat-best">0</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-slate-900 px-3 py-2 rounded col-span-2">
+                                <span class="text-slate-400">平均準確率</span>
+                                <span class="font-bold text-white" id="stat-avg-acc">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側：迷你排行榜 -->
+                <div class="flex-1 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="bar-chart-2" class="w-5 h-5 text-blue-400"></i>
+                            最新排名
+                        </h3>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto pr-2" id="mini-leaderboard-list">
+                        <!-- 排行榜項目動態生成 -->
+                    </div>
+
+                    <button id="restart-btn" class="w-full mt-6 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg rounded-xl transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] transform hover:-translate-y-0.5">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                        返回登機門 (再來一局)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Lucide 圖示
+        lucide.createIcons();
+
+        // 單字庫
+        const vocabPool = [
+            { en: "passport", zh: "護照" }, { en: "luggage", zh: "行李" },
+            { en: "flight", zh: "航班" }, { en: "airport", zh: "機場" },
+            { en: "ticket", zh: "票" }, { en: "guide", zh: "導遊" },
+            { en: "hotel", zh: "旅館" }, { en: "map", zh: "地圖" },
+            { en: "trip", zh: "旅行" }, { en: "tourist", zh: "遊客" },
+            { en: "visa", zh: "簽證" }, { en: "customs", zh: "海關" },
+            { en: "camera", zh: "相機" }, { en: "journey", zh: "旅程" },
+            { en: "backpack", zh: "背包" }, { en: "souvenir", zh: "紀念品" },
+            { en: "boarding", zh: "登機" }, { en: "arrival", zh: "抵達" },
+            { en: "depart", zh: "出發" }, { en: "station", zh: "車站" },
+            { en: "subway", zh: "地鐵" }, { en: "cruise", zh: "郵輪" },
+            { en: "island", zh: "島嶼" }, { en: "beach", zh: "海灘" },
+            { en: "resort", zh: "渡假村" }
+        ];
+
+        // 系統變數
+        const GAME_DURATION = 60;
+        let currentWordObj = null;
+        let score = 0;
+        let timeLeft = GAME_DURATION;
+        let timerInterval;
+        let isPlaying = false;
+        let totalKeystrokes = 0;
+        let correctKeystrokes = 0;
+        let shuffledWords = [];
+        let wordIndex = 0;
+
+        // 玩家數據紀錄 (In-Memory State)
+        let currentPlayerName = "夜航員";
+        let personalStats = {
+            gamesPlayed: 0,
+            bestScore: 0,
+            totalAccuracySum: 0
+        };
+
+        // 模擬排行榜數據 (讓玩家一開始就有競爭對手)
+        let leaderboardData = [
+            { name: "笨蛋奶妈", score: 28, accuracy: 98, isBot: true },
+            { name: "神经病不解释", score: 24, accuracy: 95, isBot: true },
+            { name: "神不解释", score: 18, accuracy: 88, isBot: true },
+            { name: "雪碧加冰", score: 12, accuracy: 75, isBot: true },
+            { name: "猪妞", score: 8, accuracy: 60, isBot: true }
+        ];
+
+        // DOM 元素
+        const startScreen = document.getElementById('start-screen');
+        const gameArea = document.getElementById('game-area');
+        const startBtn = document.getElementById('start-btn');
+        const homeLeaderboardBtn = document.getElementById('home-leaderboard-btn');
+        const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
+        const leaderboardModal = document.getElementById('leaderboard-modal');
+        const playerNameInput = document.getElementById('player-name-input');
+        
+        const wordDisplay = document.getElementById('word-display');
+        const chineseMeaning = document.getElementById('chinese-meaning');
+        const typingInput = document.getElementById('typing-input');
+        const timeLeftEl = document.getElementById('time-left');
+        const scoreEl = document.getElementById('score');
+        
+        const gameOverModal = document.getElementById('game-over-modal');
+        const endGreeting = document.getElementById('end-greeting');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalAccuracyEl = document.getElementById('final-accuracy');
+        const restartBtn = document.getElementById('restart-btn');
+        
+        const statGames = document.getElementById('stat-games');
+        const statBest = document.getElementById('stat-best');
+        const statAvgAcc = document.getElementById('stat-avg-acc');
+        
+        const miniLeaderboardList = document.getElementById('mini-leaderboard-list');
+        const fullLeaderboardList = document.getElementById('full-leaderboard-list');
+
+        // 初始化：渲染首頁排行榜資料
+        renderLeaderboard();
+
+        // 工具：打亂陣列
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // 開始遊戲
+        function startGame() {
+            // 處理玩家暱稱
+            const inputName = playerNameInput.value.trim();
+            if (inputName) {
+                currentPlayerName = inputName;
+            }
+
+            score = 0;
+            timeLeft = GAME_DURATION;
+            totalKeystrokes = 0;
+            correctKeystrokes = 0;
+            wordIndex = 0;
+            isPlaying = true;
+            shuffledWords = shuffleArray(vocabPool);
+
+            scoreEl.textContent = score;
+            timeLeftEl.textContent = timeLeft;
+            timeLeftEl.classList.remove('text-red-400');
+            
+            startScreen.classList.add('hidden');
+            gameOverModal.classList.add('hidden');
+            leaderboardModal.classList.add('hidden');
+            
+            gameArea.classList.remove('opacity-0', 'pointer-events-none');
+            typingInput.disabled = false;
+            typingInput.value = '';
+            
+            setNextWord();
+            typingInput.focus();
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function setNextWord() {
+            if (wordIndex >= shuffledWords.length) {
+                shuffledWords = shuffleArray(vocabPool);
+                wordIndex = 0;
+            }
+            currentWordObj = shuffledWords[wordIndex];
+            chineseMeaning.textContent = currentWordObj.zh;
+            typingInput.value = '';
+            renderWordDisplay('');
+            wordIndex++;
+        }
+
+        // 深色模式文字渲染
+        function renderWordDisplay(typedText) {
+            const targetWord = currentWordObj.en;
+            let html = '';
+            
+            for (let i = 0; i < targetWord.length; i++) {
+                const targetChar = targetWord[i];
+                const typedChar = typedText[i];
+
+                if (typedChar === undefined) {
+                    html += `<span class="text-slate-600 transition-colors">${targetChar}</span>`;
+                } else if (typedChar.toLowerCase() === targetChar.toLowerCase()) {
+                    html += `<span class="text-green-400 transition-colors drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">${targetChar}</span>`;
+                } else {
+                    html += `<span class="text-red-400 bg-red-900/40 rounded transition-colors">${targetChar}</span>`;
+                }
+            }
+            wordDisplay.innerHTML = html;
+        }
+
+        // 處理輸入
+        typingInput.addEventListener('input', (e) => {
+            if (!isPlaying) return;
+
+            const typedText = e.target.value.trim();
+            const targetWord = currentWordObj.en;
+            
+            totalKeystrokes++;
+            renderWordDisplay(typedText);
+
+            if (typedText.toLowerCase() === targetWord.toLowerCase()) {
+                score++;
+                scoreEl.textContent = score;
+                correctKeystrokes += targetWord.length; 
+                
+                // 深色模式正確提示
+                typingInput.classList.add('border-green-500', 'bg-green-900/20');
+                setTimeout(() => {
+                    typingInput.classList.remove('border-green-500', 'bg-green-900/20');
+                    setNextWord();
+                }, 150);
+            } else {
+                let isCurrentWrong = false;
+                for (let i = 0; i < typedText.length; i++) {
+                    if (typedText[i].toLowerCase() !== targetWord[i]?.toLowerCase()) {
+                        isCurrentWrong = true;
+                        break;
+                    }
+                }
+
+                if (isCurrentWrong) {
+                    typingInput.classList.add('border-red-500', 'bg-red-900/20');
+                } else {
+                    typingInput.classList.remove('border-red-500', 'bg-red-900/20');
+                }
+            }
+        });
+
+        gameArea.addEventListener('click', () => {
+            if (isPlaying) typingInput.focus();
+        });
+
+        function updateTimer() {
+            timeLeft--;
+            timeLeftEl.textContent = timeLeft;
+
+            if (timeLeft <= 10) {
+                timeLeftEl.classList.add('text-red-400', 'font-bold', 'shake');
+                setTimeout(() => timeLeftEl.classList.remove('shake'), 300);
+            }
+
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }
+
+        // 結束遊戲與數據處理
+        function endGame() {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            typingInput.disabled = true;
+            
+            // 計算準確率
+            let accuracy = 0;
+            if (totalKeystrokes > 0) {
+                accuracy = Math.round((correctKeystrokes / totalKeystrokes) * 100);
+                accuracy = Math.min(accuracy, 100); 
+            }
+
+            // 更新個人數據
+            personalStats.gamesPlayed++;
+            if (score > personalStats.bestScore) personalStats.bestScore = score;
+            personalStats.totalAccuracySum += accuracy;
+            let avgAccuracy = Math.round(personalStats.totalAccuracySum / personalStats.gamesPlayed);
+
+            // 更新排行榜數據
+            leaderboardData.push({
+                name: currentPlayerName,
+                score: score,
+                accuracy: accuracy,
+                isCurrent: true 
+            });
+
+            // 排序排行榜
+            leaderboardData.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return b.accuracy - a.accuracy;
+            });
+
+            // 渲染 UI
+            endGreeting.textContent = `${currentPlayerName}，航班已降落！`;
+            finalScoreEl.textContent = score;
+            finalAccuracyEl.textContent = `${accuracy}%`;
+            
+            statGames.textContent = personalStats.gamesPlayed;
+            statBest.textContent = personalStats.bestScore;
+            statAvgAcc.textContent = `${avgAccuracy}%`;
+
+            renderLeaderboard();
+            
+            gameOverModal.classList.remove('hidden');
+            
+            // 移除當前標記，讓下次遊玩重新標示
+            leaderboardData.forEach(entry => entry.isCurrent = false);
+
+            if (score > 0) fireConfetti();
+        }
+
+        // 渲染排行榜 (同步更新所有排行榜容器)
+        function renderLeaderboard() {
+            let listHtml = '';
+            const topPlayers = leaderboardData.slice(0, 10);
+
+            topPlayers.forEach((player, index) => {
+                const rank = index + 1;
+                let rankStyle = 'bg-slate-700 text-slate-400';
+                let rankIcon = rank;
+                
+                if (rank === 1) { rankStyle = 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'; rankIcon = '<i data-lucide="crown" class="w-4 h-4 mx-auto"></i>'; }
+                else if (rank === 2) { rankStyle = 'bg-slate-300 text-slate-800 shadow-md'; rankIcon = rank; }
+                else if (rank === 3) { rankStyle = 'bg-amber-700 text-white shadow-md'; rankIcon = rank; }
+
+                const highlightClass = player.isCurrent ? 'bg-blue-900/60 border border-blue-500 shadow-inner' : 'bg-slate-800/60 border border-slate-700';
+                const nameStyle = player.isCurrent ? 'text-blue-300 font-bold' : 'text-slate-300 font-medium';
+                
+                const botIcon = player.isBot ? '<i data-lucide="bot" class="w-3 h-3 text-slate-500 inline ml-1"></i>' : '';
+
+                listHtml += `
+                    <div class="flex items-center p-2.5 mb-2 rounded-xl ${highlightClass} transition-all hover:bg-slate-700">
+                        <div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs mr-3 flex-shrink-0 ${rankStyle}">
+                            ${rankIcon}
+                        </div>
+                        <div class="flex-1 truncate ${nameStyle} pl-1">
+                            ${player.name} ${botIcon}
+                        </div>
+                        <div class="w-16 text-center font-bold text-blue-400 text-lg">
+                            ${player.score}
+                        </div>
+                        <div class="w-16 text-right font-medium text-slate-500 text-sm pr-2">
+                            ${player.accuracy}%
+                        </div>
+                    </div>
+                `;
+            });
+
+            if(miniLeaderboardList) miniLeaderboardList.innerHTML = listHtml;
+            if(fullLeaderboardList) fullLeaderboardList.innerHTML = listHtml;
+            lucide.createIcons();
+        }
+
+        // 撒花特效
+        function fireConfetti() {
+            const count = 200;
+            const defaults = { origin: { y: 0.6 }, zIndex: 100, colors: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#c084fc'] };
+
+            function fire(particleRatio, opts) {
+                confetti(Object.assign({}, defaults, opts, {
+                    particleCount: Math.floor(count * particleRatio)
+                }));
+            }
+
+            fire(0.25, { spread: 26, startVelocity: 55 });
+            fire(0.2, { spread: 60 });
+            fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+            fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+        }
+
+        // 首頁按鈕事件
+        startBtn.addEventListener('click', startGame);
+        
+        homeLeaderboardBtn.addEventListener('click', () => {
+            renderLeaderboard(); // 確保顯示最新資料
+            leaderboardModal.classList.remove('hidden');
+        });
+        
+        closeLeaderboardBtn.addEventListener('click', () => {
+            leaderboardModal.classList.add('hidden');
+        });
+
+        // 結束畫面按鈕
+        restartBtn.addEventListener('click', () => {
+            gameOverModal.classList.add('hidden');
+            renderLeaderboard();
+            gameArea.classList.add('opacity-0', 'pointer-events-none');
+            startScreen.classList.remove('hidden');
+        });
+        
+        // 允許在輸入框按 Enter 開始
+        playerNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startGame();
+        });
+
+    </script>
+</body>
+</html>

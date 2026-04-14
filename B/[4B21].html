@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄罗斯方块 - 终极三模式版</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --primary: #38bdf8;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --text-light: #f8fafc;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 游戏主容器 */
+        #game-wrapper {
+            position: relative;
+            display: flex;
+            gap: 20px;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        /* 游戏主画布 */
+        canvas {
+            background-color: #020617;
+            border: 2px solid var(--primary);
+            border-radius: 5px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* 左上角记分表 - 绝对定位悬浮 */
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: -150px;
+            background: rgba(30, 41, 59, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 5px solid var(--primary);
+            width: 110px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        #score-board h2 { margin: 0; font-size: 1.1rem; color: #94a3b8; }
+        #score-value { font-size: 2.2rem; font-weight: bold; color: var(--success); margin: 5px 0; }
+        #mode-indicator { font-size: 0.85rem; color: var(--warning); font-weight: bold; }
+
+        /* 右上角计时器 */
+        #timer-board {
+            position: absolute;
+            top: 20px;
+            right: -150px;
+            background: rgba(30, 41, 59, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            border-right: 5px solid var(--warning);
+            width: 110px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        #timer-board h2 { margin: 0; font-size: 1.1rem; color: #94a3b8; }
+        #timer-value { font-size: 2.2rem; font-weight: bold; color: var(--warning); margin: 5px 0; }
+
+        /* 右侧信息面板 */
+        #side-panel {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .info-box h3 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #334155; padding-bottom: 8px;}
+        .info-box p { margin: 8px 0; font-size: 0.9rem; color: #cbd5e1; line-height: 1.5;}
+        
+        kbd {
+            background-color: #334155; color: #fff; border-radius: 4px; padding: 2px 6px;
+            font-size: 0.85em; font-family: monospace; border-bottom: 2px solid #0f172a;
+        }
+
+        /* 覆盖层基类 (菜单、结束、惩罚) */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            border-radius: 15px; z-index: 100; backdrop-filter: blur(8px);
+        }
+
+        .overlay h1 { color: var(--primary); font-size: 2.8rem; margin-bottom: 5px; text-shadow: 0 0 15px rgba(56, 189, 248, 0.6); }
+        .subtitle { color: #94a3b8; font-size: 1.1rem; margin-bottom: 30px; text-align: center; }
+
+        /* 模式选择按钮 */
+        .mode-btn {
+            background-color: var(--panel-bg);
+            border: 2px solid #334155;
+            color: white;
+            padding: 15px 20px;
+            margin: 10px 0;
+            width: 85%;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+        .mode-btn:hover { transform: scale(1.02); border-color: var(--primary); box-shadow: 0 0 15px rgba(56,189,248,0.3); }
+        .mode-btn h2 { margin: 0 0 5px 0; font-size: 1.3rem; color: var(--primary); }
+        .mode-btn p { margin: 0; font-size: 0.85rem; color: #94a3b8; }
+        
+        .mode-btn.btn-fast:hover { border-color: #a855f7; box-shadow: 0 0 15px rgba(168,85,247,0.3); }
+        .mode-btn.btn-fast h2 { color: #a855f7; }
+        
+        .mode-btn.btn-danger:hover { border-color: var(--danger); box-shadow: 0 0 15px rgba(239,68,68,0.3); }
+        .mode-btn.btn-danger h2 { color: var(--danger); }
+
+        .action-btn {
+            background: var(--primary); color: #0f172a; font-weight: bold; border: none;
+            padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; margin-top: 15px;
+        }
+        .action-btn:hover { background: #7dd3fc; }
+
+        /* 排行榜表格 */
+        table { width: 80%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 12px; border-bottom: 1px solid #334155; text-align: center; }
+        th { color: var(--primary); }
+
+        /* 惩罚模式特定样式 */
+        .penalty-container { text-align: center; width: 80%; }
+        .penalty-input-group { margin: 15px 0; display: flex; justify-content: center; align-items: center; gap: 15px; }
+        .penalty-input-group span { font-size: 1.6rem; font-weight: bold; color: var(--warning); width: 80px; text-align: right;}
+        .penalty-input-group input {
+            padding: 12px; font-size: 1.2rem; border-radius: 5px; border: 2px solid #334155;
+            background: #020617; color: white; width: 180px; outline: none; transition: border 0.3s;
+        }
+        .penalty-input-group input:focus { border-color: var(--danger); }
+        #penalty-timer { font-size: 3.5rem; color: var(--danger); font-weight: bold; text-shadow: 0 0 15px red; margin: 15px 0;}
+
+        /* 惊吓动图全屏样式 */
+        #jumpscare-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: black; z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column;
+        }
+        .strobe { animation: flash 0.05s infinite; }
+        @keyframes flash { 0% { background-color: black; } 50% { background-color: red; } 100% { background-color: white; } }
+        #jumpscare-screen img { width: 100%; height: 100%; object-fit: cover; position: absolute; z-index: 1; }
+        .scary-text { position: absolute; z-index: 2; color: white; font-size: 8rem; text-shadow: 0 0 20px red; mix-blend-mode: difference; pointer-events: none; font-weight: bold; text-transform: uppercase;}
+
+        /* 音乐控制 */
+        #music-toggle {
+            position: absolute; top: 20px; right: 20px; background: none; border: none; color: white;
+            font-size: 1.5rem; cursor: pointer; z-index: 1000; opacity: 0.7;
+        }
+        #music-toggle:hover { opacity: 1; transform: scale(1.1); }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- 轻松愉快的背景音乐 (Pixabay无版权音乐) -->
+    <audio id="bgm" src="https://cdn.pixabay.com/audio/2022/10/14/audio_9939f792bc.mp3" loop preload="auto"></audio>
+    <button id="music-toggle" onclick="toggleMusic()">🔊</button>
+
+    <div id="game-wrapper">
+        <!-- 外部计分板 -->
+        <div id="score-board">
+            <h2>当前分数</h2>
+            <div id="score-value">0</div>
+            <div id="mode-indicator">引导阶段</div>
+        </div>
+
+        <!-- 外部计时器 (仅限时模式显示) -->
+        <div id="timer-board" class="hidden">
+            <h2 id="timer-title">剩余时间</h2>
+            <div id="timer-value">03:00</div>
+        </div>
+
+        <!-- 游戏画布 -->
+        <canvas id="tetris" width="300" height="600"></canvas>
+
+        <!-- 侧边说明 -->
+        <div id="side-panel">
+            <div class="info-box" id="current-mode-info">
+                <h3>当前状态</h3>
+                <p>等待选择模式...</p>
+            </div>
+            <div class="info-box">
+                <h3>🕹️ 操作说明</h3>
+                <p><kbd>←</kbd> <kbd>→</kbd> 左右移动</p>
+                <p><kbd>↑</kbd> 旋转方块</p>
+                <p><kbd>↓</kbd> 稍微加速</p>
+                <p><kbd>Space</kbd> 瞬间填下</p>
+            </div>
+            <div class="info-box">
+                <h3>🎯 核心规则</h3>
+                <p>• 填入方块: <b>+10分</b></p>
+                <p>• 消除一行: <b>+50分</b></p>
+                <hr style="border-color:#334155; margin:10px 0;">
+                <p style="color:var(--warning); font-size:0.8rem;">⭐ 达到200分后，幽灵辅助关闭，开启高难度全随机方块！</p>
+            </div>
+        </div>
+
+        <!-- 主菜单 -->
+        <div id="menu-screen" class="overlay">
+            <h1>俄罗斯方块</h1>
+            <div class="subtitle">请清楚地选择您要挑战的模式</div>
+            
+            <button class="mode-btn" onclick="startGame('score')">
+                <h2>1. 🏆 计分模式 (常规挑战)</h2>
+                <p>限时 3 分钟。时间结束后自动保存分数到本地排行榜。</p>
+            </button>
+            
+            <button class="mode-btn btn-fast" onclick="startGame('fast')">
+                <h2>2. ⚡ 极快模式 (手速极限)</h2>
+                <p>无时间限制。方块初始下落速度是正常模式的 2 倍！</p>
+            </button>
+            
+            <button class="mode-btn btn-danger" onclick="startGame('penalty')">
+                <h2>3. 💀 惩罚模式 (生死时速)</h2>
+                <p>限时 3 分钟，目标 3000 分！若未达标将触发致命的翻译惩罚！</p>
+            </button>
+
+            <button class="action-btn" style="background:#475569; color:white;" onclick="showLeaderboard()">查看本地排行榜</button>
+        </div>
+
+        <!-- 游戏结束覆盖层 -->
+        <div id="game-over-screen" class="overlay hidden">
+            <h1 id="game-over-title">游戏结束</h1>
+            <p style="font-size: 1.5rem; margin-bottom: 20px;">最终得分: <span id="final-score" style="color:var(--success); font-weight:bold; font-size: 2.5rem;">0</span></p>
+            <button class="action-btn" onclick="showMenu()">返回主菜单</button>
+            <button class="action-btn hidden" id="btn-show-board" style="background-color: #475569; color:white; margin-left:10px;" onclick="showLeaderboard()">查看排行榜</button>
+        </div>
+
+        <!-- 排行榜覆盖层 -->
+        <div id="leaderboard-screen" class="overlay hidden">
+            <h1>🏆 计分模式排行榜</h1>
+            <table id="leaderboard-table">
+                <thead><tr><th>排名</th><th>分数</th><th>日期</th></tr></thead>
+                <tbody><!-- JS 动态注入 --></tbody>
+            </table>
+            <button class="action-btn" onclick="showMenu()">返回菜单</button>
+        </div>
+
+        <!-- 惩罚模式：翻译挑战覆盖层 -->
+        <div id="penalty-screen" class="overlay hidden" style="background: rgba(10, 10, 20, 0.98);">
+            <div class="penalty-container">
+                <h1 style="color: var(--danger); font-size: 3rem; text-shadow: 0 0 20px red;">🚨 挑战失败！接受惩罚！</h1>
+                <p style="color: #cbd5e1; font-size: 1.2rem; margin-bottom: 0;">你未能在3分钟内达到 3000 分。</p>
+                <p style="color: #cbd5e1; font-size: 1.2rem; margin-top: 5px;">请在 1 分钟内将以下词语翻译成英文(全小写)，否则后果自负...</p>
+                
+                <div id="penalty-timer">60</div>
+                
+                <div class="penalty-input-group">
+                    <span id="word1-label">苹果</span>
+                    <input type="text" id="word1-input" placeholder="输入英文" autocomplete="off">
+                </div>
+                <div class="penalty-input-group">
+                    <span id="word2-label">猫</span>
+                    <input type="text" id="word2-input" placeholder="输入英文" autocomplete="off">
+                </div>
+
+                <button onclick="submitPenalty()" class="action-btn" style="background:var(--danger); color:white; width: 200px; font-size: 1.3rem;">提交翻译</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 惊吓动图全屏层 (初始隐藏) -->
+    <div id="jumpscare-screen" class="hidden strobe">
+        <!-- 经典的恐怖动图占位，保证网页能加载 -->
+        <img src="https://media.tenor.com/8QzQY_4a_k0AAAAC/fnaf-jumpscare.gif" alt="Jumpscare">
+        <div class="scary-text">TIME'S UP!</div>
+    </div>
+
+<script>
+    // --- 核心配置与状态 ---
+    const canvas = document.getElementById('tetris');
+    const ctx = canvas.getContext('2d');
+    const ROWS = 20;
+    const COLS = 10;
+    const BLOCK_SIZE = 30;
+
+    // 颜色池
+    const COLORS = [null, '#00FFFF', '#0000FF', '#FFA500', '#FFFF00', '#00FF00', '#800080', '#FF0000'];
+    
+    // 形状矩阵
+    const SHAPES = {
+        I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+        J: [[2,0,0],[2,2,2],[0,0,0]],
+        L: [[0,0,3],[3,3,3],[0,0,0]],
+        O: [[4,4],[4,4]],
+        S: [[0,5,5],[5,5,0],[0,0,0]],
+        T: [[0,6,0],[6,6,6],[0,0,0]],
+        Z: [[7,7,0],[0,7,7],[0,0,0]]
+    };
+
+    // 阶段方块池
+    const GUIDED_SEQUENCE = ['O', 'I', 'T', 'L', 'J']; // 新手友好序列 (无S/Z)
+    const RANDOM_POOL = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+
+    // 惩罚翻译字典
+    const DICTIONARY = {
+        "苹果": "apple", "香蕉": "banana", "猫": "cat", "狗": "dog", 
+        "太阳": "sun", "月亮": "moon", "水": "water", "火": "fire",
+        "男孩": "boy", "女孩": "girl", "书": "book", "树": "tree"
+    };
+
+    // 游戏状态
+    let board = [];
+    let score = 0;
+    let sequenceIndex = 0;
+    let isPlaying = false;
+    let currentMode = ''; 
+    
+    // 计时与动画
+    let dropCounter = 0;
+    let dropInterval = 1000; 
+    let baseDropInterval = 1000;
+    let lastTime = 0;
+    let requestID = null;
+    let gameTimerInterval = null;
+    let gameTimeLeft = 180; // 3分钟
+
+    // 惩罚状态
+    let penaltyTimeLeft = 60;
+    let penaltyInterval = null;
+    let currentWords = [];
+
+    let player = { pos: {x: 0, y: 0}, matrix: null };
+
+    // BGM 控制
+    const bgm = document.getElementById('bgm');
+    bgm.volume = 0.4;
+    let isMusicOn = true;
+
+    function toggleMusic() {
+        if (bgm.paused) { bgm.play(); isMusicOn = true; document.getElementById('music-toggle').innerText = '🔊'; }
+        else { bgm.pause(); isMusicOn = false; document.getElementById('music-toggle').innerText = '🔇'; }
+    }
+
+    // --- UI 元素引用 ---
+    const UI = {
+        scoreVal: document.getElementById('score-value'),
+        modeInd: document.getElementById('mode-indicator'),
+        timerBoard: document.getElementById('timer-board'),
+        timerVal: document.getElementById('timer-value'),
+        modeInfoBox: document.getElementById('current-mode-info'),
+        menuScreen: document.getElementById('menu-screen'),
+        gameOverScreen: document.getElementById('game-over-screen'),
+        leaderboardScreen: document.getElementById('leaderboard-screen'),
+        penaltyScreen: document.getElementById('penalty-screen'),
+        jumpscareScreen: document.getElementById('jumpscare-screen'),
+        finalScore: document.getElementById('final-score'),
+        btnShowBoard: document.getElementById('btn-show-board')
+    };
+
+    // --- 游戏核心逻辑 ---
+    function createMatrix(w, h) {
+        const matrix = [];
+        while (h--) matrix.push(new Array(w).fill(0));
+        return matrix;
+    }
+
+    // 核心阶段控制：<200分给规律方块，>=200分全随机
+    function getNextPiece() {
+        let type;
+        if (score < 200) {
+            type = GUIDED_SEQUENCE[sequenceIndex % GUIDED_SEQUENCE.length];
+            sequenceIndex++;
+        } else {
+            type = RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)];
+        }
+        return SHAPES[type];
+    }
+
+    function playerReset() {
+        player.matrix = getNextPiece();
+        player.pos.y = 0;
+        player.pos.x = Math.floor((COLS / 2)) - Math.floor(player.matrix[0].length / 2);
+        
+        // 游戏结束判定
+        if (collide(board, player)) {
+            endGame("方块已堆满！"); 
+        }
+    }
+
+    function collide(board, player) {
+        const [m, o] = [player.matrix, player.pos];
+        for (let y = 0; y < m.length; ++y) {
+            for (let x = 0; x < m[y].length; ++x) {
+                if (m[y][x] !== 0 && (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function merge(board, player) {
+        player.matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) board[y + player.pos.y][x + player.pos.x] = value;
+            });
+        });
+    }
+
+    function playerRotate(dir) {
+        const pos = player.pos.x;
+        let offset = 1;
+        // 矩阵转置+反转实现旋转
+        for (let y = 0; y < player.matrix.length; ++y) {
+            for (let x = 0; x < y; ++x) {
+                [player.matrix[x][y], player.matrix[y][x]] = [player.matrix[y][x], player.matrix[x][y]];
+            }
+        }
+        if (dir > 0) player.matrix.forEach(row => row.reverse());
+        else player.matrix.reverse();
+
+        // 踢墙判定
+        while (collide(board, player)) {
+            player.pos.x += offset;
+            offset = -(offset + (offset > 0 ? 1 : -1));
+            if (offset > player.matrix[0].length) {
+                playerRotate(-dir); // 无法修复则撤销
+                player.pos.x = pos;
+                return;
+            }
+        }
+    }
+
+    function playerMove(offset) {
+        player.pos.x += offset;
+        if (collide(board, player)) player.pos.x -= offset;
+    }
+
+    function playerDrop() {
+        player.pos.y++;
+        if (collide(board, player)) {
+            player.pos.y--;
+            lockAndReset();
+        }
+        dropCounter = 0;
+    }
+
+    // 空格键：瞬间填下
+    function playerHardDrop() {
+        while (!collide(board, player)) player.pos.y++;
+        player.pos.y--;
+        lockAndReset();
+        dropCounter = 0;
+    }
+
+    function lockAndReset() {
+        merge(board, player);
+        addScore(10); // 核心规则：填下一个方块得十分
+        arenaSweep();
+        playerReset();
+    }
+
+    function arenaSweep() {
+        let rowCount = 0;
+        outer: for (let y = board.length - 1; y >= 0; --y) {
+            for (let x = 0; x < board[y].length; ++x) {
+                if (board[y][x] === 0) continue outer;
+            }
+            const row = board.splice(y, 1)[0].fill(0);
+            board.unshift(row);
+            ++y;
+            rowCount++;
+        }
+        if (rowCount > 0) addScore(rowCount * 50); // 消行分：额外给分以确保能达到惩罚模式的3000分
+    }
+
+    function addScore(points) {
+        score += points;
+        UI.scoreVal.innerText = score;
+
+        if (score >= 200) {
+            UI.modeInd.innerText = "⭐ 全随机模式";
+            UI.modeInd.style.color = "#ef4444"; 
+        } else {
+            UI.modeInd.innerText = "引导阶段";
+            UI.modeInd.style.color = "#f59e0b";
+        }
+
+        // 难度递进
+        dropInterval = Math.max(150, baseDropInterval - (score * 0.4));
+    }
+
+    // 获取幽灵方块的 Y 轴落地坐标
+    function getGhostY() {
+        let ghostY = player.pos.y;
+        while (!collide(board, { matrix: player.matrix, pos: { x: player.pos.x, y: ghostY } })) { ghostY++; }
+        return ghostY - 1;
+    }
+
+    // --- 绘制逻辑 ---
+    function drawBlock(x, y, color, isGhost = false) {
+        ctx.fillStyle = color;
+        if (isGhost) {
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x * BLOCK_SIZE+1, y * BLOCK_SIZE+1, BLOCK_SIZE-2, BLOCK_SIZE-2);
+            ctx.globalAlpha = 1.0;
+        } else {
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            // 3D 质感高光和阴影
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, 3);
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE + BLOCK_SIZE - 3, BLOCK_SIZE, 3);
+            ctx.strokeStyle = '#020617';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        }
+    }
+
+    function drawMatrix(matrix, offset, isGhost = false) {
+        matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) drawBlock(x + offset.x, y + offset.y, COLORS[value], isGhost);
+            });
+        });
+    }
+
+    function drawGrid() {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= COLS; i++) {
+            ctx.beginPath(); ctx.moveTo(i * BLOCK_SIZE, 0); ctx.lineTo(i * BLOCK_SIZE, canvas.height); ctx.stroke();
+        }
+        for (let i = 0; i <= ROWS; i++) {
+            ctx.beginPath(); ctx.moveTo(0, i * BLOCK_SIZE); ctx.lineTo(canvas.width, i * BLOCK_SIZE); ctx.stroke();
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        drawMatrix(board, {x: 0, y: 0}); // 画已固定的方块
+        
+        // 核心规则：分数<200，提供落点指引 (幽灵方块)
+        if (score < 200 && player.matrix) {
+            drawMatrix(player.matrix, { x: player.pos.x, y: getGhostY() }, true);
+        }
+        drawMatrix(player.matrix, player.pos); // 画当前方块
+    }
+
+    function update(time = 0) {
+        if (!isPlaying) return;
+        const deltaTime = time - lastTime;
+        lastTime = time;
+
+        dropCounter += deltaTime;
+        if (dropCounter > dropInterval) playerDrop();
+
+        draw();
+        requestID = requestAnimationFrame(update);
+    }
+
+    // --- 游戏模式控制 ---
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function startGame(mode) {
+        // 尝试播放音乐 (需用户交互后才能播放)
+        if(isMusicOn && bgm.paused) { bgm.play().catch(e=>console.log("Audio play prevented")); }
+
+        currentMode = mode;
+        board = createMatrix(COLS, ROWS);
+        score = 0;
+        sequenceIndex = 0;
+        isPlaying = true;
+        addScore(0); 
+
+        // 隐藏所有弹窗
+        document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden'));
+        if (gameTimerInterval) clearInterval(gameTimerInterval);
+        if (requestID) cancelAnimationFrame(requestID);
+
+        // 模式参数初始化
+        if (mode === 'score') {
+            baseDropInterval = 1000; // 正常速度
+            gameTimeLeft = 180; // 3分钟
+            UI.timerBoard.classList.remove('hidden');
+            UI.timerVal.innerText = formatTime(gameTimeLeft);
+            UI.modeInfoBox.innerHTML = `<h3>🏆 计分模式</h3><p>倒计时: 3分钟</p>`;
+            startTimer();
+        } else if (mode === 'fast') {
+            baseDropInterval = 400; // 速度翻倍(时间缩短)
+            dropInterval = baseDropInterval;
+            UI.timerBoard.classList.add('hidden');
+            UI.modeInfoBox.innerHTML = `<h3>⚡ 极快模式</h3><p>速度翻倍！无时间限制，撑下去！</p>`;
+        } else if (mode === 'penalty') {
+            baseDropInterval = 1000;
+            gameTimeLeft = 180; // 3分钟
+            UI.timerBoard.classList.remove('hidden');
+            UI.timerVal.innerText = formatTime(gameTimeLeft);
+            UI.modeInfoBox.innerHTML = `<h3 style="color:var(--danger)">💀 惩罚模式</h3><p>3分钟目标: <b>3000分</b></p>`;
+            startTimer();
+        }
+
+        playerReset();
+        lastTime = performance.now();
+        update();
+    }
+
+    function startTimer() {
+        gameTimerInterval = setInterval(() => {
+            gameTimeLeft--;
+            UI.timerVal.innerText = formatTime(gameTimeLeft);
+            if (gameTimeLeft <= 10) UI.timerVal.style.color = "red"; 
+            else UI.timerVal.style.color = "var(--warning)";
+
+            if (gameTimeLeft <= 0) {
+                clearInterval(gameTimerInterval);
+                endGame("时间到！");
+            }
+        }, 1000);
+    }
+
+    function endGame(reason) {
+        isPlaying = false;
+        clearInterval(gameTimerInterval);
+        cancelAnimationFrame(requestID);
+
+        UI.finalScore.innerText = score;
+        document.getElementById('game-over-title').innerText = reason;
+        
+        if (currentMode === 'score') {
+            saveScoreToLocal(score);
+            UI.btnShowBoard.classList.remove('hidden');
+            UI.gameOverScreen.classList.remove('hidden');
+        } 
+        else if (currentMode === 'fast') {
+            UI.btnShowBoard.classList.add('hidden');
+            UI.gameOverScreen.classList.remove('hidden');
+        } 
+        else if (currentMode === 'penalty') {
+            if (score < 3000 && reason === "时间到！") {
+                // 时间到且未达标 -> 开启翻译惩罚
+                triggerPenalty();
+            } else if (score >= 3000) {
+                // 达标生还
+                document.getElementById('game-over-title').innerText = "挑战成功！你活下来了！";
+                UI.btnShowBoard.classList.add('hidden');
+                UI.gameOverScreen.classList.remove('hidden');
+            } else {
+                 // 空间满了死掉（不触发翻译，算直接失败）
+                document.getElementById('game-over-title').innerText = "方块堆满，挑战失败！";
+                UI.btnShowBoard.classList.add('hidden');
+                UI.gameOverScreen.classList.remove('hidden');
+            }
+        }
+    }
+
+    // --- 排行榜 ---
+    function saveScoreToLocal(finalScore) {
+        let scores = JSON.parse(localStorage.getItem('tetrisScoreRank') || '[]');
+        scores.push({ score: finalScore, date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString() });
+        scores.sort((a, b) => b.score - a.score);
+        scores = scores.slice(0, 5); // 存前5
+        localStorage.setItem('tetrisScoreRank', JSON.stringify(scores));
+    }
+
+    function showLeaderboard() {
+        document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden'));
+        const tbody = document.querySelector('#leaderboard-table tbody');
+        let scores = JSON.parse(localStorage.getItem('tetrisScoreRank') || '[]');
+        
+        if (scores.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="color:#94a3b8">暂无记录，快去创造历史！</td></tr>';
+        } else {
+            const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+            tbody.innerHTML = scores.map((s, i) => 
+                `<tr>
+                    <td style="font-size:1.5rem">${medals[i]}</td>
+                    <td style="color:var(--success); font-weight:bold; font-size:1.2rem">${s.score}</td>
+                    <td style="font-size:0.9rem; color:#94a3b8">${s.date}</td>
+                </tr>`
+            ).join('');
+        }
+        UI.leaderboardScreen.classList.remove('hidden');
+    }
+
+    function showMenu() {
+        document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden'));
+        UI.menuScreen.classList.remove('hidden');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+    }
+
+    // --- 惩罚系统：生死一分钟 ---
+    function triggerPenalty() {
+        // 停掉欢快的音乐
+        bgm.pause();
+
+        const keys = Object.keys(DICTIONARY);
+        // 随机抽两个词
+        let w1 = keys[Math.floor(Math.random() * keys.length)];
+        let w2 = keys[Math.floor(Math.random() * keys.length)];
+        while (w1 === w2) w2 = keys[Math.floor(Math.random() * keys.length)];
+        currentWords = [w1, w2];
+
+        document.getElementById('word1-label').innerText = w1;
+        document.getElementById('word2-label').innerText = w2;
+        document.getElementById('word1-input').value = "";
+        document.getElementById('word2-input').value = "";
+        document.getElementById('word1-input').style.borderColor = "#334155";
+        document.getElementById('word2-input').style.borderColor = "#334155";
+
+        penaltyTimeLeft = 60;
+        document.getElementById('penalty-timer').innerText = penaltyTimeLeft;
+        
+        UI.penaltyScreen.classList.remove('hidden');
+        document.getElementById('word1-input').focus();
+
+        penaltyInterval = setInterval(() => {
+            penaltyTimeLeft--;
+            document.getElementById('penalty-timer').innerText = penaltyTimeLeft;
+            if (penaltyTimeLeft <= 0) {
+                clearInterval(penaltyInterval);
+                executeJumpscare(); // 恐怖处刑
+            }
+        }, 1000);
+    }
+
+    function submitPenalty() {
+        const ans1 = document.getElementById('word1-input').value.trim().toLowerCase();
+        const ans2 = document.getElementById('word2-input').value.trim().toLowerCase();
+        
+        if (ans1 === DICTIONARY[currentWords[0]] && ans2 === DICTIONARY[currentWords[1]]) {
+            // 成功生还
+            clearInterval(penaltyInterval);
+            alert("✅ 翻译正确！你逃过了一劫！");
+            if(isMusicOn) bgm.play();
+            showMenu();
+        } else {
+            // 答错视觉反馈
+            document.getElementById('word1-input').style.borderColor = "red";
+            document.getElementById('word2-input').style.borderColor = "red";
+            document.getElementById('word1-input').value = "";
+            document.getElementById('word2-input').value = "";
+            
+            // 屏幕抖动
+            UI.penaltyScreen.style.transform = "translateX(15px)";
+            setTimeout(() => UI.penaltyScreen.style.transform = "translateX(-15px)", 50);
+            setTimeout(() => UI.penaltyScreen.style.transform = "translateX(0)", 100);
+        }
+    }
+
+    // 生成刺耳的合成音频
+    function playScarySound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(100, audioCtx.currentTime); // 低吼
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.5); // 尖叫
+            gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2.5);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 2.5);
+        } catch(e) { console.log("WebAudio不被支持"); }
+    }
+
+    function executeJumpscare() {
+        UI.penaltyScreen.classList.add('hidden');
+        const jumpScreen = UI.jumpscareScreen;
+        jumpScreen.classList.remove('hidden');
+        
+        playScarySound();
+
+        // 闪烁 3 秒后结束
+        setTimeout(() => {
+            jumpScreen.classList.add('hidden');
+            alert("游戏结束...你的灵魂已被吞噬。");
+            if(isMusicOn) bgm.play();
+            showMenu();
+        }, 3000);
+    }
+
+    // --- 按键监听 ---
+    document.addEventListener('keydown', event => {
+        if (!isPlaying) return;
+
+        switch(event.keyCode) {
+            case 37: playerMove(-1); event.preventDefault(); break; // 左
+            case 39: playerMove(1); event.preventDefault(); break;  // 右
+            case 40: playerDrop(); event.preventDefault(); break;   // 下
+            case 38: playerRotate(1); event.preventDefault(); break; // 上
+            case 32: playerHardDrop(); event.preventDefault(); break; // 空格 (瞬间填下)
+        }
+    });
+
+    // 初始静态网格绘制
+    drawGrid();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>STEAM 宇宙防衛戰</title>
+    <style>
+        /* 基礎重置與全螢幕設定 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050510;
+            overflow: hidden; /* 防止滾動 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; /* 防止文字選取 */
+            -webkit-user-select: none;
+        }
+
+        /* 遊戲畫布 */
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair; /* 預設十字準星 */
+        }
+
+        /* UI 覆蓋層 */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 讓點擊穿透到 Canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* HUD (抬頭顯示器) */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 選單面板 */
+        .panel {
+            background: rgba(10, 20, 40, 0.85);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.2);
+            pointer-events: auto; /* 允許點擊按鈕 */
+            backdrop-filter: blur(5px);
+            max-width: 80%;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 48px;
+            color: #fff;
+            text-shadow: 0 0 15px #0ff, 0 0 30px #0ff;
+            letter-spacing: 2px;
+        }
+
+        p {
+            font-size: 20px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            color: #ddd;
+        }
+
+        .highlight {
+            color: #ff00ff;
+            font-weight: bold;
+        }
+
+        /* 開始/重玩按鈕 */
+        .btn {
+            background: linear-gradient(45deg, #00d2ff 0%, #3a7bd5 100%);
+            border: none;
+            border-radius: 30px;
+            color: white;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4);
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 210, 255, 0.6);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 隱藏元素用 */
+        .hidden {
+            display: none !important;
+        }
+
+    </style>
+</head>
+<body oncontextmenu="return false;"> <!-- 禁用右鍵，適合攤位環境 -->
+
+    <!-- HUD 顯示分數與時間 -->
+    <div id="hud" class="hidden">
+        <div>分數: <span id="scoreDisplay">0</span></div>
+        <div>剩餘時間: <span id="timeDisplay">30</span> 秒</div>
+    </div>
+
+    <!-- 遊戲畫布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 開始畫面 -->
+    <div id="startScreen" class="ui-layer">
+        <div class="panel">
+            <h1>STEAM 宇宙防衛戰</h1>
+            <p>警告！大量<span class="highlight">太空垃圾</span>正在接近我們的空間站！<br>
+            請運用你的射擊技巧，在 <strong>30秒</strong> 內擊碎它們！<br>
+            <small>（支援滑鼠點擊 或 觸控螢幕）</small></p>
+            <button class="btn" onclick="startGame()">開始任務</button>
+        </div>
+    </div>
+
+    <!-- 結束畫面 -->
+    <div id="gameOverScreen" class="ui-layer hidden">
+        <div class="panel">
+            <h1>任務結束</h1>
+            <p>你的最終分數為：<br><span id="finalScore" style="font-size: 64px; color: #0ff; text-shadow: 0 0 20px #0ff; font-weight:bold;">0</span></p>
+            <p id="evaluationMsg"></p>
+            <button class="btn" onclick="showStartScreen()">返回主選單</button>
+        </div>
+    </div>
+
+    <script>
+        /** * 遊戲核心邏輯
+         */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI 元素
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const hud = document.getElementById('hud');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const finalScore = document.getElementById('finalScore');
+        const evaluationMsg = document.getElementById('evaluationMsg');
+
+        // 遊戲狀態變數
+        let isPlaying = false;
+        let score = 0;
+        let timeLeft = 30;
+        let gameTimer = null;
+        let animationFrameId;
+
+        // 遊戲物件陣列
+        let targets = [];
+        let particles = [];
+        let floatingTexts = [];
+        let stars = [];
+
+        // 顏色庫 (STEAM 代表色)
+        const steamColors = ['#00d2ff', '#ff00ff', '#00ff00', '#ffaa00', '#ff3333'];
+
+        // 初始化畫布尺寸
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        /**
+         * 繪製背景星空
+         */
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 150; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1.5,
+                    alpha: Math.random(),
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawStars() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            stars.forEach(star => {
+                ctx.globalAlpha = star.alpha;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 星星緩慢向下移動產生視差感
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+                // 閃爍效果
+                star.alpha += (Math.random() - 0.5) * 0.05;
+                if(star.alpha < 0.1) star.alpha = 0.1;
+                if(star.alpha > 1) star.alpha = 1;
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        /**
+         * 目標物類別 (太空垃圾/隕石)
+         */
+        class Target {
+            constructor() {
+                this.radius = Math.random() * 25 + 20; // 半徑 20-45
+                
+                // 從畫面兩側或上方隨機生成
+                if (Math.random() > 0.5) {
+                    this.x = Math.random() * canvas.width;
+                    this.y = -this.radius;
+                    this.vx = (Math.random() - 0.5) * 4;
+                    this.vy = Math.random() * 3 + 2;
+                } else {
+                    this.x = Math.random() > 0.5 ? -this.radius : canvas.width + this.radius;
+                    this.y = Math.random() * (canvas.height / 2);
+                    this.vx = (this.x < 0 ? 1 : -1) * (Math.random() * 3 + 2);
+                    this.vy = Math.random() * 2 + 1;
+                }
+
+                this.color = steamColors[Math.floor(Math.random() * steamColors.length)];
+                this.points = Math.floor(60 - this.radius); // 越小分數越高
+                
+                // 產生不規則多邊形
+                this.vertices = [];
+                const vertexCount = Math.floor(Math.random() * 4) + 5; // 5-8邊形
+                for(let i=0; i<vertexCount; i++) {
+                    const angle = (i / vertexCount) * Math.PI * 2;
+                    const variance = this.radius * 0.3; // 凹凸程度
+                    const r = this.radius - variance/2 + Math.random() * variance;
+                    this.vertices.push({
+                        x: Math.cos(angle) * r,
+                        y: Math.sin(angle) * r
+                    });
+                }
+                
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.rotationSpeed;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                // 發光效果
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                
+                ctx.beginPath();
+                ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
+                for(let i=1; i<this.vertices.length; i++){
+                    ctx.lineTo(this.vertices[i].x, this.vertices[i].y);
+                }
+                ctx.closePath();
+                
+                ctx.fillStyle = '#111';
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = this.color;
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+
+            // 圓形碰撞檢測
+            isHit(x, y) {
+                const dist = Math.hypot(this.x - x, this.y - y);
+                return dist <= this.radius;
+            }
+        }
+
+        /**
+         * 爆炸粒子效果類別
+         */
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 6 + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.size = Math.random() * 4 + 2;
+                this.color = color;
+                this.life = 1.0; // 生命週期 1 到 0
+                this.decay = Math.random() * 0.03 + 0.02; // 衰減速度
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        /**
+         * 漂浮文字 (顯示得分)
+         */
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.life = 1.0;
+            }
+            update() {
+                this.y -= 1; // 向上飄
+                this.life -= 0.02;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                // 添加文字描邊使其在複雜背景中清晰可見
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'black';
+                ctx.strokeText(this.text, this.x, this.y);
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        /**
+         * 創建爆炸特效
+         */
+        function createExplosion(x, y, color) {
+            for(let i=0; i<20; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        /**
+         * 射擊動作處理
+         */
+        function shoot(event) {
+            if (!isPlaying) return;
+
+            // 處理滑鼠與觸控的座標
+            let clientX, clientY;
+            if (event.type === 'touchstart') {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            // 繪製雷射光特效 (由畫面底部中央射向點擊處)
+            drawLaser(x, y);
+
+            // 倒序檢查碰撞，確保點到的是最上層的物件
+            let hit = false;
+            for (let i = targets.length - 1; i >= 0; i--) {
+                if (targets[i].isHit(x, y)) {
+                    hit = true;
+                    const t = targets[i];
+                    
+                    // 增加分數
+                    score += t.points;
+                    scoreDisplay.innerText = score;
+                    
+                    // 產生特效與文字
+                    createExplosion(t.x, t.y, t.color);
+                    floatingTexts.push(new FloatingText(t.x, t.y, `+${t.points}`, t.color));
+                    
+                    // 移除目標
+                    targets.splice(i, 1);
+                    break; // 一次只打爆一個
+                }
+            }
+        }
+
+        /**
+         * 雷射特效
+         */
+        let laserTimer = null;
+        let currentLaser = null;
+
+        function drawLaser(targetX, targetY) {
+            currentLaser = { x: targetX, y: targetY };
+            if(laserTimer) clearTimeout(laserTimer);
+            laserTimer = setTimeout(() => {
+                currentLaser = null;
+            }, 100); // 雷射顯示 100ms
+        }
+
+        function renderLaser() {
+            if(currentLaser) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(canvas.width / 2, canvas.height); // 從底部中央發射
+                ctx.lineTo(currentLaser.x, currentLaser.y);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#0ff';
+                ctx.stroke();
+                
+                // 準星著彈點特效
+                ctx.beginPath();
+                ctx.arc(currentLaser.x, currentLaser.y, 10, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        /**
+         * 主遊戲迴圈
+         */
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            // 1. 清除畫布並畫背景
+            drawStars();
+
+            // 2. 隨機生成目標 (難度隨時間增加)
+            const spawnRate = 0.03 + ((30 - timeLeft) * 0.003); // 隨時間變快
+            if (Math.random() < spawnRate) {
+                targets.push(new Target());
+            }
+
+            // 3. 更新與繪製目標
+            for (let i = targets.length - 1; i >= 0; i--) {
+                targets[i].update();
+                targets[i].draw();
+
+                // 移除離開畫面的目標
+                if (targets[i].y > canvas.height + 100 || 
+                    targets[i].x < -100 || 
+                    targets[i].x > canvas.width + 100) {
+                    targets.splice(i, 1);
+                }
+            }
+
+            // 4. 更新與繪製粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // 5. 更新與繪製漂浮文字
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                floatingTexts[i].update();
+                floatingTexts[i].draw();
+                if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+            }
+
+            // 6. 繪製雷射特效
+            renderLaser();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * 遊戲流程控制
+         */
+        function showStartScreen() {
+            startScreen.classList.remove('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.add('hidden');
+            drawStars(); // 背景持續運作
+        }
+
+        function startGame() {
+            // 初始化數據
+            score = 0;
+            timeLeft = 30; // 30秒一局
+            targets = [];
+            particles = [];
+            floatingTexts = [];
+            
+            scoreDisplay.innerText = score;
+            timeDisplay.innerText = timeLeft;
+            
+            // UI 切換
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+
+            isPlaying = true;
+            
+            // 啟動計時器
+            if(gameTimer) clearInterval(gameTimer);
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                timeDisplay.innerText = timeLeft;
+                
+                // 時間倒數變色警告
+                if(timeLeft <= 5) {
+                    timeDisplay.style.color = '#ff3333';
+                } else {
+                    timeDisplay.style.color = 'white';
+                }
+
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            // 啟動迴圈
+            if(animationFrameId) cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            clearInterval(gameTimer);
+            cancelAnimationFrame(animationFrameId);
+
+            // 根據分數給予不同評價
+            let evalMsg = "";
+            if(score > 1500) evalMsg = "🌟 STEAM 護衛隊長！神級準度！";
+            else if(score > 800) evalMsg = "✨ 幹得好！空間站安全了！";
+            else evalMsg = "👍 繼續努力，下次會更好！";
+
+            finalScore.innerText = score;
+            evaluationMsg.innerText = evalMsg;
+
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // 綁定事件
+        canvas.addEventListener('mousedown', shoot);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 防止滾動等預設行為
+            shoot(e);
+        }, {passive: false});
+
+        // 預設顯示主畫面
+        showStartScreen();
+
+    </script>
+</body>
+</html>

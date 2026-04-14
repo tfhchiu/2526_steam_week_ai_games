@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電腦科技生字配對挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 科技感網格背景 (黑底白/藍線條) */
+        body {
+            background-color: #0a0a0a;
+            background-image: 
+                linear-gradient(rgba(0, 100, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 100, 255, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            font-family: 'Courier New', Courier, monospace;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        /* 卡牌翻轉動畫設定 */
+        .perspective {
+            perspective: 1000px;
+        }
+        .card-inner {
+            transition: transform 0.4s;
+            transform-style: preserve-3d;
+        }
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* 霓虹發光效果 */
+        .neon-blue { text-shadow: 0 0 10px #3b82f6, 0 0 20px #3b82f6; }
+        .neon-green { text-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e; }
+        .neon-red { text-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444; }
+        .border-glow-blue { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+        
+        /* 隱藏元素用 */
+        .hidden-screen { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- 主畫面 (Start Screen) -->
+    <div id="home-screen" class="flex flex-col items-center text-center space-y-8 w-full max-w-lg bg-black/80 p-8 rounded-2xl border-2 border-blue-500 border-glow-blue">
+        <h1 class="text-4xl md:text-5xl font-bold text-white neon-blue mb-4">電腦生字配對</h1>
+        <p class="text-gray-300 mb-6">找出英文單字與對應的中文解釋！<br>挑戰最快完成時間，登上排行榜！</p>
+        
+        <button onclick="startPreparation()" class="w-full py-4 text-2xl font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors border-2 border-blue-400">
+            開始遊戲 START
+        </button>
+        <button onclick="showLeaderboard()" class="w-full py-3 text-xl font-bold bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors border-2 border-green-400 mt-4">
+            查看排行榜 LEADERBOARD
+        </button>
+    </div>
+
+    <!-- 倒數準備畫面 (Countdown Screen) -->
+    <div id="countdown-screen" class="hidden-screen flex flex-col items-center justify-center text-center">
+        <h2 class="text-3xl text-white mb-4">準備開始...</h2>
+        <div id="countdown-number" class="text-9xl font-bold text-red-500 neon-red">3</div>
+    </div>
+
+    <!-- 遊戲畫面 (Game Screen) -->
+    <div id="game-screen" class="hidden-screen flex flex-col items-center w-full max-w-2xl">
+        <div class="flex justify-between w-full mb-6 bg-black/80 p-4 rounded-xl border border-gray-700">
+            <div class="text-xl">時間: <span id="timer-display" class="font-bold text-blue-400">00:00.00</span></div>
+            <div class="text-xl">配對: <span id="matches-display" class="font-bold text-green-400">0 / 8</span></div>
+            <button onclick="quitGame()" class="px-4 py-1 bg-red-600 hover:bg-red-500 text-white rounded font-bold border border-red-400">放棄</button>
+        </div>
+
+        <!-- 4x4 卡牌網格 -->
+        <div id="card-grid" class="grid grid-cols-4 gap-2 md:gap-4 w-full perspective">
+            <!-- 卡牌將由 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <!-- 排行榜畫面 (Leaderboard Screen) -->
+    <div id="leaderboard-screen" class="hidden-screen flex flex-col items-center w-full max-w-lg bg-black/80 p-8 rounded-2xl border-2 border-green-500 box-shadow-green">
+        <h2 class="text-3xl font-bold text-white neon-green mb-6">🏆 榮譽排行榜 TOP 3</h2>
+        
+        <div class="w-full flex flex-col gap-3 mb-8" id="leaderboard-list">
+            <!-- 排行榜數據動態生成 -->
+        </div>
+
+        <button onclick="showHomeScreen()" class="w-full py-3 text-xl font-bold bg-white text-black hover:bg-gray-200 rounded-lg transition-colors border-2 border-gray-400">
+            返回主畫面
+        </button>
+    </div>
+
+    <!-- 破紀錄彈出視窗 (New Record Modal) -->
+    <div id="record-modal" class="hidden-screen fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+        <div class="bg-black border-2 border-green-500 p-8 rounded-xl text-center max-w-md w-full">
+            <h2 class="text-3xl font-bold text-green-400 neon-green mb-4">🎉 新紀錄達成！</h2>
+            <p class="text-xl text-white mb-2">你的成績：<span id="final-time-display" class="font-bold text-blue-400"></span></p>
+            <p class="text-gray-300 mb-6">你已進入史上最快前三名！請留下你的大名：</p>
+            
+            <input type="text" id="player-name" maxlength="10" placeholder="輸入名字 (最多10字)" class="w-full p-3 mb-6 bg-gray-900 border border-blue-500 text-white rounded text-center text-xl focus:outline-none focus:border-green-500">
+            
+            <button onclick="saveRecord()" class="w-full py-3 text-xl font-bold bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors">
+                儲存成績
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 1. 遊戲資料設定 (8對，共16張卡牌)
+        const wordPairs = [
+            { id: 1, text: "CPU", type: "en" }, { id: 1, text: "中央處理器", type: "zh" },
+            { id: 2, text: "Keyboard", type: "en" }, { id: 2, text: "鍵盤", type: "zh" },
+            { id: 3, text: "Mouse", type: "en" }, { id: 3, text: "滑鼠", type: "zh" },
+            { id: 4, text: "Monitor", type: "en" }, { id: 4, text: "顯示器", type: "zh" },
+            { id: 5, text: "Motherboard", type: "en" }, { id: 5, text: "主機板", type: "zh" },
+            { id: 6, text: "RAM", type: "en" }, { id: 6, text: "記憶體", type: "zh" },
+            { id: 7, text: "Hard Drive", type: "en" }, { id: 7, text: "硬碟", type: "zh" },
+            { id: 8, text: "Software", type: "en" }, { id: 8, text: "軟體", type: "zh" }
+        ];
+
+        // 遊戲狀態變數
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let isLocked = false;
+        
+        // 計時器變數
+        let startTime = 0;
+        let timerInterval;
+        let finalTimeMs = 0;
+
+        // 取得 HTML 元素
+        const screens = {
+            home: document.getElementById('home-screen'),
+            countdown: document.getElementById('countdown-screen'),
+            game: document.getElementById('game-screen'),
+            leaderboard: document.getElementById('leaderboard-screen'),
+            modal: document.getElementById('record-modal')
+        };
+        const countdownNumber = document.getElementById('countdown-number');
+        const grid = document.getElementById('card-grid');
+        const timerDisplay = document.getElementById('timer-display');
+        const matchesDisplay = document.getElementById('matches-display');
+
+        // 切換畫面函數
+        function switchScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hidden-screen'));
+            screens[screenName].classList.remove('hidden-screen');
+        }
+
+        function showHomeScreen() { switchScreen('home'); }
+        function showLeaderboard() { 
+            updateLeaderboardUI();
+            switchScreen('leaderboard'); 
+        }
+
+        // 2. 準備階段：3秒倒數
+        function startPreparation() {
+            switchScreen('countdown');
+            let count = 3;
+            countdownNumber.textContent = count;
+            countdownNumber.className = "text-9xl font-bold text-red-500 neon-red";
+
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownNumber.textContent = count;
+                    if(count === 2) countdownNumber.className = "text-9xl font-bold text-blue-500 neon-blue";
+                    if(count === 1) countdownNumber.className = "text-9xl font-bold text-green-500 neon-green";
+                } else {
+                    clearInterval(countInterval);
+                    countdownNumber.textContent = "GO!";
+                    countdownNumber.className = "text-9xl font-bold text-white neon-blue";
+                    setTimeout(initGame, 800); // 顯示 GO 一下子後開始
+                }
+            }, 1000);
+        }
+
+        // 初始化遊戲
+        function initGame() {
+            switchScreen('game');
+            grid.innerHTML = '';
+            flippedCards = [];
+            matchedPairs = 0;
+            isLocked = false;
+            matchesDisplay.textContent = `0 / 8`;
+            
+            // 洗牌演算法 (Fisher-Yates)
+            cards = [...wordPairs].sort(() => Math.random() - 0.5);
+
+            // 產生網格 HTML
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card relative w-full aspect-square cursor-pointer';
+                cardEl.dataset.index = index;
+                cardEl.dataset.id = card.id;
+
+                cardEl.innerHTML = `
+                    <div class="card-inner w-full h-full relative">
+                        <!-- 卡牌背面 (未翻開狀態：藍色科技感) -->
+                        <div class="card-front bg-blue-900 border-2 border-blue-400 rounded-lg flex items-center justify-center shadow-lg hover:bg-blue-800 transition-colors">
+                            <span class="text-3xl text-blue-300 opacity-50">?</span>
+                        </div>
+                        <!-- 卡牌正面 (翻開狀態：白色底黑色字) -->
+                        <div class="card-back bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center p-2 shadow-lg">
+                            <span class="text-black font-bold text-sm md:text-lg text-center break-words">${card.text}</span>
+                        </div>
+                    </div>
+                `;
+                cardEl.addEventListener('click', () => flipCard(cardEl));
+                grid.appendChild(cardEl);
+            });
+
+            // 開始計時 (精確到毫秒)
+            startTime = Date.now();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 10); // 每10毫秒更新一次
+        }
+
+        // 卡牌翻轉邏輯
+        function flipCard(cardEl) {
+            if (isLocked) return;
+            if (cardEl.classList.contains('flipped')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push(cardEl);
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        // 檢查配對
+        function checkMatch() {
+            isLocked = true;
+            const [card1, card2] = flippedCards;
+            const match = card1.dataset.id === card2.dataset.id;
+
+            if (match) {
+                // 配對成功：變成綠色
+                setTimeout(() => {
+                    card1.querySelector('.card-back').classList.replace('bg-white', 'bg-green-400');
+                    card2.querySelector('.card-back').classList.replace('bg-white', 'bg-green-400');
+                    card1.querySelector('.card-back').classList.replace('border-gray-300', 'border-green-600');
+                    card2.querySelector('.card-back').classList.replace('border-gray-300', 'border-green-600');
+                    
+                    matchedPairs++;
+                    matchesDisplay.textContent = `${matchedPairs} / 8`;
+                    flippedCards = [];
+                    isLocked = false;
+
+                    // 檢查是否遊戲結束
+                    if (matchedPairs === 8) {
+                        endGame();
+                    }
+                }, 300); // 給玩家一點時間看清楚配對的牌
+            } else {
+                // 配對失敗：閃爍紅色然後翻回去
+                setTimeout(() => {
+                    card1.querySelector('.card-back').classList.replace('bg-white', 'bg-red-400');
+                    card2.querySelector('.card-back').classList.replace('bg-white', 'bg-red-400');
+                    
+                    setTimeout(() => {
+                        card1.classList.remove('flipped');
+                        card2.classList.remove('flipped');
+                        card1.querySelector('.card-back').classList.replace('bg-red-400', 'bg-white');
+                        card2.querySelector('.card-back').classList.replace('bg-red-400', 'bg-white');
+                        flippedCards = [];
+                        isLocked = false;
+                    }, 800);
+                }, 200);
+            }
+        }
+
+        // 計時器更新與格式化
+        function updateTimer() {
+            const currentTime = Date.now();
+            const timeDiff = currentTime - startTime;
+            timerDisplay.textContent = formatTime(timeDiff);
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            const milliseconds = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
+            return `${minutes}:${seconds}.${milliseconds}`;
+        }
+
+        // 3. 遊戲結束與排行榜邏輯
+        function endGame() {
+            clearInterval(timerInterval);
+            finalTimeMs = Date.now() - startTime;
+            
+            setTimeout(() => {
+                checkLeaderboard(finalTimeMs);
+            }, 500);
+        }
+
+        function quitGame() {
+            clearInterval(timerInterval);
+            showHomeScreen();
+        }
+
+        // 排行榜資料處理 (使用 localStorage 確保關閉網頁後還在)
+        function getLeaderboard() {
+            const data = localStorage.getItem('techGameLeaderboard');
+            return data ? JSON.parse(data) : [];
+        }
+
+        function checkLeaderboard(timeMs) {
+            const lb = getLeaderboard();
+            // 如果排行榜未滿3人，或者目前時間比第三名快
+            if (lb.length < 3 || timeMs < lb[lb.length - 1].time) {
+                // 破紀錄！
+                document.getElementById('final-time-display').textContent = formatTime(timeMs);
+                document.getElementById('player-name').value = '';
+                screens.modal.classList.remove('hidden-screen');
+            } else {
+                // 沒破紀錄，直接看排行榜
+                showLeaderboard();
+            }
+        }
+
+        function saveRecord() {
+            const nameInput = document.getElementById('player-name').value.trim() || '無名駭客';
+            let lb = getLeaderboard();
+            
+            lb.push({ name: nameInput, time: finalTimeMs });
+            // 排序 (時間短的在前面)
+            lb.sort((a, b) => a.time - b.time);
+            // 只保留前三名
+            lb = lb.slice(0, 3);
+            
+            localStorage.setItem('techGameLeaderboard', JSON.stringify(lb));
+            
+            screens.modal.classList.add('hidden-screen');
+            showLeaderboard();
+        }
+
+        function updateLeaderboardUI() {
+            const listContainer = document.getElementById('leaderboard-list');
+            const lb = getLeaderboard();
+            listContainer.innerHTML = '';
+
+            if (lb.length === 0) {
+                listContainer.innerHTML = '<div class="text-gray-400 text-center py-4">目前還沒有紀錄，快來當第一名！</div>';
+                return;
+            }
+
+            const medals = ['🥇', '🥈', '🥉'];
+            const colors = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
+
+            lb.forEach((record, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center bg-gray-900 border border-gray-700 p-4 rounded-lg';
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 text-xl">
+                        <span class="${colors[index]}">${medals[index]}</span>
+                        <span class="text-white font-bold">${record.name}</span>
+                    </div>
+                    <div class="text-green-400 font-mono text-xl">
+                        ${formatTime(record.time)}
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>

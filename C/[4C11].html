@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>射擊遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;700&family=Noto+Sans+TC:wght@500;700&display=swap');
+
+        :root {
+            --cs-hud-yellow: #eab308;
+            --cs-bg: #2b2b2b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: 'Noto Sans TC', sans-serif;
+            user-select: none;
+        }
+
+        /* 遊戲主視窗 */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, #475569 0%, #1e293b 60%, #0f172a 100%);
+            cursor: none; /* 隱藏原生鼠標 */
+            overflow: hidden;
+        }
+
+        /* 背景裝飾 (訓練場) */
+        .scenery {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 40%;
+            background-color: #334155;
+            border-top: 8px solid #0f172a;
+            z-index: 10;
+        }
+        
+        .box-obstacle {
+            position: absolute;
+            bottom: 0;
+            background: #78716c;
+            border: 2px solid #44403c;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            z-index: 15;
+        }
+
+        /* 自訂準星 */
+        #crosshair {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            z-index: 100;
+            transform: translate(-50%, -50%);
+            transition: width 0.1s, height 0.1s;
+        }
+        .crosshair-line {
+            position: absolute;
+            background-color: #00ff00;
+            box-shadow: 0 0 2px black;
+        }
+        .ch-top { top: 0; left: 14px; width: 2px; height: 10px; }
+        .ch-bottom { bottom: 0; left: 14px; width: 2px; height: 10px; }
+        .ch-left { top: 14px; left: 0; width: 10px; height: 2px; }
+        .ch-right { top: 14px; right: 0; width: 10px; height: 2px; }
+        .ch-dot { top: 14px; left: 14px; width: 2px; height: 2px; background: red; }
+
+        /* 射擊時準星擴大 */
+        .shooting-crosshair {
+            width: 40px !important;
+            height: 40px !important;
+        }
+
+        /* 畫面震動 (後座力) */
+        @keyframes recoil {
+            0% { transform: translateY(0) rotate(0); }
+            20% { transform: translateY(-10px) rotate(-1deg); }
+            50% { transform: translateY(5px) rotate(0.5deg); }
+            100% { transform: translateY(0) rotate(0); }
+        }
+        @keyframes recoil-heavy {
+            0% { transform: translateY(0) rotate(0); }
+            20% { transform: translateY(-25px) rotate(-3deg); }
+            50% { transform: translateY(10px) rotate(1deg); }
+            100% { transform: translateY(0) rotate(0); }
+        }
+        .recoil-active {
+            animation: recoil 0.15s ease-out;
+        }
+        .recoil-active-heavy {
+            animation: recoil-heavy 0.3s ease-out;
+        }
+
+        /* 槍枝模型 (右下角) */
+        #weapon {
+            position: absolute;
+            bottom: -20px;
+            right: 10%;
+            width: 300px;
+            height: 250px;
+            /* 預設背景移除，改由 JS 動態載入 */
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: bottom right;
+            z-index: 50;
+            pointer-events: none;
+            transition: transform 0.05s;
+        }
+
+        .weapon-shoot {
+            transform: translateY(15px) translateX(10px) rotate(5deg);
+        }
+
+        /* 槍口火光 */
+        #muzzle-flash {
+            position: absolute;
+            bottom: 120px;
+            right: calc(10% + 230px);
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(255,255,0,1) 0%, rgba(255,165,0,0.8) 40%, rgba(255,0,0,0) 70%);
+            border-radius: 50%;
+            opacity: 0;
+            z-index: 49;
+            pointer-events: none;
+        }
+        .flash-active {
+            opacity: 1 !important;
+            transform: scale(1.5) rotate(45deg);
+            transition: opacity 0.05s, transform 0.05s;
+        }
+
+        /* 目標靶子 (恐怖份子剪影) */
+        .target {
+            position: absolute;
+            bottom: 40%; /* 站在地上 */
+            width: 90px;
+            height: 140px;
+            background-color: #1e293b;
+            border-radius: 40px 40px 10px 10px;
+            border: 3px solid #0f172a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 12;
+            cursor: none;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: bottom center;
+        }
+        
+        .target-head {
+            width: 45px;
+            height: 45px;
+            background-color: #ef4444; /* 爆頭區標示為紅色 */
+            border-radius: 50%;
+            margin-top: -20px;
+            margin-bottom: 10px;
+            border: 2px solid #7f1d1d;
+        }
+
+        .target-photo {
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            padding: 4px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none; /* 讓點擊穿透到靶子本體 */
+            object-fit: cover;
+            display: block;
+        }
+
+        .target-hide {
+            transform: scaleY(0);
+        }
+
+        /* 擊中特效 */
+        .hit-marker {
+            position: absolute;
+            color: red;
+            font-weight: bold;
+            font-size: 24px;
+            pointer-events: none;
+            z-index: 60;
+            animation: floatUp 0.5s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-30px) scale(1.5); opacity: 0; }
+        }
+
+        /* HUD UI */
+        .hud-font {
+            font-family: 'Teko', 'Noto Sans TC', sans-serif;
+            color: var(--cs-hud-yellow);
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+        }
+
+        /* 血液飛濺特效 (受傷時) */
+        #blood-overlay {
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 100px 20px rgba(220, 38, 38, 0);
+            pointer-events: none;
+            z-index: 90;
+            transition: box-shadow 0.2s;
+        }
+        .damage-taken {
+            box-shadow: inset 0 0 150px 50px rgba(220, 38, 38, 0.7) !important;
+        }
+
+        /* 玻璃碎裂特效 (遊戲結束) */
+        .game-over-bg {
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        /* 武器選擇按鈕 */
+        .weapon-btn {
+            transition: all 0.2s;
+        }
+        .weapon-btn.selected {
+            border-color: #22c55e;
+            background-color: rgba(34, 197, 94, 0.2);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- 主遊戲容器 -->
+    <div id="game-container" onmousemove="updateCrosshair(event)" onclick="shoot(event)">
+        
+        <!-- 受傷特效疊層 -->
+        <div id="blood-overlay"></div>
+
+        <!-- 場景與掩體 -->
+        <div class="scenery"></div>
+        <div class="box-obstacle" style="width: 150px; height: 120px; left: 10%;"></div>
+        <div class="box-obstacle" style="width: 200px; height: 90px; left: 40%;"></div>
+        <div class="box-obstacle" style="width: 120px; height: 150px; right: 15%;"></div>
+
+        <!-- 靶子生成區 -->
+        <div id="targets-layer"></div>
+
+        <!-- 擊中標記區 -->
+        <div id="hit-markers"></div>
+
+        <!-- 武器與特效 -->
+        <div id="muzzle-flash"></div>
+        <div id="weapon"></div>
+
+        <!-- 自訂準星 -->
+        <div id="crosshair">
+            <div class="crosshair-line ch-top"></div>
+            <div class="crosshair-line ch-bottom"></div>
+            <div class="crosshair-line ch-left"></div>
+            <div class="crosshair-line ch-right"></div>
+            <div class="crosshair-line ch-dot"></div>
+        </div>
+
+        <!-- HUD: 上方指令區 -->
+        <div class="absolute top-4 left-0 w-full text-center z-50 pointer-events-none">
+            <h2 class="text-white text-xl drop-shadow-md bg-black/50 inline-block px-6 py-1 rounded-full border border-slate-600">
+                目標指令： <span id="mission-word" class="text-3xl text-green-400 font-bold ml-2">準備中...</span>
+            </h2>
+        </div>
+
+        <!-- HUD: 右上角時間 -->
+        <div class="absolute top-6 right-8 z-50 pointer-events-none text-right">
+            <div class="text-gray-400 text-sm font-bold mb-1">TIME LEFT</div>
+            <div class="hud-font text-5xl flex items-baseline justify-end gap-1 text-white">
+                <span id="time-display">1:00</span>
+            </div>
+        </div>
+
+        <!-- HUD: 左下角生命與裝甲 -->
+        <div class="absolute bottom-6 left-8 z-50 pointer-events-none flex gap-6 items-end">
+            <div class="text-center">
+                <div class="text-gray-400 text-sm font-bold mb-1">HEALTH</div>
+                <div class="hud-font text-5xl flex items-center gap-2">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="text-white"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    <span id="hp-display">100</span>
+                </div>
+            </div>
+            <div class="text-center">
+                <div class="text-gray-400 text-sm font-bold mb-1">SCORE</div>
+                <div class="hud-font text-5xl flex items-center gap-2 text-white">
+                    <span id="score-display">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- HUD: 右下角彈藥 -->
+        <div class="absolute bottom-6 right-8 z-50 pointer-events-none text-right">
+            <div class="text-gray-400 text-sm font-bold mb-1">AMMO (Press R)</div>
+            <div class="hud-font text-6xl flex items-baseline justify-end gap-1">
+                <span id="ammo-current">30</span>
+                <span class="text-3xl text-gray-400">/ ∞</span>
+            </div>
+        </div>
+
+        <!-- 換彈提示 -->
+        <div id="reload-warning" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 hud-font text-4xl text-red-500 hidden animate-pulse pointer-events-none">
+            RELOAD! 點擊或按 R 鍵換彈
+        </div>
+
+        <!-- 開始畫面 Modal -->
+        <div id="start-screen" class="absolute inset-0 bg-slate-900/90 z-[200] flex flex-col items-center justify-center game-over-bg">
+            <h1 class="text-6xl hud-font text-white mb-2">SHOOTER</h1>
+            <p class="text-green-400 text-xl font-bold mb-6 tracking-widest">射擊遊戲</p>
+            
+            <!-- 武器選擇區 -->
+            <div class="mb-6 w-full max-w-md bg-slate-800 border-2 border-slate-600 p-4 rounded-lg shadow-xl">
+                <h3 class="text-white font-bold text-center mb-3 border-b border-slate-600 pb-2">🔫 選擇武器 (LOADOUT)</h3>
+                <div class="flex gap-3 justify-center" id="weapon-selection">
+                    <button class="weapon-btn selected flex-1 py-2 px-2 border-2 border-slate-600 rounded bg-slate-700 hover:bg-slate-600 text-white flex flex-col items-center cursor-pointer" onclick="selectWeapon('M416')">
+                        <span class="font-bold text-lg text-yellow-400">M416</span>
+                        <span class="text-xs text-gray-300">30發 | 穩定</span>
+                    </button>
+                    <button class="weapon-btn flex-1 py-2 px-2 border-2 border-slate-600 rounded bg-slate-700 hover:bg-slate-600 text-white flex flex-col items-center cursor-pointer" onclick="selectWeapon('AKM')">
+                        <span class="font-bold text-lg text-yellow-400">AKM</span>
+                        <span class="text-xs text-gray-300">30發 | 高座力</span>
+                    </button>
+                    <button class="weapon-btn flex-1 py-2 px-2 border-2 border-slate-600 rounded bg-slate-700 hover:bg-slate-600 text-white flex flex-col items-center cursor-pointer" onclick="selectWeapon('M762')">
+                        <span class="font-bold text-lg text-yellow-400">M762</span>
+                        <span class="text-xs text-gray-300">30發 | 猛男槍</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 border-2 border-slate-600 p-6 rounded-lg max-w-md text-slate-300 mb-8 shadow-2xl">
+                <h3 class="text-white font-bold text-lg mb-3 border-b border-slate-600 pb-2">🎯 任務簡報 (Briefing)</h3>
+                <ul class="space-y-2 text-sm">
+                    <li>1. 畫面頂部會顯示需要擊殺的 <strong>中文單字</strong> 目標。</li>
+                    <li>2. 將準星移至帶有對應 <strong>正確照片</strong> 的恐怖份子，點擊滑鼠開火。</li>
+                    <li>3. <strong>子彈有限</strong>，打空時請按鍵盤 <kbd class="bg-slate-700 px-2 py-0.5 rounded">R</kbd> 鍵換彈。</li>
+                    <li>4. 射錯目標會遭到反擊扣除生命值！</li>
+                </ul>
+            </div>
+
+            <div class="flex flex-col items-center gap-4">
+                <button onclick="startGame()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-12 rounded shadow-[0_0_15px_rgba(34,197,94,0.5)] transition-all transform hover:scale-105 active:scale-95 text-xl cursor-pointer">
+                    ACCEPT MISSION (開始)
+                </button>
+                <button onclick="viewLeaderboard()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-8 rounded shadow transition-all hover:scale-105 active:scale-95 text-lg cursor-pointer">
+                    查看排名 (LEADERBOARD)
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲結束 Modal -->
+        <div id="game-over-screen" class="absolute inset-0 bg-red-900/90 z-[200] hidden flex-col items-center justify-center game-over-bg">
+            <h1 id="game-over-title" class="text-7xl hud-font text-white mb-2">MISSION FAILED</h1>
+            <p id="game-over-reason" class="text-slate-300 text-xl mb-6">你被目標擊敗了...</p>
+            
+            <div class="text-center mb-8">
+                <p class="text-gray-400 font-bold mb-1">FINAL SCORE</p>
+                <p class="hud-font text-6xl text-yellow-400" id="final-score">0</p>
+            </div>
+
+            <!-- 輸入特務代號 -->
+            <div id="name-input-section" class="flex flex-col items-center mb-6">
+                <input type="text" id="player-name" maxlength="10" placeholder="輸入特務代號..." class="bg-slate-700 text-white border-2 border-slate-500 rounded px-4 py-2 mb-4 text-center text-xl outline-none focus:border-green-500" style="cursor: text;">
+                <button onclick="submitScore()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-8 rounded shadow-lg transition-all text-lg cursor-pointer">
+                    登錄成績 (SUBMIT)
+                </button>
+            </div>
+        </div>
+
+        <!-- 排行榜 Modal -->
+        <div id="leaderboard-screen" class="absolute inset-0 bg-slate-900/95 z-[250] hidden flex-col items-center justify-center game-over-bg">
+            <h2 class="text-5xl hud-font text-yellow-400 mb-6 flex items-center gap-4">🏆 菁英特務排行榜 🏆</h2>
+            <div id="leaderboard-list" class="w-full max-w-md bg-slate-800 rounded-lg border-2 border-slate-600 p-4 mb-8 shadow-2xl">
+                <!-- 排名項目 -->
+            </div>
+            <button onclick="restartGame()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-12 rounded shadow-[0_0_15px_rgba(34,197,94,0.5)] transition-all transform hover:scale-105 active:scale-95 text-xl cursor-pointer">
+                返回主畫面 (MAIN MENU)
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 單字資料庫 (改為照片配對) ---
+        // 提示：你可以把 img 的網址替換成真實的圖片 URL (例如 .jpg 或 .png 結尾的網址)
+        const vocabDB = [
+            { id: "keyboard", zh: "鍵盤", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Keyboard" },
+            { id: "mouse", zh: "滑鼠", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Mouse" },
+            { id: "monitor", zh: "螢幕", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Monitor" },
+            { id: "hardware", zh: "硬體", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Hardware" },
+            { id: "software", zh: "軟體", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Software" },
+            { id: "network", zh: "網路", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Network" },
+            { id: "database", zh: "資料庫", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Database" },
+            { id: "browser", zh: "瀏覽器", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Browser" },
+            { id: "server", zh: "伺服器", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=Server" },
+            { id: "cpu", zh: "處理器", img: "https://placehold.co/150x150/2b2b2b/00ff00?text=CPU" }
+        ];
+
+        // --- 武器資料庫 ---
+        const WEAPONS = {
+            'M416': {
+                name: 'M416', ammo: 30, fireRate: 150, scoreMult: 1.0, recoilClass: 'recoil-active',
+                svg: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'><path d='M20 80 L30 50 L100 50 L110 40 L160 40 L170 45 L180 45 L180 50 L160 55 L110 60 L100 80 Z' fill='%231f2937'/><path d='M100 50 L150 50 L150 55 L100 60 Z' fill='%23374151'/><rect x='40' y='50' width='20' height='30' fill='%234b5563' transform='skewX(-15)'/><path d='M160 42 L190 42 L190 45 L160 45 Z' fill='%239ca3af'/></svg>"
+            },
+            'AKM': {
+                name: 'AKM', ammo: 30, fireRate: 250, scoreMult: 1.0, recoilClass: 'recoil-active-heavy',
+                svg: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'><path d='M10 80 L30 50 L90 50 L100 45 L150 45 L150 55 L100 60 L90 80 Z' fill='%23b45309'/><path d='M90 50 L150 50 L150 55 L90 60 Z' fill='%23374151'/><path d='M40 50 Q60 80 65 80 L50 50 Z' fill='%231f2937'/><path d='M150 48 L190 48 L190 52 L150 52 Z' fill='%239ca3af'/></svg>"
+            },
+            'M762': {
+                name: 'M762', ammo: 30, fireRate: 200, scoreMult: 1.0, recoilClass: 'recoil-active-heavy',
+                svg: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'><path d='M10 80 L30 50 L90 50 L100 45 L150 45 L150 55 L100 60 L90 80 Z' fill='%231f2937'/><path d='M90 50 L150 50 L150 55 L90 60 Z' fill='%23111827'/><path d='M40 50 Q60 80 65 80 L50 50 Z' fill='%23000000'/><path d='M150 48 L190 48 L190 52 L150 52 Z' fill='%234b5563'/></svg>"
+            }
+        };
+
+        // --- 遊戲狀態 ---
+        const MAX_HP = 100;
+        const MAX_TIME = 60; // 1分鐘 = 60秒
+        let gameState = {
+            hp: MAX_HP,
+            score: 0,
+            ammo: 0,
+            maxAmmo: 30,
+            timeLeft: MAX_TIME,
+            timerInterval: null,
+            isPlaying: false,
+            isReloading: false,
+            currentWord: null,
+            targetsOnScreen: [],
+            wordPool: [], // 新增：用來記錄還沒出過的題目，確保不重複
+            weaponConfig: WEAPONS['M416'],
+            lastShootTime: 0
+        };
+        
+        // 改為從瀏覽器本地儲存讀取排行榜，加入 try-catch 避免預覽環境阻擋
+        let leaderboard = [];
+        try {
+            const savedData = localStorage.getItem('csgo_leaderboard');
+            if (savedData) {
+                leaderboard = JSON.parse(savedData);
+            }
+        } catch (e) {
+            console.warn("瀏覽器環境限制無法讀取 localStorage，將暫時使用記憶體儲存排名。");
+        }
+
+        // --- DOM 元素 ---
+        const ui = {
+            container: document.getElementById('game-container'),
+            crosshair: document.getElementById('crosshair'),
+            weapon: document.getElementById('weapon'),
+            flash: document.getElementById('muzzle-flash'),
+            targetsLayer: document.getElementById('targets-layer'),
+            hitMarkers: document.getElementById('hit-markers'),
+            missionWord: document.getElementById('mission-word'),
+            timeDisplay: document.getElementById('time-display'),
+            hpDisplay: document.getElementById('hpDisplay'),
+            hpDisplayStr: document.getElementById('hp-display'),
+            scoreDisplay: document.getElementById('score-display'),
+            ammoDisplay: document.getElementById('ammo-current'),
+            reloadWarning: document.getElementById('reload-warning'),
+            bloodOverlay: document.getElementById('blood-overlay'),
+            startScreen: document.getElementById('start-screen'),
+            gameOverScreen: document.getElementById('game-over-screen'),
+            gameOverTitle: document.getElementById('game-over-title'),
+            gameOverReason: document.getElementById('game-over-reason'),
+            finalScore: document.getElementById('final-score'),
+            nameInputSection: document.getElementById('name-input-section'),
+            playerName: document.getElementById('player-name'),
+            leaderboardScreen: document.getElementById('leaderboard-screen'),
+            leaderboardList: document.getElementById('leaderboard-list')
+        };
+
+        // --- 音效系統 (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 產生槍聲 (根據武器變化)
+        function playGunshot(weaponKey) {
+            if (!audioCtx) return;
+            const bufferSize = audioCtx.sampleRate * 0.5; // 0.5秒
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1; // 白噪音
+            }
+
+            const noiseSource = audioCtx.createBufferSource();
+            noiseSource.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            
+            const gainNode = audioCtx.createGain();
+            
+            // 根據武器調整聲音特性
+            if (weaponKey === 'M762') {
+                filter.frequency.value = 2000; // 沉重連發
+                gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            } else if (weaponKey === 'AKM') {
+                filter.frequency.value = 4000; // 較清脆、大聲
+                gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            } else {
+                filter.frequency.value = 3000; // M416 標準
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+            }
+
+            noiseSource.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            noiseSource.start();
+            noiseSource.stop(audioCtx.currentTime + 0.5);
+        }
+
+        // 叮 (擊中音效)
+        function playHitSound(isHeadshot = false) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine';
+            const freq = isHeadshot ? 1200 : 800; // 爆頭音調更高
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(isHeadshot ? 0.3 : 0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        // 錯誤/受傷音效
+        function playErrorSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+            
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // 空槍音效
+        function playEmptySound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        // --- 核心邏輯 ---
+
+        // 選擇武器 UI 互動
+        function selectWeapon(weaponKey) {
+            gameState.weaponConfig = WEAPONS[weaponKey];
+            
+            // 更新按鈕外觀
+            const buttons = document.querySelectorAll('.weapon-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('selected', 'border-green-500');
+                btn.classList.add('border-slate-600');
+                if (btn.innerText.includes(weaponKey)) {
+                    btn.classList.add('selected', 'border-green-500');
+                    btn.classList.remove('border-slate-600');
+                }
+            });
+        }
+
+        // 更新準星位置
+        function updateCrosshair(e) {
+            if (!gameState.isPlaying) return;
+            ui.crosshair.style.left = e.clientX + 'px';
+            ui.crosshair.style.top = e.clientY + 'px';
+        }
+
+        // 遊戲開始
+        function startGame() {
+            initAudio();
+            ui.startScreen.classList.add('hidden');
+            ui.startScreen.classList.remove('flex');
+            
+            gameState.hp = MAX_HP;
+            gameState.score = 0;
+            gameState.maxAmmo = gameState.weaponConfig.ammo;
+            gameState.ammo = gameState.maxAmmo;
+            gameState.timeLeft = MAX_TIME;
+            gameState.isPlaying = true;
+            gameState.lastShootTime = 0;
+
+            // 套用選擇的武器圖示
+            ui.weapon.style.backgroundImage = `url("${gameState.weaponConfig.svg}")`;
+            
+            // 啟動計時器
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(updateTimer, 1000);
+            updateTimerDisplay();
+
+            // 將題庫複製一份並洗牌 (確保題目不重複)
+            gameState.wordPool = [...vocabDB];
+            gameState.wordPool.sort(() => Math.random() - 0.5);
+            
+            updateHUD();
+            nextRound();
+        }
+
+        // 計時器邏輯
+        function updateTimer() {
+            if (!gameState.isPlaying) return;
+            gameState.timeLeft--;
+            updateTimerDisplay();
+            
+            if (gameState.timeLeft <= 0) {
+                gameOver(true); // true 代表是時間到
+            }
+        }
+
+        // 更新時間顯示
+        function updateTimerDisplay() {
+            const minutes = Math.floor(gameState.timeLeft / 60);
+            const seconds = gameState.timeLeft % 60;
+            ui.timeDisplay.innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            // 剩餘10秒時顯示紅色警告
+            if (gameState.timeLeft <= 10) {
+                ui.timeDisplay.classList.add('text-red-500');
+                ui.timeDisplay.classList.add('animate-pulse');
+            } else {
+                ui.timeDisplay.classList.remove('text-red-500');
+                ui.timeDisplay.classList.remove('animate-pulse');
+            }
+        }
+
+        // 下一回合生成目標
+        function nextRound() {
+            if (!gameState.isPlaying) return;
+            ui.targetsLayer.innerHTML = ''; // 清除舊靶子
+            gameState.targetsOnScreen = [];
+
+            // 1. 挑選本次目標單字 (從洗牌過的題庫中抽出不放回)
+            if (gameState.wordPool.length === 0) {
+                // 如果題目都出完了一輪，就重新洗牌補充
+                gameState.wordPool = [...vocabDB];
+                gameState.wordPool.sort(() => Math.random() - 0.5);
+            }
+            gameState.currentWord = gameState.wordPool.pop(); // 抽出最後一個並移除
+            ui.missionWord.innerText = gameState.currentWord.zh;
+
+            // 2. 準備選項 (1個正確，2個錯誤)
+            let options = [gameState.currentWord];
+            let pool = vocabDB.filter(v => v.id !== gameState.currentWord.id);
+            
+            // 洗牌 pool
+            pool.sort(() => Math.random() - 0.5);
+            options.push(pool[0]);
+            options.push(pool[1]);
+            
+            // 洗牌 options
+            options.sort(() => Math.random() - 0.5);
+
+            // 3. 生成靶子並放置於不同位置 (左、中、右)
+            const positions = [
+                { left: '15%', zIndex: 11 }, // 左邊掩體後
+                { left: '45%', zIndex: 14 }, // 中間掩體後
+                { left: '75%', zIndex: 13 }  // 右邊空曠區
+            ];
+            // 打亂位置
+            positions.sort(() => Math.random() - 0.5);
+
+            options.forEach((opt, idx) => {
+                const targetEl = document.createElement('div');
+                targetEl.className = 'target target-hide';
+                targetEl.style.left = positions[idx].left;
+                targetEl.style.zIndex = positions[idx].zIndex;
+                
+                // 靶子的 HTML 結構 (改為顯示照片)
+                targetEl.innerHTML = `
+                    <div class="target-head" data-is-head="true" data-id="${opt.id}"></div>
+                    <img src="${opt.img}" class="target-photo" alt="photo">
+                `;
+
+                // 綁定點擊事件在靶子上 (阻止冒泡，避免點擊到背景也被判定空槍)
+                targetEl.addEventListener('mousedown', (e) => handleTargetHit(e, opt.id));
+
+                ui.targetsLayer.appendChild(targetEl);
+                
+                // 動畫彈出
+                setTimeout(() => {
+                    targetEl.classList.remove('target-hide');
+                }, 100 + idx * 150);
+            });
+        }
+
+        // 射擊主控 (點擊背景)
+        function shoot(e) {
+            if (!gameState.isPlaying) return;
+
+            const now = Date.now();
+            if (now - gameState.lastShootTime < gameState.weaponConfig.fireRate) return; // 射速限制
+
+            // 換彈中或沒子彈
+            if (gameState.isReloading) return;
+            if (gameState.ammo <= 0) {
+                if (now - gameState.lastShootTime > 300) { // 避免連點瘋狂播放空槍音
+                    playEmptySound();
+                    ui.reloadWarning.classList.remove('hidden');
+                    gameState.lastShootTime = now;
+                }
+                return;
+            }
+
+            gameState.lastShootTime = now;
+
+            // 扣除子彈
+            gameState.ammo--;
+            updateHUD();
+
+            // 播放特效
+            playGunshot(gameState.weaponConfig.name);
+            
+            // 槍枝動畫
+            ui.weapon.classList.add('weapon-shoot');
+            setTimeout(() => ui.weapon.classList.remove('weapon-shoot'), 100);
+
+            // 槍口火光
+            ui.flash.classList.add('flash-active');
+            setTimeout(() => ui.flash.classList.remove('flash-active'), 50);
+
+            // 準星擴大與畫面後座力 (依據武器變換)
+            ui.crosshair.classList.add('shooting-crosshair');
+            ui.container.classList.add(gameState.weaponConfig.recoilClass);
+            setTimeout(() => {
+                ui.crosshair.classList.remove('shooting-crosshair');
+                ui.container.classList.remove(gameState.weaponConfig.recoilClass);
+            }, 100);
+
+            // 若需換彈提示
+            if (gameState.ammo === 0) {
+                ui.reloadWarning.classList.remove('hidden');
+            }
+        }
+
+        // 處理擊中靶子
+        function handleTargetHit(e, hitId) {
+            // 確保先觸發 shoot 的消耗子彈邏輯
+            shoot(e); 
+            e.stopPropagation(); // 阻止事件冒泡到 container，避免觸發兩次 shoot
+
+            // 檢查是否真的開出槍了 (可能被射速限制或沒子彈擋下)
+            if (gameState.ammo < 0 || (Date.now() - gameState.lastShootTime > 50)) return; 
+
+            const targetEl = e.currentTarget;
+            const isHeadshot = e.target.dataset.isHead === "true";
+            
+            // 顯示命中標記 (X)
+            showHitMarker(e.clientX, e.clientY);
+
+            if (hitId === gameState.currentWord.id) {
+                // 打對了！
+                playHitSound(isHeadshot);
+                
+                // 正常分數，無武器加成
+                let points = isHeadshot ? 150 : 100;
+                
+                gameState.score += points;
+                updateHUD();
+
+                // 靶子倒下
+                targetEl.style.transform = 'scaleY(0) rotate(-20deg)';
+                targetEl.style.opacity = '0';
+                
+                // 延遲進入下一回合
+                setTimeout(() => {
+                    nextRound();
+                }, 500);
+
+            } else {
+                // 打錯了！受傷
+                playErrorSound();
+                takeDamage(20);
+            }
+        }
+
+        // 顯示命中十字標籤
+        function showHitMarker(x, y) {
+            const marker = document.createElement('div');
+            marker.className = 'hit-marker';
+            marker.innerText = '✖';
+            marker.style.left = (x - 12) + 'px';
+            marker.style.top = (y - 12) + 'px';
+            ui.hitMarkers.appendChild(marker);
+            
+            setTimeout(() => {
+                marker.remove();
+            }, 500);
+        }
+
+        // 玩家受傷
+        function takeDamage(amount) {
+            gameState.hp -= amount;
+            
+            // 畫面流血特效
+            ui.bloodOverlay.classList.add('damage-taken');
+            setTimeout(() => ui.bloodOverlay.classList.remove('damage-taken'), 300);
+
+            updateHUD();
+
+            if (gameState.hp <= 0) {
+                gameOver(false); // false 代表是血量歸零
+            }
+        }
+
+        // 換彈夾
+        function reload() {
+            if (!gameState.isPlaying || gameState.isReloading || gameState.ammo === gameState.maxAmmo) return;
+            
+            gameState.isReloading = true;
+            ui.reloadWarning.classList.add('hidden');
+            
+            // 模擬換彈動作：槍枝放下再拿起
+            ui.weapon.style.transform = 'translateY(100px) rotate(30deg)';
+            
+            // 播放換彈音效 (簡單合成音)
+            if (audioCtx) {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+                osc.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            }
+
+            // 所有突擊步槍換彈時間皆為 800ms
+            const reloadTime = 800;
+
+            setTimeout(() => {
+                gameState.ammo = gameState.maxAmmo;
+                gameState.isReloading = false;
+                ui.weapon.style.transform = '';
+                updateHUD();
+                
+                // 上膛音
+                if (audioCtx) {
+                    const osc = audioCtx.createOscillator();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+                    osc.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.2);
+                }
+            }, reloadTime);
+        }
+
+        // 更新介面
+        function updateHUD() {
+            ui.hpDisplayStr.innerText = Math.max(0, gameState.hp);
+            ui.scoreDisplay.innerText = gameState.score;
+            ui.ammoDisplay.innerText = gameState.ammo;
+            
+            // 更新 HUD 顯示的彈匣上限
+            const maxAmmoDisplay = document.querySelector('#ammo-current').nextElementSibling;
+            if (maxAmmoDisplay) maxAmmoDisplay.innerText = `/ ${gameState.maxAmmo}`;
+            
+            if(gameState.hp <= 30) {
+                ui.hpDisplayStr.classList.add('text-red-500');
+            } else {
+                ui.hpDisplayStr.classList.remove('text-red-500');
+            }
+        }
+
+        // 遊戲結束
+        function gameOver(isTimeOut = false) {
+            gameState.isPlaying = false;
+            clearInterval(gameState.timerInterval); // 停止計時
+            
+            ui.gameOverScreen.classList.remove('hidden');
+            ui.gameOverScreen.classList.add('flex');
+            ui.finalScore.innerText = gameState.score;
+            
+            // 根據結束原因顯示不同文字
+            if (isTimeOut) {
+                ui.gameOverReason.innerText = "時間到！直升機已撤離！";
+                ui.gameOverTitle.innerText = "TIME'S UP";
+            } else {
+                ui.gameOverReason.innerText = "你被目標擊敗了...";
+                ui.gameOverTitle.innerText = "MISSION FAILED";
+            }
+
+            ui.targetsLayer.innerHTML = '';
+            
+            // 重置輸入框
+            ui.playerName.value = '';
+            
+            // 取消隱藏原生游標
+            ui.container.style.cursor = 'default';
+        }
+
+        // 提交分數
+        function submitScore() {
+            const name = ui.playerName.value.trim() || "無名特務";
+            
+            // 將所有舊紀錄的 isNew 標記取消
+            leaderboard.forEach(entry => entry.isNew = false);
+            
+            // 寫入排行榜並排序 (降序)，加上 isNew 標記以利高亮顯示
+            const newEntry = { name: name, score: gameState.score, isNew: true };
+            leaderboard.push(newEntry);
+            leaderboard.sort((a, b) => b.score - a.score);
+            
+            // 儲存到瀏覽器本地 (加入 try-catch 防止預覽環境報錯)
+            // 儲存時最多保留前 20 名，且去除 isNew 標記避免污染儲存資料
+            try {
+                const saveList = leaderboard.slice(0, 20).map(e => ({name: e.name, score: e.score}));
+                localStorage.setItem('csgo_leaderboard', JSON.stringify(saveList));
+            } catch (e) {
+                console.warn("環境限制無法寫入 localStorage，將依賴暫存記憶體。");
+            }
+            
+            showLeaderboard();
+        }
+
+        // 單純查看排行榜 (從主畫面)
+        function viewLeaderboard() {
+            ui.startScreen.classList.add('hidden');
+            ui.startScreen.classList.remove('flex');
+            showLeaderboard();
+        }
+
+        // 顯示排行榜
+        function showLeaderboard() {
+            // 隱藏 Game Over 畫面
+            ui.gameOverScreen.classList.add('hidden');
+            ui.gameOverScreen.classList.remove('flex');
+            
+            ui.leaderboardList.innerHTML = '';
+            
+            if (leaderboard.length === 0) {
+                ui.leaderboardList.innerHTML = '<div class="text-center text-gray-400 py-4 font-bold tracking-widest">尚無特務登錄成績</div>';
+            } else {
+                // 準備顯示列表 (前 5 名)
+                let displayList = leaderboard.slice(0, 5);
+                
+                // 檢查剛才提交的成績是否在 5 名以外，如果是，硬生生把它加在列表最後面顯示！
+                const newEntryIndex = leaderboard.findIndex(e => e.isNew);
+                if (newEntryIndex >= 5) {
+                    displayList.push({ isSeparator: true }); // 加個分隔點
+                    displayList.push(leaderboard[newEntryIndex]);
+                }
+
+                displayList.forEach((entry, idx) => {
+                    const item = document.createElement('div');
+                    
+                    // 渲染分隔點
+                    if (entry.isSeparator) {
+                        item.className = "text-center text-slate-500 my-1 text-2xl tracking-widest";
+                        item.innerHTML = "• • •";
+                        ui.leaderboardList.appendChild(item);
+                        return;
+                    }
+
+                    // 判斷真實名次
+                    let rankNum = (entry.isNew && newEntryIndex >= 5) ? newEntryIndex + 1 : idx + 1;
+                    
+                    // 如果是這次的成績，加上背景高亮
+                    let bgClass = entry.isNew ? "bg-slate-700/80 rounded px-2 -mx-2 shadow-inner" : "";
+
+                    item.className = `flex justify-between items-center border-b border-slate-600 py-3 last:border-0 ${bgClass}`;
+                    
+                    let medal = "<span class='w-8 inline-block text-center text-slate-400'>#" + rankNum + "</span>";
+                    if (rankNum === 1) medal = "<span class='w-8 inline-block text-center text-2xl'>🥇</span>";
+                    else if (rankNum === 2) medal = "<span class='w-8 inline-block text-center text-2xl'>🥈</span>";
+                    else if (rankNum === 3) medal = "<span class='w-8 inline-block text-center text-2xl'>🥉</span>";
+
+                    // 若是本次成績，加上標籤
+                    let newTag = entry.isNew ? `<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded ml-3 align-middle font-bold">本次成績</span>` : "";
+
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3 text-white text-xl">
+                            ${medal}
+                            <span class="font-bold tracking-wide">${entry.name}${newTag}</span>
+                        </div>
+                        <span class="hud-font text-3xl text-yellow-400">${entry.score}</span>
+                    `;
+                    ui.leaderboardList.appendChild(item);
+                });
+            }
+
+            // 顯示排行榜畫面
+            ui.leaderboardScreen.classList.remove('hidden');
+            ui.leaderboardScreen.classList.add('flex');
+        }
+
+        // 重新開始 (改為返回主畫面)
+        function restartGame() {
+            // **重要修改**：不再使用 location.reload()，改用隱藏介面的方式。
+            // 這樣預覽環境的「暫存記憶體」才不會被清空！
+            ui.leaderboardScreen.classList.add('hidden');
+            ui.leaderboardScreen.classList.remove('flex');
+            
+            ui.startScreen.classList.remove('hidden');
+            ui.startScreen.classList.add('flex');
+            
+            // 恢復原生游標
+            ui.container.style.cursor = 'default';
+        }
+
+        // 綁定鍵盤事件 (R鍵換彈)
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'r') {
+                reload();
+            }
+        });
+
+    </script>
+</body>
+</html>
