@@ -213,7 +213,7 @@
             <div class="text-6xl mb-4">👾</div>
             <h2 class="text-2xl font-black mb-2 text-white">數據怪獸出現！</h2>
             <p class="text-zinc-400 text-sm mb-6 leading-relaxed">
-                在 <strong class="neon-text text-lg">30秒</strong> 內配對<br>「英文縮寫」與「中文解釋」<br>發射攻擊指令將怪獸縮小至消失！<br>
+                在 <strong class="neon-text text-lg">30秒</strong> 內配對<br>「英文詞語」與「中文解釋」<br>發射攻擊指令將怪獸縮小至消失！<br>
                 <span class="text-yellow-500 font-bold mt-2 block">★ 首次擊中將觸發 3 秒時停 Combo！</span>
             </p>
             <button onclick="startGame()" class="w-full neon-bg text-white text-lg font-black italic py-3 rounded-xl tracking-wider hover:scale-105 transition-transform">
@@ -272,12 +272,12 @@
         // ================= 遊戲資料 =================
         // 6對生字 (英文 vs 中文)
         const vocabData = [
-            { id: 1, en: 'CPU', ch: '中央處理器' },
-            { id: 2, en: 'RAM', ch: '隨機存取記憶體' },
-            { id: 3, en: 'GPU', ch: '顯示卡' },
-            { id: 4, en: 'SSD', ch: '固態硬碟' },
-            { id: 5, en: 'HDD', ch: '傳統硬碟' },
-            { id: 6, en: 'USB', ch: '通用序列匯流排' }
+            { id: 1, en: 'Monitor', ch: '顯示器' },
+            { id: 2, en: 'Internet', ch: '互聯網' },
+            { id: 3, en: 'File', ch: '檔案' },
+            { id: 4, en: 'Router', ch: '路由器' },
+            { id: 5, en: 'Folder', ch: '資料夾' },
+            { id: 6, en: 'CPU', ch: '中央處理器' }
         ];
 
         // 16 宮格中，卡牌應該放置的索引位置 (排除中間四格: 5,6,9,10)
